@@ -17,15 +17,15 @@ jobs:
     outputs:
       cache-key: ${{ steps.cache.outputs.cache-key }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Cache pip
         id: cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ env.PIP_CACHE_DIR }}
           key: pip-cache-${{ hashFiles('conda_env.yml') }}
       - name: Cache conda packages
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /opt/conda/pkgs
           key: conda-pkgs-${{ hashFiles('conda_env.yml') }}
@@ -36,7 +36,7 @@ jobs:
     container:
       image: continuumio/miniconda3:24.7.1
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Conda environment
         shell: bash -el {0}
         run: |
@@ -74,7 +74,7 @@ jobs:
           pip install anybadge
           anybadge --overwrite --label ${{ github.job }} --value=$(cat public/badges/${{ github.job }}.score) --file=public/badges/${{ github.job }}.svg 4=red 6=orange 8=yellow 10=green
       - name: Upload lint artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: lint-artifacts
           path: |
@@ -87,7 +87,7 @@ jobs:
     container:
       image: continuumio/miniconda3:24.7.1
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Conda environment
         shell: bash -el {0}
         run: |
@@ -113,7 +113,7 @@ jobs:
           mkdir -p public
           coverage-badge -o public/coverage.svg
       - name: Upload test artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-artifacts
           path: |
