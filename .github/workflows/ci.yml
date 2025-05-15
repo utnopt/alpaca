@@ -3,6 +3,7 @@ name: CI Pipeline
 on:
   push:
   pull_request:
+    branches: [ main, master ]
 
 env:
   SOURCE_FOLDER: './src'
@@ -34,7 +35,7 @@ jobs:
     needs: setup
     runs-on: ubuntu-latest
     container:
-      image: continuumio/miniconda3:24.7.1
+      image: continuumio/miniconda3:latest
     steps:
       - uses: actions/checkout@v4
       - name: Set up Conda environment
@@ -85,7 +86,7 @@ jobs:
     needs: setup
     runs-on: ubuntu-latest
     container:
-      image: continuumio/miniconda3:24.7.1
+      image: continuumio/miniconda3:latest
     steps:
       - uses: actions/checkout@v4
       - name: Set up Conda environment
