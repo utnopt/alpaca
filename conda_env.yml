@@ -1,0 +1,11 @@
+name: YOUR_PROJECT_NAME
+channels:
+  - conda-forge
+  - nodefaults # never remove this!
+dependencies:
+  - python=3.11
+# add all your required python libs here
+# recommendation: fix up to 2nd version (e.g. pandas=2.2 not 2.2.0)
+  - pandas=2.2
+  - pyscipopt=5.1
+  - scip=9.1
