@@ -1,0 +1,122 @@
+name: CI Pipeline
+
+on:
+  push:
+  pull_request:
+
+env:
+  SOURCE_FOLDER: './src'
+  PYLINT_SCORE_THRESHOLD: '9.0'
+  CONDA_ENV_NAME: 'conda_env'
+  CONDA_ENV_FILE: 'conda_env.yml'
+  PIP_CACHE_DIR: '${{ github.workspace }}/.cache/pip'
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      cache-key: ${{ steps.cache.outputs.cache-key }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Cache pip
+        id: cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.PIP_CACHE_DIR }}
+          key: pip-cache-${{ hashFiles('conda_env.yml') }}
+      - name: Cache conda packages
+        uses: actions/cache@v3
+        with:
+          path: /opt/conda/pkgs
+          key: conda-pkgs-${{ hashFiles('conda_env.yml') }}
+
+  pylint:
+    needs: setup
+    runs-on: ubuntu-latest
+    container:
+      image: continuumio/miniconda3:24.7.1
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Conda environment
+        shell: bash -el {0}
+        run: |
+          conda env create -f $CONDA_ENV_FILE -n $CONDA_ENV_NAME
+          conda activate $CONDA_ENV_NAME
+      - name: Create output directories
+        run: mkdir -p public/badges public/lint
+      - name: Initialize score file
+        run: echo undefined > public/badges/${{ github.job }}.score
+      - name: Install pylint-gitlab
+        shell: bash -el {0}
+        run: |
+          conda activate $CONDA_ENV_NAME
+          pip install pylint-gitlab
+      - name: Run pylint text
+        shell: bash -el {0}
+        run: |
+          conda activate $CONDA_ENV_NAME
+          pylint --exit-zero --output-format=text $SOURCE_FOLDER | tee /tmp/pylint.txt
+          sed -n 's/^Your code has been rated at \(.*\)/\1/p' /tmp/pylint.txt > public/badges/${{ github.job }}.score
+      - name: Generate CodeClimate report
+        shell: bash -el {0}
+        run: |
+          conda activate $CONDA_ENV_NAME
+          pylint --exit-zero --output-format=pylint_gitlab.GitlabCodeClimateReporter $SOURCE_FOLDER > codeclimate.json
+      - name: Generate HTML report
+        shell: bash -el {0}
+        run: |
+          conda activate $CONDA_ENV_NAME
+          pylint --fail-under=$PYLINT_SCORE_THRESHOLD --output-format=pylint_gitlab.GitlabPagesHtmlReporter $SOURCE_FOLDER > public/lint/pylint_index.html
+      - name: Create badge SVG
+        shell: bash -el {0}
+        run: |
+          conda activate $CONDA_ENV_NAME
+          pip install anybadge
+          anybadge --overwrite --label ${{ github.job }} --value=$(cat public/badges/${{ github.job }}.score) --file=public/badges/${{ github.job }}.svg 4=red 6=orange 8=yellow 10=green
+      - name: Upload lint artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: lint-artifacts
+          path: |
+            public
+            codeclimate.json
+
+  unittest:
+    needs: setup
+    runs-on: ubuntu-latest
+    container:
+      image: continuumio/miniconda3:24.7.1
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Conda environment
+        shell: bash -el {0}
+        run: |
+          conda env create -f $CONDA_ENV_FILE -n $CONDA_ENV_NAME
+          conda activate $CONDA_ENV_NAME
+      - name: Install coverage
+        shell: bash -el {0}
+        run: |
+          conda activate $CONDA_ENV_NAME
+          conda install -c conda-forge coverage=7.4.3 coverage-badge
+      - name: Run unit tests with coverage
+        shell: bash -el {0}
+        run: |
+          conda activate $CONDA_ENV_NAME
+          export PYTHONPATH=$SOURCE_FOLDER:./test
+          python -m coverage run --source=$SOURCE_FOLDER,./test -m unittest discover
+      - name: Coverage report and badge
+        shell: bash -el {0}
+        run: |
+          conda activate $CONDA_ENV_NAME
+          coverage report -m
+          coverage html
+          mkdir -p public
+          coverage-badge -o public/coverage.svg
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-artifacts
+          path: |
+            htmlcov
+            public
+
