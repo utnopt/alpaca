@@ -9,3 +9,5 @@ dependencies:
   - pandas=2.2
   - pyscipopt=5.1
   - scip=9.1
+  - bs4=4.13
+  - lxml=5.4

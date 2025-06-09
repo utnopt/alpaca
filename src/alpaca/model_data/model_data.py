@@ -1,0 +1,218 @@
+# -*- coding: utf-8 -*-
+"""
+@authors: kuen,
+"""
+import copy
+from bs4 import BeautifulSoup
+import numpy as np
+
+from alpaca.settings import UserSettings, StaticSettings
+from alpaca.utils.logger import logger
+import alpaca.utils.datahandling as udh
+from alpaca.model_data import (
+    variable as var,
+    constraint as con,
+    nonlinear_expression as nle,
+    bilinear_expression as ble,
+    one_dim_expression as ode,
+)
+
+
+class ModelData:  # pylint: disable=too-few-public-methods
+    """Data container."""
+
+    def __init__(self, settings: UserSettings):
+        self.settings = settings
+        self.variables = {"x_-1": var.Variable("x_-1", lb=-np.inf)}
+        self.constraints = {}
+        self.nonlinear_expressions: dict[str, nle.NonlinearExpression] = {}
+        self.first_level_nonlinear_expressions: dict[str, nle.NonlinearExpression] = {}
+        self.one_dim_expressions: dict[str, ode.OneDimExpression] = {}
+        self.bilinear_expressions: dict[str, ble.BilinearExpression] = {}
+
+    def build_model_from_osil_data(self):
+        """
+        Create a data container object from osil data
+        """
+        logger.info("Reading data..")
+        osil_data = self._read_osil_file()
+        self._add_variables_from_osil_data(osil_data)
+        self._add_objective_from_osil_data(osil_data)
+        self._add_constraints_from_osil_data(osil_data)
+        self._add_linear_expressions_from_osil_data(osil_data)
+        self._add_quadratic_expressions_from_osil_data(osil_data)
+        self._add_nonlinear_expressions_from_osil_data(osil_data)
+        self.first_level_nonlinear_expressions = copy.deepcopy(
+            self.nonlinear_expressions
+        )
+        self._grow_nonlinear_expression_trees()
+
+    def _read_osil_file(self):
+        with open(
+            StaticSettings.instances_path + self.settings.osil_file_name + ".osil", "r"
+        ) as f:
+            data = f.read()
+        data = BeautifulSoup(data, "xml")
+        return data
+
+    def _add_variables_from_osil_data(self, osil_data):
+        var_tags = osil_data.find("variables").find_all("var")
+        for v in var_tags:
+            var_name = f"x_{len(self.variables) - 1}"
+            variable = var.Variable(var_name)
+            lb = v.get("lb")
+            variable.lb = 0 if lb is None else -np.inf if lb == "-INF" else float(lb)
+            ub = v.get("ub")
+            variable.ub = 0 if ub is None else np.inf if ub == "INF" else float(ub)
+            var_type = v.get("type")
+            variable.var_type = "C" if var_type is None else var_type
+            self.variables[var_name] = variable
+
+    def _add_constraints_from_osil_data(self, osil_data):
+        try:
+            cons_tags = osil_data.find("constraints").find_all("con")
+        except AttributeError:
+            return
+        for c in cons_tags:
+            con_name = f"c_{len(self.constraints) - 1}"
+            constraint = con.Constraint(con_name)
+            lb = c.get("lb")
+            ub = c.get("ub")
+            constraint.type = "<=" if lb is None else ">=" if ub is None else "=="
+            constraint.rhs = float(ub) if lb is None else float(lb)
+            self.constraints[con_name] = constraint
+
+    def _add_objective_from_osil_data(self, osil_data):
+        objective = osil_data.find("objectives").find_all("obj")[0]
+        con_name = f"c_{-1}"
+        constraint = con.Constraint(con_name)
+        constraint.type = "<="
+        self.constraints[con_name] = constraint
+        constraint.variables.append((-1.0, self.variables["x_-1"]))
+        coeff_tags = objective.find_all("coef")
+        for c in coeff_tags:
+            constraint.variables.append(
+                (float(c.string), self.variables[f"x_{c.get("idx")}"])
+            )
+
+    @staticmethod
+    def _expand_osil_elements(parent_element, dtype=float):
+        el_tags = parent_element.find_all("el")
+        if el_tags is None:
+            return []
+        expanded = []
+        for el in el_tags:
+            if "mult" in el.attrs:
+                count = int(el.attrs["mult"])
+                base_val = dtype(el.text)
+                incr = dtype(el.attrs.get("incr", 0))
+                expanded.extend(base_val + i * incr for i in range(count))
+            else:
+                expanded.append(dtype(el.text))
+        return expanded
+
+    def _add_linear_expressions_from_osil_data(self, osil_data):
+        lin_con = osil_data.find("linearConstraintCoefficients")
+        if lin_con is None:
+            return
+        try:
+            num_vals = int(lin_con.get("numberOfValues"))
+        except (TypeError, ValueError):
+            return
+        start_elem = lin_con.find("start")
+        if start_elem is None:
+            return
+        start_vals = self._expand_osil_elements(start_elem, int)
+        start_vals.append(num_vals)
+        var_indices = self._expand_osil_elements(lin_con.find("colIdx"), int)
+        coeff_vals = self._expand_osil_elements(lin_con.find("value"), float)
+        if len(var_indices) != num_vals or len(coeff_vals) != num_vals:
+            return
+        for con_idx in range(len(start_vals) - 1):
+            start = start_vals[con_idx]
+            end = start_vals[con_idx + 1]
+            for pos in range(start, end):
+                self.constraints[f"c_{con_idx}"].variables.append(
+                    (coeff_vals[pos], self.variables[f"x_{var_indices[pos]}"])
+                )
+
+    def _add_quadratic_expressions_from_osil_data(self, osil_data):
+        try:
+            quad_tags = osil_data.find("quadraticCoefficients").find_all("qTerm")
+        except AttributeError:
+            return
+        for q in quad_tags:
+            first_var_index = q.get("idxOne")
+            second_var_index = q.get("idxTwo")
+            constraint_index = q.get("idx")
+            coeff = float(q.get("coef"))
+            if first_var_index == second_var_index:
+                self._add_quadratic_expression_to_constraint(
+                    first_var_index, constraint_index, coeff
+                )
+            else:
+                self._add_bilinear_expression_to_constraint(
+                    first_var_index, second_var_index, constraint_index, coeff
+                )
+
+    def _add_quadratic_expression_to_constraint(
+        self, var_index: str, constraint_index: str, coeff: float
+    ):
+        expr_hash = f"q_{var_index}"
+        if expr_hash in self.one_dim_expressions:
+            quadratic_expression = self.one_dim_expressions[expr_hash]
+        else:
+            quadratic_expression = ode.QuadraticExpression(
+                expr_hash, self, self.variables[f"x_{var_index}"]
+            )
+            self.one_dim_expressions[expr_hash] = quadratic_expression
+        self.constraints[f"c_{constraint_index}"].variables.append(
+            (coeff, quadratic_expression.representative_variable)
+        )
+
+    def _add_bilinear_expression_to_constraint(
+        self,
+        first_var_index: str,
+        second_var_index: str,
+        constraint_index: str,
+        coeff: float,
+    ):
+        expr_hash = "b" + f"_".join(sorted([first_var_index, second_var_index]))
+        if expr_hash in self.bilinear_expressions:
+            bilinear_expression = self.bilinear_expressions[expr_hash]
+        else:
+            bilinear_expression = ble.BilinearExpression(
+                expr_hash,
+                self.variables[f"x_{first_var_index}"],
+                self.variables[f"x_{second_var_index}"],
+                self,
+            )
+            self.bilinear_expressions[expr_hash] = bilinear_expression
+        self.constraints[f"c_{constraint_index}"].variables.append(
+            (coeff, bilinear_expression.representative_variable)
+        )
+
+    def _add_nonlinear_expressions_from_osil_data(self, osil_data):
+        try:
+            nonlinear_tags = osil_data.find("nonlinearExpressions").find_all("nl")
+        except AttributeError:
+            return
+        for n in nonlinear_tags:
+            coeff = 1.0 if n.get("coef") is None else float(n.get("coef"))
+            expr_hash = udh.hash_nonlinearity(str(n.next))
+            if expr_hash in self.nonlinear_expressions:
+                nonlinear_expression = self.nonlinear_expressions[expr_hash]
+            else:
+                nonlinear_expression = nle.NonlinearExpression(expr_hash, n.next)
+                self.nonlinear_expressions[expr_hash] = nonlinear_expression
+            self.constraints[f"c_{n.get('idx')}"].variables.append(
+                (coeff, nonlinear_expression.representative_variable)
+            )
+
+    def _grow_nonlinear_expression_trees(self):
+        for nonlinear_expression in self.first_level_nonlinear_expressions.values():
+            self.variables[f"r_{nonlinear_expression.name}"] = (
+                nonlinear_expression.representative_variable
+            )
+            nonlinear_expression.model_data = self
+            nonlinear_expression.grow_expression_tree()
