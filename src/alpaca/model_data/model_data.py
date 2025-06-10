@@ -92,7 +92,7 @@ class ModelData:  # pylint: disable=too-few-public-methods
         coeff_tags = objective.find_all("coef")
         for c in coeff_tags:
             constraint.variables.append(
-                (float(c.string), self.variables[f"x_{c.get("idx")}"])
+                (float(c.string), self.variables[f"x_{c.get('idx')}"])
             )
 
     @staticmethod
