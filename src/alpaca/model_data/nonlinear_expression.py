@@ -2,22 +2,25 @@
 """
 @authors: kuen,
 """
+from __future__ import annotations
+
 import alpaca.utils.datahandling as udh
-from alpaca.model_data import model_data as mda, variable as var
+from alpaca.model_data import variable as var
 
 
-class NonlinearExpression:  # pylint: disable=too-few-public-methods
+class NonlinearExpression:
     """Nonlinear expression."""
 
     def __init__(self, name: str, expression_tag, model_data=None):
         self.name = name
         self.expression_type = expression_tag.name
         self.expression_tag = expression_tag
-        self.model_data: mda.ModelData | None = model_data
+        self.model_data: "ModelData" | None = model_data
         self.child_expressions = []
         self.representative_variable = var.Variable(f"r_{self.name}")
 
     def grow_expression_tree(self):
+        """Grow expression tree."""
         for child_expression_tag in self.expression_tag.contents:
             child_expression_tag_name = udh.hash_nonlinearity(str(child_expression_tag))
             if child_expression_tag.name == "variable":

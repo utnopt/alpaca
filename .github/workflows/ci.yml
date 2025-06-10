@@ -7,7 +7,7 @@ on:
 
 env:
   SOURCE_FOLDER: './src'
-  PYLINT_SCORE_THRESHOLD: '3.0'
+  PYLINT_SCORE_THRESHOLD: '9.0'
   CONDA_ENV_NAME: 'conda_env'
   CONDA_ENV_FILE: 'conda_env.yml'
   PIP_CACHE_DIR: '${{ github.workspace }}/.cache/pip'

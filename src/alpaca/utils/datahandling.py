@@ -7,8 +7,9 @@ import hashlib
 
 
 def hash_nonlinearity(xml_str):
+    """Convert xml string to hash."""
     def canon(node):
-        # canonical repr = tag + sorted(child_reprs) + sorted attributes
+        """canonical repr = tag + sorted(child_reprs) + sorted attributes"""
         parts = [canon(c) for c in node]
         parts.sort()
         attr = ""

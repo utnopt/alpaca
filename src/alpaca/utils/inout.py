@@ -46,7 +46,7 @@ def config_file_logger(
                 #    != StaticSettings.project_name + ".log"
                 # ):
                 logger.removeHandler(hdlr)
-            except Exception as ex:
+            except Exception as ex:  # pylint: disable=broad-exception-caught
                 logger.warning(
                     "Couldn't remove previous log file handler with files %s due to error %s",
                     str(hdlr.baseFilename),

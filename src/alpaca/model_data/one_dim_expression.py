@@ -5,7 +5,7 @@
 from alpaca.model_data import variable as var
 
 
-class OneDimExpression:  # pylint: disable=too-few-public-methods
+class OneDimExpression:
     """One dimensional expression."""
 
     def __init__(self, name: str, model_data):

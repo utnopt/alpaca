@@ -3,6 +3,7 @@
 @authors: kuen,
 """
 import json
+import dataclasses
 import logging
 import os
 import time
@@ -10,6 +11,7 @@ import time
 from alpaca.utils.logger import logger
 
 
+@dataclasses.dataclass
 class StaticSettings:
     """
     Class containing static settings.
@@ -29,7 +31,7 @@ class StaticSettings:
     log_rotation_type = "size"  # use "size", "time" or "none"
 
 
-class UserSettings:
+class UserSettings:  # pylint: disable=too-few-public-methods
     """
     Class containing user settings.
     """
@@ -40,7 +42,8 @@ class UserSettings:
 
         self.export_path = (
             StaticSettings.base_path
-            + f"/data/export/{time.strftime('%Y-%m-%d_%H-%M-%S')}_Result_{StaticSettings.project_name}/"
+            + f"/data/export/{time.strftime('%Y-%m-%d_%H-%M-%S')}_"
+              f"Result_{StaticSettings.project_name}/"
         )
 
     def save_to_json(self):

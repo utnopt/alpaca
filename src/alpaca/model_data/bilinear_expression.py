@@ -5,7 +5,7 @@
 from alpaca.model_data import variable as var
 
 
-class BilinearExpression:  # pylint: disable=too-few-public-methods
+class BilinearExpression:
     """Bilinear expression."""
 
     def __init__(

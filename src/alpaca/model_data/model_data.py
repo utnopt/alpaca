@@ -18,7 +18,7 @@ from alpaca.model_data import (
 )
 
 
-class ModelData:  # pylint: disable=too-few-public-methods
+class ModelData:
     """Data container."""
 
     def __init__(self, settings: UserSettings):
@@ -49,7 +49,8 @@ class ModelData:  # pylint: disable=too-few-public-methods
 
     def _read_osil_file(self):
         with open(
-            StaticSettings.instances_path + self.settings.osil_file_name + ".osil", "r"
+            StaticSettings.instances_path + self.settings.osil_file_name + ".osil", "r",
+            encoding="utf-8",
         ) as f:
             data = f.read()
         data = BeautifulSoup(data, "xml")
@@ -177,7 +178,7 @@ class ModelData:  # pylint: disable=too-few-public-methods
         constraint_index: str,
         coeff: float,
     ):
-        expr_hash = "b" + f"_".join(sorted([first_var_index, second_var_index]))
+        expr_hash = "b" + "_".join(sorted([first_var_index, second_var_index]))
         if expr_hash in self.bilinear_expressions:
             bilinear_expression = self.bilinear_expressions[expr_hash]
         else:

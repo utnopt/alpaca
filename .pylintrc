@@ -9,6 +9,7 @@ generated-members=pyo.*
 [MESSAGES CONTROL]
 disable=
     import-error,            # pylint is buggy in some import check cases
+    too-few-public-methods,  # one is often sufficient
     unsubscriptable-object,  # pylint/issues/3139
       # if you face further false positiv errors have a look at:
       # https://pylint.readthedocs.io/en/stable/user_guide/messages/messages_overview.html
