@@ -12,6 +12,7 @@ from alpaca.model_data import (
     one_dim_expression as ode,
     constraint as con,
 )
+from alpaca.utils.logger import logger
 
 
 class NonlinearExpression:
@@ -54,7 +55,7 @@ class NonlinearExpression:
         elif self.expression_type == "sum":
             self._fragment_sum_expression()
         elif self.expression_type == "divide":
-            pass
+            logger.warning("Expression type divide not supported yet!")
         elif self.expression_type == "square":
             self._fragment_one_dim_expression(ode.SquareExpression)
         elif self.expression_type == "exp":
@@ -76,9 +77,11 @@ class NonlinearExpression:
         elif self.expression_type == "inverse":
             self._fragment_one_dim_expression(ode.InverseExpression)
         elif self.expression_type == "power":
-            pass
+            logger.warning("Expression type power not supported yet!")
         elif self.expression_type == "xabsx":
             self._fragment_one_dim_expression(ode.AbsExpression)
+        elif self.expression_type == "negate":
+            logger.warning("Expression type negate not supported yet!")
         else:
             raise KeyError(f"Expression type {self.expression_type} not supported yet!")
         for child_expression in self.child_expressions:

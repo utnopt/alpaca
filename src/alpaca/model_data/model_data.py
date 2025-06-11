@@ -47,6 +47,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         self.first_level_nonlinear_expressions = copy.deepcopy(
             self.nonlinear_expressions
         )
+        self._add_model_data_to_nonlinear_expressions()
         self._grow_nonlinear_expression_trees()
         self._fragment_expression_trees_to_low_dimensional_functions()
 
@@ -214,6 +215,10 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             self.constraints[f"c_{n.get('idx')}"].variables.append(
                 (coeff, nonlinear_expression.representative_variable)
             )
+
+    def _add_model_data_to_nonlinear_expressions(self):
+        for nonlinear_expression in self.nonlinear_expressions.values():
+            nonlinear_expression.model_data = self
 
     def _grow_nonlinear_expression_trees(self):
         for nonlinear_expression in self.first_level_nonlinear_expressions.values():
