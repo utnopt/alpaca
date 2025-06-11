@@ -14,11 +14,12 @@ from alpaca.model_data import (
     constraint as con,
     nonlinear_expression as nle,
     bilinear_expression as ble,
+    multilinear_expression as mle,
     one_dim_expression as ode,
 )
 
 
-class ModelData:
+class ModelData:  # pylint: disable=too-many-instance-attributes
     """Data container."""
 
     def __init__(self, settings: UserSettings):
@@ -29,6 +30,7 @@ class ModelData:
         self.first_level_nonlinear_expressions: dict[str, nle.NonlinearExpression] = {}
         self.one_dim_expressions: dict[str, ode.OneDimExpression] = {}
         self.bilinear_expressions: dict[str, ble.BilinearExpression] = {}
+        self.multilinear_expressions: dict[str, mle.MultilinearExpression] = {}
 
     def build_model_from_osil_data(self):
         """
@@ -46,10 +48,12 @@ class ModelData:
             self.nonlinear_expressions
         )
         self._grow_nonlinear_expression_trees()
+        self._fragment_expression_trees_to_low_dimensional_functions()
 
     def _read_osil_file(self):
         with open(
-            StaticSettings.instances_path + self.settings.osil_file_name + ".osil", "r",
+            StaticSettings.instances_path + self.settings.osil_file_name + ".osil",
+            "r",
             encoding="utf-8",
         ) as f:
             data = f.read()
@@ -79,15 +83,14 @@ class ModelData:
             constraint = con.Constraint(con_name)
             lb = c.get("lb")
             ub = c.get("ub")
-            constraint.type = "<=" if lb is None else ">=" if ub is None else "=="
+            constraint.con_type = "<=" if lb is None else ">=" if ub is None else "=="
             constraint.rhs = float(ub) if lb is None else float(lb)
             self.constraints[con_name] = constraint
 
     def _add_objective_from_osil_data(self, osil_data):
         objective = osil_data.find("objectives").find_all("obj")[0]
         con_name = f"c_{-1}"
-        constraint = con.Constraint(con_name)
-        constraint.type = "<="
+        constraint = con.Constraint(con_name, con_type="<=")
         self.constraints[con_name] = constraint
         constraint.variables.append((-1.0, self.variables["x_-1"]))
         coeff_tags = objective.find_all("coef")
@@ -148,7 +151,7 @@ class ModelData:
             constraint_index = q.get("idx")
             coeff = float(q.get("coef"))
             if first_var_index == second_var_index:
-                self._add_quadratic_expression_to_constraint(
+                self._add_square_expression_to_constraint(
                     first_var_index, constraint_index, coeff
                 )
             else:
@@ -156,19 +159,19 @@ class ModelData:
                     first_var_index, second_var_index, constraint_index, coeff
                 )
 
-    def _add_quadratic_expression_to_constraint(
+    def _add_square_expression_to_constraint(
         self, var_index: str, constraint_index: str, coeff: float
     ):
         expr_hash = f"q_{var_index}"
         if expr_hash in self.one_dim_expressions:
-            quadratic_expression = self.one_dim_expressions[expr_hash]
+            square_expression = self.one_dim_expressions[expr_hash]
         else:
-            quadratic_expression = ode.QuadraticExpression(
+            square_expression = ode.SquareExpression(
                 expr_hash, self, self.variables[f"x_{var_index}"]
             )
-            self.one_dim_expressions[expr_hash] = quadratic_expression
+            self.one_dim_expressions[expr_hash] = square_expression
         self.constraints[f"c_{constraint_index}"].variables.append(
-            (coeff, quadratic_expression.representative_variable)
+            (coeff, square_expression.representative_variable)
         )
 
     def _add_bilinear_expression_to_constraint(
@@ -184,8 +187,10 @@ class ModelData:
         else:
             bilinear_expression = ble.BilinearExpression(
                 expr_hash,
-                self.variables[f"x_{first_var_index}"],
-                self.variables[f"x_{second_var_index}"],
+                (
+                    self.variables[f"x_{first_var_index}"],
+                    self.variables[f"x_{second_var_index}"],
+                ),
                 self,
             )
             self.bilinear_expressions[expr_hash] = bilinear_expression
@@ -217,3 +222,7 @@ class ModelData:
             )
             nonlinear_expression.model_data = self
             nonlinear_expression.grow_expression_tree()
+
+    def _fragment_expression_trees_to_low_dimensional_functions(self):
+        for nonlinear_expression in self.first_level_nonlinear_expressions.values():
+            nonlinear_expression.fragment_expression_tree_to_low_dimensional_functions()

@@ -21,11 +21,14 @@ class TestModelData(unittest.TestCase):
         """
         Function that executes the unittest for model data creation.
         """
-        config_dict = {}
-        user_settings = s.UserSettings(config_dict)
+        for test_instance in ["alkyl", "ann_compressor_exp",
+                              "least", "st_e41", "chance"]:
+            print(test_instance)
+            config_dict = {"osil_file_name": test_instance}
+            user_settings = s.UserSettings(config_dict)
 
-        model_data = mda.ModelData(user_settings)
-        model_data.build_model_from_osil_data()
+            model_data = mda.ModelData(user_settings)
+            model_data.build_model_from_osil_data()
 
 
 if __name__ == "__main__":

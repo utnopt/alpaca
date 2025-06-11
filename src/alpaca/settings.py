@@ -43,7 +43,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods
         self.export_path = (
             StaticSettings.base_path
             + f"/data/export/{time.strftime('%Y-%m-%d_%H-%M-%S')}_"
-              f"Result_{StaticSettings.project_name}/"
+            f"Result_{StaticSettings.project_name}/"
         )
 
     def save_to_json(self):

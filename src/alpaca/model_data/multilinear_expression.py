@@ -5,18 +5,18 @@
 from alpaca.model_data import variable as var
 
 
-class BilinearExpression:
-    """Bilinear expression."""
+class MultilinearExpression:
+    """Multilinear expression."""
 
     def __init__(
         self,
         name: str,
-        variables: tuple[var.Variable, var.Variable],
+        variables: list[var.Variable],
         model_data,
         representative_variable=None,
     ):
         self.name = name
-        self.first_var, self.second_var = variables
+        self.variables = variables
         # pylint: disable=duplicate-code
         self.representative_variable = (
             representative_variable
