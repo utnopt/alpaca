@@ -13,6 +13,7 @@ from alpaca.model_data import (
     constraint as con,
 )
 from alpaca.utils.logger import logger
+import alpaca.settings as s
 
 
 class NonlinearExpression:
@@ -24,7 +25,12 @@ class NonlinearExpression:
         self.expression_tag = expression_tag
         self.model_data: "ModelData" | None = model_data
         self.child_expressions: list = []
-        self.representative_variable = var.Variable(f"r_{self.name}")
+        self.representative_variable = var.Variable(
+            f"r_{self.name}", lb=-s.StaticSettings.infinity
+        )
+        if not model_data is None:
+            model_data.variables[f"r_{self.name}"] = self.representative_variable
+        self.fragmented = False
 
     def grow_expression_tree(self):
         """Grow expression tree."""
@@ -81,12 +87,16 @@ class NonlinearExpression:
         elif self.expression_type == "xabsx":
             self._fragment_one_dim_expression(ode.AbsExpression)
         elif self.expression_type == "negate":
-            logger.warning("Expression type negate not supported yet!")
+            self._fragment_negate_expression()
         else:
             raise KeyError(f"Expression type {self.expression_type} not supported yet!")
         for child_expression in self.child_expressions:
-            if isinstance(child_expression, NonlinearExpression):
+            if (
+                isinstance(child_expression, NonlinearExpression)
+                and not child_expression.fragmented
+            ):
                 child_expression.fragment_expression_tree_to_low_dimensional_functions()
+                child_expression.fragmented = True
 
     def _fragment_product_expression(self):
         float_children, variable_children, nonlinear_children = (
@@ -160,11 +170,11 @@ class NonlinearExpression:
             self._create_multilinear_expression(
                 variables_in_product, representative_variable
             )
-        elif num_vars == 2 and variables_in_product[0] != variables_in_product[1]:
+        elif num_vars == 2 and not variables_in_product[0] is variables_in_product[1]:
             self._create_bilinear_expression(
                 variables_in_product, representative_variable
             )
-        elif num_vars == 2 and variables_in_product[0] == variables_in_product[1]:
+        elif num_vars == 2 and variables_in_product[0] is variables_in_product[1]:
             self._create_square_expression(
                 variables_in_product, representative_variable
             )
@@ -180,10 +190,10 @@ class NonlinearExpression:
 
     def _create_multilinear_expression(self, variables, representative_variable):
         expr_name = f"ml_{representative_variable.name}"
-        self.model_data.one_dim_expressions[expr_name] = mle.MultilinearExpression(
+        self.model_data.multilinear_expressions[expr_name] = mle.MultilinearExpression(
             expr_name,
-            variables,
             self.model_data,
+            variables,
             representative_variable=representative_variable,
         )
 
@@ -191,8 +201,8 @@ class NonlinearExpression:
         expr_name = f"bl_{representative_variable.name}"
         self.model_data.bilinear_expressions[expr_name] = ble.BilinearExpression(
             expr_name,
-            variables,
             self.model_data,
+            variables,
             representative_variable=representative_variable,
         )
 
@@ -200,8 +210,8 @@ class NonlinearExpression:
         expr_name = f"square_{representative_variable.name}"
         self.model_data.one_dim_expressions[expr_name] = ode.SquareExpression(
             expr_name,
-            variables[0],
             self.model_data,
+            variables[0],
             representative_variable=representative_variable,
         )
 
@@ -213,6 +223,7 @@ class NonlinearExpression:
         self.model_data.constraints[f"c_{self.expression_type}_{self.name}"] = (
             constraint
         )
+        constraint.variables.append((-1.0, self.representative_variable))
         for child_expression in self.child_expressions:
             if isinstance(child_expression, tuple):
                 child_expression: tuple[float, var.Variable]
@@ -263,8 +274,8 @@ class NonlinearExpression:
             f"{self.expression_type}_{helper_variable.name}"
         ] = expression_class(
             f"{self.expression_type}_{helper_variable.name}",
-            helper_variable,
             self.model_data,
+            helper_variable,
             representative_variable=self.representative_variable,
         )
 
@@ -278,9 +289,19 @@ class NonlinearExpression:
             f"{self.expression_type}_{variable.name}"
         ] = expression_class(
             f"{self.expression_type}_{variable.name}",
-            variable,
             self.model_data,
+            variable,
             representative_variable=self.representative_variable,
+        )
+
+    def _fragment_negate_expression(self):
+        self.model_data.constraints[f"c_{self.name}"] = con.Constraint(
+            f"c_{self.name}",
+            variables=[
+                (1.0, self.representative_variable),
+                (1.0, self.child_expressions[0].representative_variable),
+            ],
+            con_type="==",
         )
 
     def _add_nonlinear_expression_child(

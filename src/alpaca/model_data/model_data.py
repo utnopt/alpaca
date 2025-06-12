@@ -4,7 +4,6 @@
 """
 import copy
 from bs4 import BeautifulSoup
-import numpy as np
 
 from alpaca.settings import UserSettings, StaticSettings
 from alpaca.utils.logger import logger
@@ -24,7 +23,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
 
     def __init__(self, settings: UserSettings):
         self.settings = settings
-        self.variables = {"x_-1": var.Variable("x_-1", lb=-np.inf)}
+        self.variables = {"x_-1": var.Variable("x_-1", lb=-StaticSettings.infinity)}
         self.constraints = {}
         self.nonlinear_expressions: dict[str, nle.NonlinearExpression] = {}
         self.first_level_nonlinear_expressions: dict[str, nle.NonlinearExpression] = {}
@@ -50,6 +49,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         self._add_model_data_to_nonlinear_expressions()
         self._grow_nonlinear_expression_trees()
         self._fragment_expression_trees_to_low_dimensional_functions()
+        self._apply_piecewise_linear_approximation_to_low_dimensional_functions()
 
     def _read_osil_file(self):
         with open(
@@ -67,9 +67,17 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             var_name = f"x_{len(self.variables) - 1}"
             variable = var.Variable(var_name)
             lb = v.get("lb")
-            variable.lb = 0 if lb is None else -np.inf if lb == "-INF" else float(lb)
+            variable.lb = (
+                0
+                if lb is None
+                else -StaticSettings.infinity if lb == "-INF" else float(lb)
+            )
             ub = v.get("ub")
-            variable.ub = 0 if ub is None else np.inf if ub == "INF" else float(ub)
+            variable.ub = (
+                StaticSettings.infinity
+                if ub is None
+                else StaticSettings.infinity if ub == "INF" else float(ub)
+            )
             var_type = v.get("type")
             variable.var_type = "C" if var_type is None else var_type
             self.variables[var_name] = variable
@@ -188,11 +196,11 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         else:
             bilinear_expression = ble.BilinearExpression(
                 expr_hash,
+                self,
                 (
                     self.variables[f"x_{first_var_index}"],
                     self.variables[f"x_{second_var_index}"],
                 ),
-                self,
             )
             self.bilinear_expressions[expr_hash] = bilinear_expression
         self.constraints[f"c_{constraint_index}"].variables.append(
@@ -231,3 +239,11 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
     def _fragment_expression_trees_to_low_dimensional_functions(self):
         for nonlinear_expression in self.first_level_nonlinear_expressions.values():
             nonlinear_expression.fragment_expression_tree_to_low_dimensional_functions()
+
+    def _apply_piecewise_linear_approximation_to_low_dimensional_functions(self):
+        for expression in self.bilinear_expressions.values():
+            expression.apply_piecewise_linear_approximation()
+        for expression in self.multilinear_expressions.values():
+            expression.apply_piecewise_linear_approximation()
+        for expression in self.one_dim_expressions.values():
+            expression.apply_piecewise_linear_approximation()

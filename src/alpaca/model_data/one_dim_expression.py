@@ -3,6 +3,7 @@
 @authors: kuen,
 """
 from alpaca.model_data import variable as var
+import alpaca.settings as s
 
 
 class OneDimExpression:
@@ -14,7 +15,9 @@ class OneDimExpression:
         self.representative_variable = (
             representative_variable
             if representative_variable
-            else model_data.variables.setdefault(f"r_{name}", var.Variable(f"r_{name}"))
+            else model_data.variables.setdefault(
+                f"r_{name}", var.Variable(f"r_{name}", lb=-s.StaticSettings.infinity)
+            )
         )
 
     def __repr__(self):
@@ -33,6 +36,12 @@ class SquareExpression(OneDimExpression):
     ):
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
+        self.representative_variable.discretize_variable(
+            model_data.settings.number_of_breakpoints
+        )
+
+    def apply_piecewise_linear_approximation(self):
+        """Apply piecewise linear approximation."""
 
 
 class DivisionExpression(OneDimExpression):
@@ -61,6 +70,12 @@ class ExponentialExpression(OneDimExpression):
     ):
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
+        self.representative_variable.discretize_variable(
+            model_data.settings.number_of_breakpoints
+        )
+
+    def apply_piecewise_linear_approximation(self):
+        """Apply piecewise linear approximation."""
 
 
 class LnExpression(OneDimExpression):
@@ -75,6 +90,12 @@ class LnExpression(OneDimExpression):
     ):
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
+        self.representative_variable.discretize_variable(
+            model_data.settings.number_of_breakpoints
+        )
+
+    def apply_piecewise_linear_approximation(self):
+        """Apply piecewise linear approximation."""
 
 
 class SquareRootExpression(OneDimExpression):
@@ -89,6 +110,12 @@ class SquareRootExpression(OneDimExpression):
     ):
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
+        self.representative_variable.discretize_variable(
+            model_data.settings.number_of_breakpoints
+        )
+
+    def apply_piecewise_linear_approximation(self):
+        """Apply piecewise linear approximation."""
 
 
 class SinusExpression(OneDimExpression):
@@ -103,6 +130,12 @@ class SinusExpression(OneDimExpression):
     ):
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
+        self.representative_variable.discretize_variable(
+            model_data.settings.number_of_breakpoints
+        )
+
+    def apply_piecewise_linear_approximation(self):
+        """Apply piecewise linear approximation."""
 
 
 class CosinusExpression(OneDimExpression):
@@ -117,6 +150,12 @@ class CosinusExpression(OneDimExpression):
     ):
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
+        self.representative_variable.discretize_variable(
+            model_data.settings.number_of_breakpoints
+        )
+
+    def apply_piecewise_linear_approximation(self):
+        """Apply piecewise linear approximation."""
 
 
 class LogExpression(OneDimExpression):
@@ -131,6 +170,12 @@ class LogExpression(OneDimExpression):
     ):
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
+        self.representative_variable.discretize_variable(
+            model_data.settings.number_of_breakpoints
+        )
+
+    def apply_piecewise_linear_approximation(self):
+        """Apply piecewise linear approximation."""
 
 
 class AbsExpression(OneDimExpression):
@@ -173,6 +218,12 @@ class PowerExpression(OneDimExpression):
     ):
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
+        self.representative_variable.discretize_variable(
+            model_data.settings.number_of_breakpoints
+        )
+
+    def apply_piecewise_linear_approximation(self):
+        """Apply piecewise linear approximation."""
 
 
 class MinExpression(OneDimExpression):
@@ -190,7 +241,7 @@ class MinExpression(OneDimExpression):
 
 
 class TangensHExpression(OneDimExpression):
-    """Tengens hyperbolicus expression."""
+    """Tangens hyperbolicus expression."""
 
     def __init__(
         self,
@@ -201,3 +252,9 @@ class TangensHExpression(OneDimExpression):
     ):
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
+        self.representative_variable.discretize_variable(
+            model_data.settings.number_of_breakpoints
+        )
+
+    def apply_piecewise_linear_approximation(self):
+        """Apply piecewise linear approximation."""

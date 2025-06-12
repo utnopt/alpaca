@@ -3,6 +3,7 @@
 @authors: kuen,
 """
 from alpaca.model_data import variable as var
+import alpaca.settings as s
 
 
 class BilinearExpression:
@@ -11,8 +12,8 @@ class BilinearExpression:
     def __init__(
         self,
         name: str,
-        variables: tuple[var.Variable, var.Variable],
         model_data,
+        variables: tuple[var.Variable, var.Variable],
         representative_variable=None,
     ):
         self.name = name
@@ -21,8 +22,16 @@ class BilinearExpression:
         self.representative_variable = (
             representative_variable
             if representative_variable
-            else model_data.variables.setdefault(f"r_{name}", var.Variable(f"r_{name}"))
+            else model_data.variables.setdefault(
+                f"r_{name}", var.Variable(f"r_{name}", lb=-s.StaticSettings.infinity)
+            )
         )
+        self.representative_variable.discretize_variable(
+            model_data.settings.number_of_breakpoints
+        )
+
+    def apply_piecewise_linear_approximation(self):
+        """Apply piecewise linear approximation."""
 
     def __repr__(self):
         return self.name

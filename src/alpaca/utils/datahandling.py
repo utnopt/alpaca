@@ -3,23 +3,20 @@
 @authors: kuen,
 """
 import xml.etree.ElementTree as ET
-import hashlib
+import zlib
 
 
 def hash_nonlinearity(xml_str):
-    """Convert xml string to hash."""
+    """Convert XML string to a short 8-character hash."""
 
     def canon(node):
-        """canonical repr = tag + sorted(child_reprs) + sorted attributes"""
+        """Generate canonical representation: tag + sorted children + sorted attributes"""
         parts = [canon(c) for c in node]
         parts.sort()
-        attr = ""
-        if node.attrib:
-            attr = (
-                "{" + ",".join(f"{k}={v}" for k, v in sorted(node.attrib.items())) + "}"
-            )
-        return node.tag + "".join(parts) + attr
+        attrs = "".join(f"{k}={v}" for k, v in sorted(node.attrib.items()))
+        return node.tag + "".join(parts) + attrs
 
     root = ET.fromstring(xml_str)
-    h = hashlib.md5(canon(root).encode("utf-8")).hexdigest()
-    return h
+    canonical = canon(root).encode("utf-8")
+    crc = zlib.crc32(canonical) & 0xFFFFFFFF  # Ensure unsigned 32-bit
+    return f"{crc:08x}"  # Format as 8-digit hex
