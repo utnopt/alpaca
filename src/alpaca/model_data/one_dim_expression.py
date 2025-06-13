@@ -416,38 +416,6 @@ class AbsExpression(OneDimExpression):
         self.variable = variable
 
 
-class InverseExpression(OneDimExpression):
-    """Inverse expression representing r = 1/x.
-
-    A one-dimensional expression where the representative variable equals
-    the reciprocal of the input variable.
-
-    Attributes:
-        name: Unique identifier for the expression.
-        variable: Input variable being reciprocated.
-        representative_variable: Variable representing the result of the expression.
-    """
-
-    def __init__(
-        self,
-        name: str,
-        model_data: "ModelData",
-        variable: var.Variable,
-        representative_variable: var.Variable | None = None,
-    ):
-        """Initialize an inverse expression.
-
-        Args:
-            name: Unique identifier for the expression.
-            model_data: Reference to the containing model data object.
-            variable: Input variable being reciprocated.
-            representative_variable: Optional existing variable to represent the result.
-                If None, a new variable will be created.
-        """
-        super().__init__(name, model_data, representative_variable)
-        self.variable = variable
-
-
 class PowerExpression(OneDimExpression):
     """Power expression representing r = x^p (for some constant p).
 

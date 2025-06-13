@@ -98,7 +98,7 @@ class NonlinearExpression:
         elif self.expression_type == "sum":
             self._fragment_sum_expression()
         elif self.expression_type == "divide":
-            logger.warning("Expression type divide not supported yet!")
+            self._fragment_division_expression()
         elif self.expression_type == "square":
             self._fragment_one_dim_expression(ode.SquareExpression)
         elif self.expression_type == "exp":
@@ -118,7 +118,7 @@ class NonlinearExpression:
         elif self.expression_type == "min":
             self._fragment_one_dim_expression(ode.MinExpression)
         elif self.expression_type == "inverse":
-            self._fragment_one_dim_expression(ode.InverseExpression)
+            self._fragment_inverse_expression()
         elif self.expression_type == "power":
             logger.warning("Expression type power not supported yet!")
         elif self.expression_type == "xabsx":
@@ -224,7 +224,7 @@ class NonlinearExpression:
             )
         elif num_vars == 2 and not variables_in_product[0] is variables_in_product[1]:
             self._create_bilinear_expression(
-                variables_in_product, representative_variable
+                tuple(variables_in_product), representative_variable
             )
         elif num_vars == 2 and variables_in_product[0] is variables_in_product[1]:
             self._create_square_expression(
@@ -252,7 +252,9 @@ class NonlinearExpression:
         )
 
     def _create_bilinear_expression(
-        self, variables: list[var.Variable], representative_variable: var.Variable
+        self,
+        variables: tuple[var.Variable, var.Variable],
+        representative_variable: var.Variable,
     ) -> None:
         expr_name = f"bl_{representative_variable.name}"
         self.model_data.bilinear_expressions[expr_name] = ble.BilinearExpression(
@@ -364,6 +366,89 @@ class NonlinearExpression:
                 (1.0, self.child_expressions[0].representative_variable),
             ],
             con_type="==",
+        )
+
+    def _fragment_inverse_expression(self) -> None:
+        helper_bilinear_expression = ble.BilinearExpression(
+            f"bl_{self.name}",
+            self.model_data,
+            (
+                self.child_expressions[0].representative_variable,
+                self.representative_variable,
+            ),
+        )
+        self.model_data.bilinear_expressions[f"bl_{self.name}"] = (
+            helper_bilinear_expression
+        )
+        self.model_data.constraints[f"c_{self.name}"] = con.Constraint(
+            f"c_{self.name}",
+            variables=[
+                (1.0, helper_bilinear_expression.representative_variable),
+            ],
+            rhs=1.0,
+        )
+
+    def _fragment_division_expression(self) -> None:
+        denominator_variable = (
+            self.child_expressions[1][1]
+            if isinstance(self.child_expressions[1], tuple)
+            else self.child_expressions[1].representative_variable
+        )
+        helper_bilinear_expression = ble.BilinearExpression(
+            f"bl_{self.name}",
+            self.model_data,
+            (denominator_variable, self.representative_variable),
+        )
+        self.model_data.bilinear_expressions[f"bl_{self.name}"] = (
+            helper_bilinear_expression
+        )
+        if isinstance(self.child_expressions[0], float):
+            self._handle_division_float_numerator(helper_bilinear_expression)
+        else:
+            self._handle_division_nonlinear_numerator(helper_bilinear_expression)
+
+    def _handle_division_float_numerator(
+        self, helper_bilinear_expression: ble.BilinearExpression
+    ) -> None:
+        rhs = (
+            self.child_expressions[0]
+            if not isinstance(self.child_expressions[1], tuple)
+            else self.child_expressions[0] / self.child_expressions[1][0]
+        )
+        self.model_data.constraints[f"c_{self.name}"] = con.Constraint(
+            f"c_{self.name}",
+            variables=[
+                (1.0, helper_bilinear_expression.representative_variable),
+            ],
+            rhs=rhs,
+        )
+
+    def _handle_division_nonlinear_numerator(
+        self, helper_bilinear_expression: ble.BilinearExpression
+    ) -> None:
+        rhs_denominator = (
+            1.0
+            if not isinstance(self.child_expressions[1], tuple)
+            else self.child_expressions[1][0]
+        )
+        rhs_variable = (
+            (
+                self.child_expressions[0][0] / rhs_denominator,
+                self.child_expressions[0][1],
+            )
+            if isinstance(self.child_expressions[0], tuple)
+            else (
+                1.0 / rhs_denominator,
+                self.child_expressions[0].representative_variable,
+            )
+        )
+        self.model_data.constraints[f"c_{self.name}"] = con.Constraint(
+            f"c_{self.name}",
+            variables=[
+                rhs_variable,
+                (-1.0, helper_bilinear_expression.representative_variable),
+            ],
+            rhs=0.0,
         )
 
     def _add_nonlinear_expression_child(
