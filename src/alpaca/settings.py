@@ -52,7 +52,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods
 
     def save_to_json(self):
         """
-        function that saves the self-object as a dict to json
+        Function that saves the self-object as a dict to json
         """
         logger.info("\tThe settings are saved as JSON-format to the export folder")
         json_data = self.__dict__

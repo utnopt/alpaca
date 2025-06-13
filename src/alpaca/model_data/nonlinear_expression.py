@@ -17,9 +17,33 @@ import alpaca.settings as s
 
 
 class NonlinearExpression:
-    """Nonlinear expression."""
+    """Represents a general nonlinear expression in an optimization model.
 
-    def __init__(self, name: str, expression_tag, model_data=None):
+    This class handles the parsing, representation, and transformation of nonlinear expressions
+    into piecewise linear approximations that can be solved by linear solvers. It recursively
+    processes expression trees and decomposes them into simpler one-dimensional, bilinear, or
+    multilinear expressions.
+
+    Attributes:
+        name: Unique identifier for the expression
+        expression_type: Type of the nonlinear operation (e.g., 'sum', 'product', 'exp')
+        expression_tag: Original expression tag from the OSiL format
+        model_data: Reference to the containing model data object
+        child_expressions: List of child expressions in the expression tree
+        representative_variable: Variable representing the result of the expression
+        fragmented: Flag indicating if the expression has been decomposed
+    """
+
+    def __init__(
+        self, name: str, expression_tag, model_data: "ModelData" | None = None
+    ):
+        """Initialize a nonlinear expression with its XML tag and optional model data.
+
+        Args:
+            name: Unique identifier for the expression
+            expression_tag: XML tag containing the expression from OSiL format
+            model_data: Reference to the containing model data object
+        """
         self.name = name
         self.expression_type = expression_tag.name
         self.expression_tag = expression_tag
@@ -32,8 +56,13 @@ class NonlinearExpression:
             model_data.variables[f"r_{self.name}"] = self.representative_variable
         self.fragmented = False
 
-    def grow_expression_tree(self):
-        """Grow expression tree."""
+    def grow_expression_tree(self) -> None:
+        """Build the expression tree recursively from OSiL XML tags.
+
+        Parses the expression_tag's contents and creates child nodes for variables, numbers,
+        and nested nonlinear expressions. Each child is processed and added to the
+        child_expressions list.
+        """
         for child_expression_tag in self.expression_tag.contents:
             child_expression_tag_name = udh.hash_nonlinearity(str(child_expression_tag))
             if child_expression_tag.name == "variable":
@@ -53,9 +82,17 @@ class NonlinearExpression:
                     child_expression_tag_name, child_expression_tag
                 )
 
-    def fragment_expression_tree_to_low_dimensional_functions(self):
+    def fragment_expression_tree_to_low_dimensional_functions(self) -> None:
         # pylint: disable=too-many-branches
-        """Fragment expression tree to one dim, bilinear or multilinear functions."""
+        """Decompose complex expressions into simple low-dimensional functions.
+
+        Based on the expression type, this method breaks down the nonlinear expression into
+        simpler one-dimensional, bilinear, or multilinear expressions that can be approximated
+        using piecewise linear functions. It handles various expression types such as products,
+        sums, exponentials, logarithms, trigonometric functions, etc.
+
+        The method recursively processes child expressions and marks them as fragmented.
+        """
         if self.expression_type == "product":
             self._fragment_product_expression()
         elif self.expression_type == "sum":
@@ -71,9 +108,9 @@ class NonlinearExpression:
         elif self.expression_type == "sqrt":
             self._fragment_one_dim_expression(ode.SquareRootExpression)
         elif self.expression_type == "sin":
-            self._fragment_one_dim_expression(ode.SinusExpression)
+            self._fragment_one_dim_expression(ode.SineExpression)
         elif self.expression_type == "cos":
-            self._fragment_one_dim_expression(ode.CosinusExpression)
+            self._fragment_one_dim_expression(ode.CosineExpression)
         elif self.expression_type == "log10":
             self._fragment_one_dim_expression(ode.LogExpression)
         elif self.expression_type == "tanh":
@@ -98,7 +135,7 @@ class NonlinearExpression:
                 child_expression.fragment_expression_tree_to_low_dimensional_functions()
                 child_expression.fragmented = True
 
-    def _fragment_product_expression(self):
+    def _fragment_product_expression(self) -> None:
         float_children, variable_children, nonlinear_children = (
             self._separate_children()
         )
@@ -115,7 +152,11 @@ class NonlinearExpression:
                 variables_in_product, self.representative_variable
             )
 
-    def _separate_children(self):
+    def _separate_children(
+        self,
+    ) -> tuple[
+        list[float], list[tuple[float, var.Variable]], list[NonlinearExpression]
+    ]:
         float_children = [
             child for child in self.child_expressions if isinstance(child, float)
         ]
@@ -130,7 +171,9 @@ class NonlinearExpression:
         return float_children, variable_children, nonlinear_children
 
     @staticmethod
-    def _calculate_product_coeff(float_children, variable_children):
+    def _calculate_product_coeff(
+        float_children: list[float], variable_children: list[tuple[float, var.Variable]]
+    ) -> float:
         product_coeff = 1.0
         for coeff in float_children:
             product_coeff *= coeff
@@ -139,12 +182,17 @@ class NonlinearExpression:
         return product_coeff
 
     @staticmethod
-    def _get_variables_in_product(variable_children, nonlinear_children):
+    def _get_variables_in_product(
+        variable_children: list[tuple[float, var.Variable]],
+        nonlinear_children: list[NonlinearExpression],
+    ) -> list[var.Variable]:
         variables = [variable for _, variable in variable_children]
         variables.extend(child.representative_variable for child in nonlinear_children)
         return variables
 
-    def _create_helper_variable_and_constraint(self, product_coeff):
+    def _create_helper_variable_and_constraint(
+        self, product_coeff: float
+    ) -> var.Variable:
         lb = self.representative_variable.lb / product_coeff
         ub = self.representative_variable.ub / product_coeff
         helper_var_lb, helper_var_ub = min(lb, ub), max(lb, ub)
@@ -164,7 +212,11 @@ class NonlinearExpression:
         )
         return helper_variable
 
-    def _create_product_expression(self, variables_in_product, representative_variable):
+    def _create_product_expression(
+        self,
+        variables_in_product: list[var.Variable],
+        representative_variable: var.Variable,
+    ) -> None:
         num_vars = len(variables_in_product)
         if num_vars > 2:
             self._create_multilinear_expression(
@@ -188,7 +240,9 @@ class NonlinearExpression:
                 ],
             )
 
-    def _create_multilinear_expression(self, variables, representative_variable):
+    def _create_multilinear_expression(
+        self, variables: list[var.Variable], representative_variable: var.Variable
+    ) -> None:
         expr_name = f"ml_{representative_variable.name}"
         self.model_data.multilinear_expressions[expr_name] = mle.MultilinearExpression(
             expr_name,
@@ -197,7 +251,9 @@ class NonlinearExpression:
             representative_variable=representative_variable,
         )
 
-    def _create_bilinear_expression(self, variables, representative_variable):
+    def _create_bilinear_expression(
+        self, variables: list[var.Variable], representative_variable: var.Variable
+    ) -> None:
         expr_name = f"bl_{representative_variable.name}"
         self.model_data.bilinear_expressions[expr_name] = ble.BilinearExpression(
             expr_name,
@@ -206,7 +262,9 @@ class NonlinearExpression:
             representative_variable=representative_variable,
         )
 
-    def _create_square_expression(self, variables, representative_variable):
+    def _create_square_expression(
+        self, variables: list[var.Variable], representative_variable: var.Variable
+    ) -> None:
         expr_name = f"square_{representative_variable.name}"
         self.model_data.one_dim_expressions[expr_name] = ode.SquareExpression(
             expr_name,
@@ -215,7 +273,7 @@ class NonlinearExpression:
             representative_variable=representative_variable,
         )
 
-    def _fragment_sum_expression(self):
+    def _fragment_sum_expression(self) -> None:
         constraint = con.Constraint(
             f"c_{self.expression_type}_{self.name}",
             con_type="==",
@@ -236,13 +294,15 @@ class NonlinearExpression:
                     (1.0, child_expression.representative_variable)
                 )
 
-    def _fragment_one_dim_expression(self, expression_class):
+    def _fragment_one_dim_expression(self, expression_class: type) -> None:
         if len(self.child_expressions) == 2:
             self._fragment_one_dim_expression_with_coefficient(expression_class)
         elif len(self.child_expressions) == 1:
             self._fragment_one_dim_expression_without_coefficient(expression_class)
 
-    def _fragment_one_dim_expression_with_coefficient(self, expression_class):
+    def _fragment_one_dim_expression_with_coefficient(
+        self, expression_class: type
+    ) -> None:
         if isinstance(self.child_expressions[0], float):
             coeff = self.child_expressions[0]
             variable = (
@@ -279,7 +339,9 @@ class NonlinearExpression:
             representative_variable=self.representative_variable,
         )
 
-    def _fragment_one_dim_expression_without_coefficient(self, expression_class):
+    def _fragment_one_dim_expression_without_coefficient(
+        self, expression_class: type
+    ) -> None:
         variable = (
             self.child_expressions[0][1]
             if isinstance(self.child_expressions[0], tuple)
@@ -294,7 +356,7 @@ class NonlinearExpression:
             representative_variable=self.representative_variable,
         )
 
-    def _fragment_negate_expression(self):
+    def _fragment_negate_expression(self) -> None:
         self.model_data.constraints[f"c_{self.name}"] = con.Constraint(
             f"c_{self.name}",
             variables=[
@@ -305,8 +367,8 @@ class NonlinearExpression:
         )
 
     def _add_nonlinear_expression_child(
-        self, child_expression_tag_name, child_expression_tag
-    ):
+        self, child_expression_tag_name: str, child_expression_tag
+    ) -> None:
         if child_expression_tag_name in self.model_data.nonlinear_expressions:
             self.child_expressions.append(
                 self.model_data.nonlinear_expressions[child_expression_tag_name]
@@ -321,5 +383,5 @@ class NonlinearExpression:
         self.child_expressions.append(child_expression)
         child_expression.grow_expression_tree()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.expression_type + "_" + self.name

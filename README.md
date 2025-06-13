@@ -6,7 +6,7 @@ Code to ALPACA: Adaptive Linear Piecewise Approximation with Combinatorial Augme
 ## Features
 [...]
 
-## installation
+## Installation
 
 create conda env with all required packages
 ```bash
@@ -22,4 +22,4 @@ create conda env with all required packages
 - get logs and results from export/
 
 ## Authors and acknowledgment
-Code and model by: Tobias Kuen,
+Code and model by: Tobias Kuen, ...

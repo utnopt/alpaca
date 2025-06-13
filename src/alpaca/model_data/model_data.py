@@ -19,9 +19,19 @@ from alpaca.model_data import (
 
 
 class ModelData:  # pylint: disable=too-many-instance-attributes
-    """Data container."""
+    """A comprehensive data container for optimization models based on OSiL format.
+
+    This class maintains collections of variables, constraints, and various types of expressions
+    (nonlinear, bilinear, multilinear, and one-dimensional) that comprise an optimization model.
+    It provides methods to build and manipulate model components from OSiL data.
+    """
 
     def __init__(self, settings: UserSettings):
+        """Initialize a ModelData instance with user settings.
+
+        Args:
+            settings: User configuration settings for the model.
+        """
         self.settings = settings
         self.variables = {"x_-1": var.Variable("x_-1", lb=-StaticSettings.infinity)}
         self.constraints = {}
@@ -31,9 +41,12 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         self.bilinear_expressions: dict[str, ble.BilinearExpression] = {}
         self.multilinear_expressions: dict[str, mle.MultilinearExpression] = {}
 
-    def build_model_from_osil_data(self):
-        """
-        Create a data container object from osil data
+    def build_model_from_osil_data(self) -> None:
+        """Create a complete model from OSiL data file.
+
+        Reads the OSiL file specified in settings, builds variables, constraints,
+        and different types of expressions, and applies piecewise linear approximations
+        to nonlinear functions.
         """
         logger.info("Reading data..")
         osil_data = self._read_osil_file()
@@ -51,7 +64,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         self._fragment_expression_trees_to_low_dimensional_functions()
         self._apply_piecewise_linear_approximation_to_low_dimensional_functions()
 
-    def _read_osil_file(self):
+    def _read_osil_file(self) -> BeautifulSoup:
         with open(
             StaticSettings.instances_path + self.settings.osil_file_name + ".osil",
             "r",
@@ -61,7 +74,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         data = BeautifulSoup(data, "xml")
         return data
 
-    def _add_variables_from_osil_data(self, osil_data):
+    def _add_variables_from_osil_data(self, osil_data: BeautifulSoup) -> None:
         var_tags = osil_data.find("variables").find_all("var")
         for v in var_tags:
             var_name = f"x_{len(self.variables) - 1}"
@@ -82,7 +95,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             variable.var_type = "C" if var_type is None else var_type
             self.variables[var_name] = variable
 
-    def _add_constraints_from_osil_data(self, osil_data):
+    def _add_constraints_from_osil_data(self, osil_data: BeautifulSoup) -> None:
         try:
             cons_tags = osil_data.find("constraints").find_all("con")
         except AttributeError:
@@ -96,7 +109,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             constraint.rhs = float(ub) if lb is None else float(lb)
             self.constraints[con_name] = constraint
 
-    def _add_objective_from_osil_data(self, osil_data):
+    def _add_objective_from_osil_data(self, osil_data: BeautifulSoup) -> None:
         objective = osil_data.find("objectives").find_all("obj")[0]
         con_name = f"c_{-1}"
         constraint = con.Constraint(con_name, con_type="<=")
@@ -109,7 +122,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             )
 
     @staticmethod
-    def _expand_osil_elements(parent_element, dtype=float):
+    def _expand_osil_elements(parent_element: BeautifulSoup, dtype=float) -> list:
         el_tags = parent_element.find_all("el")
         if el_tags is None:
             return []
@@ -124,7 +137,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
                 expanded.append(dtype(el.text))
         return expanded
 
-    def _add_linear_expressions_from_osil_data(self, osil_data):
+    def _add_linear_expressions_from_osil_data(self, osil_data: BeautifulSoup) -> None:
         lin_con = osil_data.find("linearConstraintCoefficients")
         if lin_con is None:
             return
@@ -149,7 +162,9 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
                     (coeff_vals[pos], self.variables[f"x_{var_indices[pos]}"])
                 )
 
-    def _add_quadratic_expressions_from_osil_data(self, osil_data):
+    def _add_quadratic_expressions_from_osil_data(
+        self, osil_data: BeautifulSoup
+    ) -> None:
         try:
             quad_tags = osil_data.find("quadraticCoefficients").find_all("qTerm")
         except AttributeError:
@@ -207,7 +222,9 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             (coeff, bilinear_expression.representative_variable)
         )
 
-    def _add_nonlinear_expressions_from_osil_data(self, osil_data):
+    def _add_nonlinear_expressions_from_osil_data(
+        self, osil_data: BeautifulSoup
+    ) -> None:
         try:
             nonlinear_tags = osil_data.find("nonlinearExpressions").find_all("nl")
         except AttributeError:
@@ -224,11 +241,11 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
                 (coeff, nonlinear_expression.representative_variable)
             )
 
-    def _add_model_data_to_nonlinear_expressions(self):
+    def _add_model_data_to_nonlinear_expressions(self) -> None:
         for nonlinear_expression in self.nonlinear_expressions.values():
             nonlinear_expression.model_data = self
 
-    def _grow_nonlinear_expression_trees(self):
+    def _grow_nonlinear_expression_trees(self) -> None:
         for nonlinear_expression in self.first_level_nonlinear_expressions.values():
             self.variables[f"r_{nonlinear_expression.name}"] = (
                 nonlinear_expression.representative_variable
@@ -236,11 +253,13 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             nonlinear_expression.model_data = self
             nonlinear_expression.grow_expression_tree()
 
-    def _fragment_expression_trees_to_low_dimensional_functions(self):
+    def _fragment_expression_trees_to_low_dimensional_functions(self) -> None:
         for nonlinear_expression in self.first_level_nonlinear_expressions.values():
             nonlinear_expression.fragment_expression_tree_to_low_dimensional_functions()
 
-    def _apply_piecewise_linear_approximation_to_low_dimensional_functions(self):
+    def _apply_piecewise_linear_approximation_to_low_dimensional_functions(
+        self,
+    ) -> None:
         for expression in self.bilinear_expressions.values():
             expression.apply_piecewise_linear_approximation()
         for expression in self.multilinear_expressions.values():

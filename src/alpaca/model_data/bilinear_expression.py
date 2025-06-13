@@ -7,15 +7,30 @@ import alpaca.settings as s
 
 
 class BilinearExpression:
-    """Bilinear expression."""
+    """Represents a bilinear expression z = x * y.
+
+    Attributes:
+        name: Identifier for the expression
+        first_var: First variable (x) in the expression
+        second_var: Second variable (y) in the expression
+        representative_variable: Variable representing the product (z)
+    """
 
     def __init__(
         self,
         name: str,
         model_data,
         variables: tuple[var.Variable, var.Variable],
-        representative_variable=None,
+        representative_variable: var.Variable | None = None,
     ):
+        """Initialize bilinear expression.
+
+        Args:
+            name: Expression identifier
+            model_data: Container for model components
+            variables: Tuple containing the two input variables (x, y)
+            representative_variable: Optional existing variable to represent product
+        """
         self.name = name
         self.first_var, self.second_var = variables
         # pylint: disable=duplicate-code
