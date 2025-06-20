@@ -88,7 +88,7 @@ class SquareExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.representative_variable.discretize_variable(
+        self.variable.discretize_variable(
             model_data.settings.number_of_breakpoints
         )
 
@@ -162,7 +162,7 @@ class ExponentialExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.representative_variable.discretize_variable(
+        self.variable.discretize_variable(
             model_data.settings.number_of_breakpoints
         )
 
@@ -204,7 +204,7 @@ class LnExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.representative_variable.discretize_variable(
+        self.variable.discretize_variable(
             model_data.settings.number_of_breakpoints
         )
 
@@ -246,7 +246,7 @@ class SquareRootExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.representative_variable.discretize_variable(
+        self.variable.discretize_variable(
             model_data.settings.number_of_breakpoints
         )
 
@@ -288,7 +288,7 @@ class SineExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.representative_variable.discretize_variable(
+        self.variable.discretize_variable(
             model_data.settings.number_of_breakpoints
         )
 
@@ -330,7 +330,7 @@ class CosineExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.representative_variable.discretize_variable(
+        self.variable.discretize_variable(
             model_data.settings.number_of_breakpoints
         )
 
@@ -372,7 +372,7 @@ class LogExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.representative_variable.discretize_variable(
+        self.variable.discretize_variable(
             model_data.settings.number_of_breakpoints
         )
 
@@ -446,7 +446,7 @@ class PowerExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.representative_variable.discretize_variable(
+        self.variable.discretize_variable(
             model_data.settings.number_of_breakpoints
         )
 
@@ -520,7 +520,7 @@ class TangensHExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.representative_variable.discretize_variable(
+        self.variable.discretize_variable(
             model_data.settings.number_of_breakpoints
         )
 
