@@ -1,0 +1,25 @@
+[MAIN]
+max-line-length=100
+ignore=.venv
+ignore-patterns=.venv
+
+[TYPECHECK]
+generated-members=pyo.*
+
+[MESSAGES CONTROL]
+disable=
+    import-error,            # pylint is buggy in some import check cases
+    too-few-public-methods,  # one is often sufficient
+    unsubscriptable-object,  # pylint/issues/3139
+      # if you face further false positiv errors have a look at:
+      # https://pylint.readthedocs.io/en/stable/user_guide/messages/messages_overview.html
+
+[REPORTS]
+
+## Evaluation method for code score:
+# (should return a score between 0 and 10)
+# fail on error:
+evaluation=max(0, 0 if fatal or error else 10.0 - ((float(2 * warning + refactor + convention) / statement) * 10))
+# only fail on fatal (and on a few errors):
+#evaluation=max(0, 0 if fatal         else 10.0 - ((float(100 * error + 2 * warning + refactor + convention) / statement) * 10))
+

@@ -1,16 +1,12 @@
-# [projectname]
+# ALPACA
 
-Code to [projectname]
+Code to ALPACA: Adaptive Linear Piecewise Approximation with Combinatorial Augmentation
 
-Project deals with [...]
-
-Project folder:
-[...]
 
 ## Features
 [...]
 
-## installation
+## Installation
 
 create conda env with all required packages
 ```bash
@@ -19,24 +15,11 @@ create conda env with all required packages
 
 ## Usage
 
-- put your import files into [...]
-- run run_scenario.py
-- get your results from [...]
+- download osil files from www.minlplib.org/download
+- put the files into data/import/instances
+- adjust data/import/config.json
+- run run.py
+- get logs and results from export/
 
 ## Authors and acknowledgment
-Code and model by: [...]
-Project knowledge: [...]
-
-
-
-# License
-
-## Used OSS libraries
-
-
-| library         | min version    | checked version   | license |
------------------ | -------------- | ----------------- | ------------------- |
-[...]             | [...]           | [...]              | [...] |
-
-
-
+Code and model by: Tobias Kuen, ...

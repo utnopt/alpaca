@@ -1,3 +1,4 @@
 {
-"solver_time_limit": 3600
+"solver_time_limit": 3600,
+  "osil_file_name": "alkyl"
 }
