@@ -5,6 +5,7 @@
 import traceback
 
 import alpaca.model_data.model_data as mda
+import alpaca.mpip.mpiphandler as mph
 import alpaca.settings as s
 from alpaca.utils import inout as ut_io, datareading as ut_dr
 from alpaca.utils.logger import logger
@@ -26,6 +27,10 @@ def run_optimization():
 
         model_data = mda.ModelData(user_settings)
         model_data.build_model_from_osil_data()
+
+        mpip_handler = mph.MPIPHandler(model_data.first_level_nonlinear_expressions)
+        mpip_handler.find_mpip_instances_in_nonlinear_expression()
+
         logger.info("Optimization finished successfully.")
         return {"status": "success"}
     except Exception as ex:  # pylint: disable=broad-exception-caught

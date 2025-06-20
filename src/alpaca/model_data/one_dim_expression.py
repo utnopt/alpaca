@@ -88,9 +88,7 @@ class SquareExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.variable.discretize_variable(
-            model_data.settings.number_of_breakpoints
-        )
+        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
 
     def apply_piecewise_linear_approximation(self) -> None:
         """Apply piecewise linear approximation to the square function.
@@ -162,9 +160,7 @@ class ExponentialExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.variable.discretize_variable(
-            model_data.settings.number_of_breakpoints
-        )
+        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
 
     def apply_piecewise_linear_approximation(self) -> None:
         """Apply piecewise linear approximation to the exponential function.
@@ -204,9 +200,7 @@ class LnExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.variable.discretize_variable(
-            model_data.settings.number_of_breakpoints
-        )
+        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
 
     def apply_piecewise_linear_approximation(self) -> None:
         """Apply piecewise linear approximation to the natural logarithm function.
@@ -246,9 +240,7 @@ class SquareRootExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.variable.discretize_variable(
-            model_data.settings.number_of_breakpoints
-        )
+        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
 
     def apply_piecewise_linear_approximation(self) -> None:
         """Apply piecewise linear approximation to the square root function.
@@ -288,9 +280,7 @@ class SineExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.variable.discretize_variable(
-            model_data.settings.number_of_breakpoints
-        )
+        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
 
     def apply_piecewise_linear_approximation(self) -> None:
         """Apply piecewise linear approximation to the sine function.
@@ -330,9 +320,7 @@ class CosineExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.variable.discretize_variable(
-            model_data.settings.number_of_breakpoints
-        )
+        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
 
     def apply_piecewise_linear_approximation(self) -> None:
         """Apply piecewise linear approximation to the cosine function.
@@ -372,9 +360,7 @@ class LogExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.variable.discretize_variable(
-            model_data.settings.number_of_breakpoints
-        )
+        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
 
     def apply_piecewise_linear_approximation(self) -> None:
         """Apply piecewise linear approximation to the base-10 logarithm function.
@@ -446,9 +432,7 @@ class PowerExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.variable.discretize_variable(
-            model_data.settings.number_of_breakpoints
-        )
+        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
 
     def apply_piecewise_linear_approximation(self) -> None:
         """Apply piecewise linear approximation to the power function.
@@ -520,9 +504,7 @@ class TangensHExpression(OneDimExpression):
         """
         super().__init__(name, model_data, representative_variable)
         self.variable = variable
-        self.variable.discretize_variable(
-            model_data.settings.number_of_breakpoints
-        )
+        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
 
     def apply_piecewise_linear_approximation(self) -> None:
         """Apply piecewise linear approximation to the hyperbolic tangent function.

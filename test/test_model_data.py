@@ -6,6 +6,7 @@ import unittest
 
 import alpaca.settings as s
 import alpaca.model_data.model_data as mda
+import alpaca.mpip.mpiphandler as mph
 
 
 class TestModelData(unittest.TestCase):
@@ -29,6 +30,9 @@ class TestModelData(unittest.TestCase):
 
             model_data = mda.ModelData(user_settings)
             model_data.build_model_from_osil_data()
+
+            mpip_handler = mph.MPIPHandler(model_data.first_level_nonlinear_expressions)
+            mpip_handler.find_mpip_instances_in_nonlinear_expression()
 
 
 if __name__ == "__main__":
