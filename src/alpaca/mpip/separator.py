@@ -157,10 +157,10 @@ class Separator:
                 sep_implying_variables.append(var)
             self.sep_implying_variables[implying_index] = sep_implying_variables
 
-        self.sep_implied_variables = {
+        self.sep_implied_variables = [
             self.separation_model.addVar(f"sep_implied_{i}", ub=1, obj=-1)
             for i in range(len(self.mpip.implied_variables))
-        }
+        ]
 
     def _add_separation_constraints(self) -> None:
         """Add constraints to separation model."""
