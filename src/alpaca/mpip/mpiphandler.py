@@ -4,6 +4,7 @@
 """
 import pyscipopt as scip
 
+from alpaca.utils.logger import logger
 import alpaca.utils.datahandling as udh
 from alpaca.model_data import nonlinear_expression as nle
 import alpaca.mpip.mpip as mp
@@ -19,9 +20,11 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         self.first_level_nonlinear_expressions = first_level_nonlinear_expressions
         self.mpip_dict: dict[str, mp.MPIP] = {}
         self.mpip_counter: int = 0
+        self._find_mpip_instances_in_nonlinear_expression()
 
-    def find_mpip_instances_in_nonlinear_expression(self) -> None:
+    def _find_mpip_instances_in_nonlinear_expression(self) -> None:
         """Extract mpip instances from nonlinear expression trees."""
+        logger.info("Add feature mpip..")
         for nonlinear_expression in self.first_level_nonlinear_expressions.values():
             self._process_expression_tree(nonlinear_expression)
 

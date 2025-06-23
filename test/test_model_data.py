@@ -5,12 +5,14 @@
 import unittest
 
 import alpaca.settings as s
+import alpaca.model_scip.model_scip as msc
 import alpaca.model_data.model_data as mda
-import alpaca.mpip.mpiphandler as mph
+import alpaca.solver.solver as slv
+from alpaca.mpip import mpiphandler as mph, separationhandler as mps
 
 
 class TestModelData(unittest.TestCase):
-    """unit test for the model data buildup."""
+    """Unit test for the model data buildup."""
 
     def setUp(self):
         """
@@ -29,10 +31,17 @@ class TestModelData(unittest.TestCase):
             user_settings = s.UserSettings(config_dict)
 
             model_data = mda.ModelData(user_settings)
-            model_data.build_model_from_osil_data()
+
+            scip_model = msc.ModelScip(model_data, user_settings)
+
+            solver = slv.Solver(scip_model, user_settings)
 
             mpip_handler = mph.MPIPHandler(model_data.first_level_nonlinear_expressions)
-            mpip_handler.find_mpip_instances_in_nonlinear_expression()
+
+            mpip_separation_handler = mps.SeparationHandler(mpip_handler, scip_model.opt_model)
+            solver.mpip_separation_handler = mpip_separation_handler
+
+            solver.solve_instance()
 
 
 if __name__ == "__main__":

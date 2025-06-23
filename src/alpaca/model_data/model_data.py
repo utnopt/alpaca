@@ -40,8 +40,9 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         self.one_dim_expressions: dict[str, ode.OneDimExpression] = {}
         self.bilinear_expressions: dict[str, ble.BilinearExpression] = {}
         self.multilinear_expressions: dict[str, mle.MultilinearExpression] = {}
+        self._build_model_from_osil_data()
 
-    def build_model_from_osil_data(self) -> None:
+    def _build_model_from_osil_data(self) -> None:
         """Create a complete model from OSiL data file.
 
         Reads the OSiL file specified in settings, builds variables, constraints,

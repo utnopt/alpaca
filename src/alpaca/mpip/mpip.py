@@ -18,13 +18,15 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         self.implying_breakpoints: dict[str, list[float]] = {}
         self.implied_breakpoints: list[float] = []
         self.implied_id = ""
-        self.implying_ids = []
+        self.implying_variables: dict[str, list[scip.Variable]] = {}
+        self.implied_variables: list[scip.Variable] = []
         self.relation = {}
         self.implying_function = scip.Expr()
         self.interval_lp = scip.Model()
         self.interval_lp.hideOutput()
         self.interval_lp_implying_vars = {}
         self.interval_lp_implied_var = 0
+        self.separator = None
         self.feasible = True
 
     def build_mpip(self) -> None:
@@ -36,11 +38,13 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         """Add implied variable information."""
         self.implied_id = implied_id
         self.implied_breakpoints = breakpoints
-        self.interval_lp_implied_var = self.interval_lp.addVar(f"x_{self.implied_id}", lb=None)
+        self.interval_lp_implied_var = self.interval_lp.addVar(
+            f"x_{self.implied_id}", lb=None
+        )
 
     def add_implying_id(self, implying_id: str, breakpoints: list[float]) -> None:
         """Add implying variable information."""
-        self.implying_ids.append(implying_id)
+        self.implying_variables.update({implying_id: []})
         self.implying_breakpoints[implying_id] = breakpoints
         var_name = f"x_{implying_id}"
         self.interval_lp_implying_vars[implying_id] = self.interval_lp.addVar(var_name)

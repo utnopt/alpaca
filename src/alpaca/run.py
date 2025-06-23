@@ -5,7 +5,9 @@
 import traceback
 
 import alpaca.model_data.model_data as mda
-import alpaca.mpip.mpiphandler as mph
+import alpaca.model_scip.model_scip as msc
+import alpaca.solver.solver as slv
+from alpaca.mpip import mpiphandler as mph, separationhandler as mps
 import alpaca.settings as s
 from alpaca.utils import inout as ut_io, datareading as ut_dr
 from alpaca.utils.logger import logger
@@ -26,10 +28,19 @@ def run_optimization():
         user_settings.save_to_json()
 
         model_data = mda.ModelData(user_settings)
-        model_data.build_model_from_osil_data()
 
-        mpip_handler = mph.MPIPHandler(model_data.first_level_nonlinear_expressions)
-        mpip_handler.find_mpip_instances_in_nonlinear_expression()
+        scip_model = msc.ModelScip(model_data, user_settings)
+
+        solver = slv.Solver(scip_model, user_settings)
+
+        if user_settings.feature_mpip:
+            mpip_handler = mph.MPIPHandler(model_data.first_level_nonlinear_expressions)
+            mpip_separation_handler = mps.SeparationHandler(
+                mpip_handler, scip_model.opt_model
+            )
+            solver.mpip_separation_handler = mpip_separation_handler
+
+        solver.solve_instance()
 
         logger.info("Optimization finished successfully.")
         return {"status": "success"}
