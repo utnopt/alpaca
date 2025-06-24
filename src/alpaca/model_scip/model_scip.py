@@ -2,7 +2,7 @@
 """
 @authors: kuen,
 """
-import pyscipopt as opt_solver
+import pyscipopt as scip
 
 from alpaca.model_data import model_data as mda
 from alpaca.settings import UserSettings
@@ -13,11 +13,12 @@ class ModelScip:
     """Optimization model object."""
 
     def __init__(self, data: mda.ModelData, settings: UserSettings):
-        self.opt_model = opt_solver.Model()
+        self.opt_model = scip.Model()
         self.data = data
         self.settings = settings
+        self._build_optimization_model()
 
-    def build_optimization_model(self):
+    def _build_optimization_model(self):
         """
         Buildup optimization model.
         """

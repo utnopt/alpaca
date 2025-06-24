@@ -31,7 +31,13 @@ class StaticSettings:
     log_rotation_type = "size"  # use "size", "time" or "none"
 
     # ===== Data settings =====
-    infinity = 1e5
+    infinity = 1e2
+    feasibility_tolerance = 1e-3
+
+    # ===== MPIP settings =====
+    max_violation_relation = 1e-2
+    min_cut_violation = 1e-2
+    rounding_precision = 5
 
 
 class UserSettings:  # pylint: disable=too-few-public-methods
@@ -42,7 +48,8 @@ class UserSettings:  # pylint: disable=too-few-public-methods
     def __init__(self, config_dict):
         self.solver_time_limit = int(config_dict.get("solver_time_limit", 3600))
         self.osil_file_name = str(config_dict.get("osil_file_name", "st_e41"))
-        self.number_of_breakpoints = int(config_dict.get("number_of_breakpoints", 10))
+        self.number_of_breakpoints = int(config_dict.get("number_of_breakpoints", 4))
+        self.feature_mpip = int(config_dict.get("feature_mpip", 0))
 
         self.export_path = (
             StaticSettings.base_path
@@ -54,7 +61,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods
         """
         Function that saves the self-object as a dict to json
         """
-        logger.info("\tThe settings are saved as JSON-format to the export folder")
+        logger.info("The settings are saved as JSON-format to the export folder")
         json_data = self.__dict__
         with open(self.export_path + "config.json", "w", encoding="utf8") as json_file:
             json.dump(json_data, json_file, indent=4)
