@@ -2,7 +2,9 @@
 """
 @authors: kuen,
 """
-from alpaca.model_data import variable as var
+import math
+
+from alpaca.model_data import variable as var, constraint as con
 import alpaca.settings as s
 
 
@@ -22,6 +24,7 @@ class OneDimExpression:
         self,
         name: str,
         model_data: "ModelData",
+        variable: var.Variable,
         representative_variable: var.Variable | None = None,
     ):
         """Initialize a one-dimensional expression.
@@ -41,6 +44,12 @@ class OneDimExpression:
                 f"r_{name}", var.Variable(f"r_{name}", lb=-s.StaticSettings.infinity)
             )
         )
+        self.model_data = model_data
+        self.variable: var.Variable = variable
+        self._adjust_representative_variable_bounds()
+
+    def _adjust_representative_variable_bounds(self) -> None:
+        pass
 
     def apply_piecewise_linear_approximation(self) -> None:
         """Apply piecewise linear approximation to the expression.
@@ -48,6 +57,38 @@ class OneDimExpression:
         This method is implemented by subclasses to create appropriate linear constraints
         that approximate the nonlinear function represented by this expression.
         """
+        if self.model_data.settings.pwl_method == "multiple-choice":
+            self._apply_multiple_choice_method()
+
+    def _apply_multiple_choice_method(self):
+        reference_points = self._get_reference_points_multiple_choice()
+        self.model_data.constraints.update(
+            {
+                f"mc_{self.name}": con.Constraint(
+                    f"mc_{self.name}",
+                    con_type="==",
+                    variables=[(-1.0, self.representative_variable)]
+                    + [
+                        (
+                            (reference_points[i + 1] - reference_point)
+                            / (
+                                self.variable.breakpoints[i + 1]
+                                - self.variable.breakpoints[i]
+                            ),
+                            self.variable.pwl_variables_continuous[i],
+                        )
+                        for i, reference_point in enumerate(reference_points[:-1])
+                    ]
+                    + [
+                        (reference_point, self.variable.pwl_variables_binary[i])
+                        for i, reference_point in enumerate(reference_points[:-1])
+                    ],
+                )
+            }
+        )
+
+    def _get_reference_points_multiple_choice(self) -> list[float]:
+        return []
 
     def __repr__(self) -> str:
         """Return string representation of the expression.
@@ -86,48 +127,15 @@ class SquareExpression(OneDimExpression):
             representative_variable: Optional existing variable to represent the result.
                 If None, a new variable will be created.
         """
-        super().__init__(name, model_data, representative_variable)
-        self.variable = variable
-        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
+        super().__init__(name, model_data, variable, representative_variable)
+        self.variable.add_nonlinearity_to_occurring_in("square")
 
-    def apply_piecewise_linear_approximation(self) -> None:
-        """Apply piecewise linear approximation to the square function.
+    def _get_reference_points_multiple_choice(self) -> list[float]:
+        return [bp * bp for bp in self.variable.breakpoints]
 
-        Creates linear constraints that approximate the square function
-        over the domain of the input variable using breakpoints.
-        """
-
-
-class DivisionExpression(OneDimExpression):
-    """Division expression representing r = 1/x.
-
-    A one-dimensional expression where the representative variable equals
-    the reciprocal of the input variable.
-
-    Attributes:
-        name: Unique identifier for the expression.
-        variable: Input variable being reciprocated.
-        representative_variable: Variable representing the result of the expression.
-    """
-
-    def __init__(
-        self,
-        name: str,
-        model_data: "ModelData",
-        variable: var.Variable,
-        representative_variable: var.Variable | None = None,
-    ):
-        """Initialize a division expression.
-
-        Args:
-            name: Unique identifier for the expression.
-            model_data: Reference to the containing model data object.
-            variable: Input variable to be reciprocated.
-            representative_variable: Optional existing variable to represent the result.
-                If None, a new variable will be created.
-        """
-        super().__init__(name, model_data, representative_variable)
-        self.variable = variable
+    def _adjust_representative_variable_bounds(self) -> None:
+        self.representative_variable.ub = max(self.variable.ub, -self.variable.lb) ** 2
+        self.representative_variable.lb = min(self.variable.lb**2, 0)
 
 
 class ExponentialExpression(OneDimExpression):
@@ -158,16 +166,15 @@ class ExponentialExpression(OneDimExpression):
             representative_variable: Optional existing variable to represent the result.
                 If None, a new variable will be created.
         """
-        super().__init__(name, model_data, representative_variable)
-        self.variable = variable
-        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
+        super().__init__(name, model_data, variable, representative_variable)
+        self.variable.add_nonlinearity_to_occurring_in("exp")
 
-    def apply_piecewise_linear_approximation(self) -> None:
-        """Apply piecewise linear approximation to the exponential function.
+    def _get_reference_points_multiple_choice(self) -> list[float]:
+        return [math.exp(bp) for bp in self.variable.breakpoints]
 
-        Creates linear constraints that approximate the exponential function
-        over the domain of the input variable using breakpoints.
-        """
+    def _adjust_representative_variable_bounds(self) -> None:
+        self.representative_variable.lb = math.exp(self.variable.lb)
+        self.representative_variable.ub = math.exp(self.variable.ub)
 
 
 class LnExpression(OneDimExpression):
@@ -198,16 +205,16 @@ class LnExpression(OneDimExpression):
             representative_variable: Optional existing variable to represent the result.
                 If None, a new variable will be created.
         """
-        super().__init__(name, model_data, representative_variable)
-        self.variable = variable
-        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
+        super().__init__(name, model_data, variable, representative_variable)
+        self.variable.add_nonlinearity_to_occurring_in("ln")
 
-    def apply_piecewise_linear_approximation(self) -> None:
-        """Apply piecewise linear approximation to the natural logarithm function.
+    def _get_reference_points_multiple_choice(self) -> list[float]:
+        return [math.log(bp) for bp in self.variable.breakpoints]
 
-        Creates linear constraints that approximate the logarithm function
-        over the domain of the input variable using breakpoints.
-        """
+    def _adjust_representative_variable_bounds(self) -> None:
+        self.variable.lb = max(self.variable.lb, s.StaticSettings.feasibility_tolerance)
+        self.representative_variable.lb = math.log(self.variable.lb)
+        self.representative_variable.ub = math.log(self.variable.ub)
 
 
 class SquareRootExpression(OneDimExpression):
@@ -238,16 +245,16 @@ class SquareRootExpression(OneDimExpression):
             representative_variable: Optional existing variable to represent the result.
                 If None, a new variable will be created.
         """
-        super().__init__(name, model_data, representative_variable)
-        self.variable = variable
-        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
+        super().__init__(name, model_data, variable, representative_variable)
+        self.variable.add_nonlinearity_to_occurring_in("sqrt")
 
-    def apply_piecewise_linear_approximation(self) -> None:
-        """Apply piecewise linear approximation to the square root function.
+    def _get_reference_points_multiple_choice(self) -> list[float]:
+        return [math.sqrt(bp) for bp in self.variable.breakpoints]
 
-        Creates linear constraints that approximate the square root function
-        over the domain of the input variable using breakpoints.
-        """
+    def _adjust_representative_variable_bounds(self) -> None:
+        self.variable.lb = max(self.variable.lb, 0.0)
+        self.representative_variable.lb = math.sqrt(self.variable.lb)
+        self.representative_variable.ub = math.sqrt(self.variable.ub)
 
 
 class SineExpression(OneDimExpression):
@@ -278,16 +285,15 @@ class SineExpression(OneDimExpression):
             representative_variable: Optional existing variable to represent the result.
                 If None, a new variable will be created.
         """
-        super().__init__(name, model_data, representative_variable)
-        self.variable = variable
-        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
+        super().__init__(name, model_data, variable, representative_variable)
+        self.variable.add_nonlinearity_to_occurring_in("sin")
 
-    def apply_piecewise_linear_approximation(self) -> None:
-        """Apply piecewise linear approximation to the sine function.
+    def _get_reference_points_multiple_choice(self) -> list[float]:
+        return [math.sin(bp) for bp in self.variable.breakpoints]
 
-        Creates linear constraints that approximate the sine function
-        over the domain of the input variable using breakpoints.
-        """
+    def _adjust_representative_variable_bounds(self) -> None:
+        self.representative_variable.lb = -1.0
+        self.representative_variable.ub = 1.0
 
 
 class CosineExpression(OneDimExpression):
@@ -318,16 +324,15 @@ class CosineExpression(OneDimExpression):
             representative_variable: Optional existing variable to represent the result.
                 If None, a new variable will be created.
         """
-        super().__init__(name, model_data, representative_variable)
-        self.variable = variable
-        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
+        super().__init__(name, model_data, variable, representative_variable)
+        self.variable.add_nonlinearity_to_occurring_in("cos")
 
-    def apply_piecewise_linear_approximation(self) -> None:
-        """Apply piecewise linear approximation to the cosine function.
+    def _get_reference_points_multiple_choice(self) -> list[float]:
+        return [math.cos(bp) for bp in self.variable.breakpoints]
 
-        Creates linear constraints that approximate the cosine function
-        over the domain of the input variable using breakpoints.
-        """
+    def _adjust_representative_variable_bounds(self) -> None:
+        self.representative_variable.lb = -1.0
+        self.representative_variable.ub = 1.0
 
 
 class LogExpression(OneDimExpression):
@@ -358,16 +363,16 @@ class LogExpression(OneDimExpression):
             representative_variable: Optional existing variable to represent the result.
                 If None, a new variable will be created.
         """
-        super().__init__(name, model_data, representative_variable)
-        self.variable = variable
-        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
+        super().__init__(name, model_data, variable, representative_variable)
+        self.variable.add_nonlinearity_to_occurring_in("log10")
 
-    def apply_piecewise_linear_approximation(self) -> None:
-        """Apply piecewise linear approximation to the base-10 logarithm function.
+    def _get_reference_points_multiple_choice(self) -> list[float]:
+        return [math.log10(bp) for bp in self.variable.breakpoints]
 
-        Creates linear constraints that approximate the logarithm function
-        over the domain of the input variable using breakpoints.
-        """
+    def _adjust_representative_variable_bounds(self) -> None:
+        self.variable.lb = max(self.variable.lb, s.StaticSettings.feasibility_tolerance)
+        self.representative_variable.lb = math.log10(self.variable.lb)
+        self.representative_variable.ub = math.log10(self.variable.ub)
 
 
 class AbsExpression(OneDimExpression):
@@ -382,96 +387,56 @@ class AbsExpression(OneDimExpression):
         representative_variable: Variable representing the result of the expression.
     """
 
-    def __init__(
-        self,
-        name: str,
-        model_data: "ModelData",
-        variable: var.Variable,
-        representative_variable: var.Variable | None = None,
-    ):
-        """Initialize an absolute value expression.
+    def apply_piecewise_linear_approximation(self):
+        binary_abs_variable = var.Variable(
+            f"abs_bin_{self.variable.name}", var_type="B"
+        )
+        self.model_data.variables.update(
+            {f"abs_bin_{self.variable.name}": binary_abs_variable}
+        )
+        self.model_data.constraints.update(
+            {
+                f"abs_neg_{self.variable.name}": con.Constraint(
+                    f"abs_neg_{self.variable.name}",
+                    con_type=">=",
+                    variables=[
+                        (1.0, self.representative_variable),
+                        (1.0, self.variable),
+                    ],
+                ),
+                f"abs_pos_{self.variable.name}": con.Constraint(
+                    f"abs_pos_{self.variable.name}",
+                    con_type=">=",
+                    variables=[
+                        (1.0, self.representative_variable),
+                        (-1.0, self.variable),
+                    ],
+                ),
+                f"abs_neg_bigm_{self.variable.name}": con.Constraint(
+                    f"abs_neg_bigm_{self.variable.name}",
+                    con_type="<=",
+                    variables=[
+                        (1.0, self.representative_variable),
+                        (1.0, self.variable),
+                        (-self.variable.ub + self.variable.lb, binary_abs_variable),
+                    ],
+                ),
+                f"abs_pos_bigm_{self.variable.name}": con.Constraint(
+                    f"abs_pos_bigm_{self.variable.name}",
+                    con_type="<=",
+                    variables=[
+                        (1.0, self.representative_variable),
+                        (-1.0, self.variable),
+                        (2 * self.variable.ub, binary_abs_variable),
+                    ],
+                    rhs=2 * self.variable.ub,
+                ),
+            }
+        )
 
-        Args:
-            name: Unique identifier for the expression.
-            model_data: Reference to the containing model data object.
-            variable: Input variable to which absolute value is applied.
-            representative_variable: Optional existing variable to represent the result.
-                If None, a new variable will be created.
-        """
-        super().__init__(name, model_data, representative_variable)
-        self.variable = variable
-
-
-class PowerExpression(OneDimExpression):
-    """Power expression representing r = x^p (for some constant p).
-
-    A one-dimensional expression where the representative variable equals
-    the input variable raised to a constant power.
-
-    Attributes:
-        name: Unique identifier for the expression.
-        variable: Input variable being raised to a power.
-        representative_variable: Variable representing the result of the expression.
-    """
-
-    def __init__(
-        self,
-        name: str,
-        model_data: "ModelData",
-        variable: var.Variable,
-        representative_variable: var.Variable | None = None,
-    ):
-        """Initialize a power expression.
-
-        Args:
-            name: Unique identifier for the expression.
-            model_data: Reference to the containing model data object.
-            variable: Input variable being raised to a power.
-            representative_variable: Optional existing variable to represent the result.
-                If None, a new variable will be created.
-        """
-        super().__init__(name, model_data, representative_variable)
-        self.variable = variable
-        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
-
-    def apply_piecewise_linear_approximation(self) -> None:
-        """Apply piecewise linear approximation to the power function.
-
-        Creates linear constraints that approximate the power function
-        over the domain of the input variable using breakpoints.
-        """
-
-
-class MinExpression(OneDimExpression):
-    """Minimum expression representing r = min(x, c) for some constant c.
-
-    A one-dimensional expression where the representative variable equals
-    the minimum of the input variable and a constant.
-
-    Attributes:
-        name: Unique identifier for the expression.
-        variable: Input variable to compare with constant.
-        representative_variable: Variable representing the result of the expression.
-    """
-
-    def __init__(
-        self,
-        name: str,
-        model_data: "ModelData",
-        variable: var.Variable,
-        representative_variable: var.Variable | None = None,
-    ):
-        """Initialize a minimum expression.
-
-        Args:
-            name: Unique identifier for the expression.
-            model_data: Reference to the containing model data object.
-            variable: Input variable to compare with constant.
-            representative_variable: Optional existing variable to represent the result.
-                If None, a new variable will be created.
-        """
-        super().__init__(name, model_data, representative_variable)
-        self.variable = variable
+    def _adjust_representative_variable_bounds(self) -> None:
+        self.representative_variable.lb = max(self.variable.lb, 0)
+        self.representative_variable.ub = max(self.variable.ub, -self.variable.lb)
 
 
 class TangensHExpression(OneDimExpression):
@@ -502,13 +467,12 @@ class TangensHExpression(OneDimExpression):
             representative_variable: Optional existing variable to represent the result.
                 If None, a new variable will be created.
         """
-        super().__init__(name, model_data, representative_variable)
-        self.variable = variable
-        self.variable.discretize_variable(model_data.settings.number_of_breakpoints)
+        super().__init__(name, model_data, variable, representative_variable)
+        self.variable.add_nonlinearity_to_occurring_in("tanh")
 
-    def apply_piecewise_linear_approximation(self) -> None:
-        """Apply piecewise linear approximation to the hyperbolic tangent function.
+    def _get_reference_points_multiple_choice(self) -> list[float]:
+        return [math.tanh(bp) for bp in self.variable.breakpoints]
 
-        Creates linear constraints that approximate the hyperbolic tangent function
-        over the domain of the input variable using breakpoints.
-        """
+    def _adjust_representative_variable_bounds(self) -> None:
+        self.representative_variable.lb = math.tanh(self.variable.lb)
+        self.representative_variable.ub = math.tanh(self.variable.ub)

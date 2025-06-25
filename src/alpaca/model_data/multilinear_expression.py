@@ -44,9 +44,7 @@ class MultilinearExpression:
                 f"r_{name}", var.Variable(f"r_{name}", lb=-s.StaticSettings.infinity)
             )
         )
-        self.representative_variable.discretize_variable(
-            model_data.settings.number_of_breakpoints
-        )
+        self.representative_variable.add_nonlinearity_to_occurring_in("multilinear")
 
     def apply_piecewise_linear_approximation(self) -> None:
         """Apply piecewise linear approximation to the multilinear expression."""

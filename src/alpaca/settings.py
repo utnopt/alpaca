@@ -50,6 +50,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods
         self.osil_file_name = str(config_dict.get("osil_file_name", "st_e41"))
         self.number_of_breakpoints = int(config_dict.get("number_of_breakpoints", 4))
         self.feature_mpip = int(config_dict.get("feature_mpip", 0))
+        self.pwl_method = str(config_dict.get("pwl_method", "multiple-choice"))
 
         self.export_path = (
             StaticSettings.base_path
