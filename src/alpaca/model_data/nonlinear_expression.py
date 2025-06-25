@@ -116,7 +116,7 @@ class NonlinearExpression:
         elif self.expression_type == "tanh":
             self._fragment_one_dim_expression(ode.TangensHExpression)
         elif self.expression_type == "min":
-            self._fragment_one_dim_expression(ode.MinExpression)
+            logger.warning("Expression type min not supported yet!")
         elif self.expression_type == "inverse":
             self._fragment_inverse_expression()
         elif self.expression_type == "power":

@@ -63,6 +63,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         self._add_model_data_to_nonlinear_expressions()
         self._grow_nonlinear_expression_trees()
         self._fragment_expression_trees_to_low_dimensional_functions()
+        self._discretize_variables()
         self._apply_piecewise_linear_approximation_to_low_dimensional_functions()
 
     def _read_osil_file(self) -> BeautifulSoup:
@@ -257,6 +258,25 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
     def _fragment_expression_trees_to_low_dimensional_functions(self) -> None:
         for nonlinear_expression in self.first_level_nonlinear_expressions.values():
             nonlinear_expression.fragment_expression_tree_to_low_dimensional_functions()
+
+    def _discretize_variables(
+        self,
+    ) -> None:
+        pwl_variables = []
+        pwl_constraints = []
+        for variable in self.variables.values():
+            if variable.is_discretized:
+                variable.set_breakpoints(
+                    self.settings.number_of_breakpoints, self.settings.pwl_method
+                )
+                pwl_variables.extend(
+                    variable.pwl_variables_binary + variable.pwl_variables_continuous
+                )
+                pwl_constraints.extend(variable.pwl_constraints)
+        self.variables.update({variable.name: variable for variable in pwl_variables})
+        self.constraints.update(
+            {constraint.name: constraint for constraint in pwl_constraints}
+        )
 
     def _apply_piecewise_linear_approximation_to_low_dimensional_functions(
         self,
