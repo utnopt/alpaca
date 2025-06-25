@@ -42,6 +42,8 @@ class BilinearExpression:
             )
         )
         self.representative_variable.add_nonlinearity_to_occurring_in("bilinear")
+        self.first_var.add_nonlinearity_to_occurring_in("bilinear")
+        self.second_var.add_nonlinearity_to_occurring_in("bilinear")
 
     def apply_piecewise_linear_approximation(self):
         """Apply piecewise linear approximation."""
