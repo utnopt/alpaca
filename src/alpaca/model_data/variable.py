@@ -55,11 +55,9 @@ class Variable:  # pylint: disable=too-many-instance-attributes
         """Save in which types of nonlinearities the variable occurs.
         To determine the optimal breakpoint locations.
         """
-        if self.is_discretized:
-            return
         if nonlinearity_type not in self.occurring_in:
             self.occurring_in.append(nonlinearity_type)
-        self.is_discretized = True
+            self.is_discretized = True
 
     def set_breakpoints(self, number_of_breakpoints: int, pwl_method: str) -> None:
         """Discretize the variable into breakpoints.
