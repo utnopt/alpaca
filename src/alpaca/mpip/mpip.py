@@ -23,7 +23,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         self.relation = {}
         self.implying_function = scip.Expr()
         self.interval_lp = scip.Model()
-        # self.interval_lp.hideOutput()
+        self.interval_lp.hideOutput()
         self.interval_lp_implying_vars = {}
         self.interval_lp_implied_var = 0
         self.separator = None
@@ -58,8 +58,13 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         for combo in itertools.product(*breakpoint_ranges):
             key = tuple(low for low, _ in combo)
             interval_dict = dict(zip(list(self.implying_breakpoints.keys()), combo))
-            lb, ub = self._implied_interval_scip(interval_dict)
-            self.relation[key] = self._calculate_implied_relation_from_interval(lb, ub)
+            feasible, lb, ub = self._implied_interval_scip(interval_dict)
+            if feasible:
+                self.relation[key] = self._calculate_implied_relation_from_interval(
+                    lb, ub
+                )
+            else:
+                self.relation[key] = ()
 
     def _calculate_implied_relation_from_interval(self, lb: float, ub: float) -> tuple:
         if self.implied_breakpoints[0] == ub:
@@ -75,7 +80,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
 
     def _implied_interval_scip(
         self, intervals: dict[str, tuple[float, float]]
-    ) -> tuple[float, float]:
+    ) -> tuple[bool, float, float]:
         self.interval_lp.freeTransform()
         for implying_index, (low, high) in intervals.items():
             var = self.interval_lp_implying_vars[implying_index]
@@ -83,17 +88,19 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
             self.interval_lp.chgVarUb(var, high)
 
         self.interval_lp.setObjective(self.interval_lp_implied_var, "minimize")
-        self.interval_lp.writeProblem("model.lp")
         self.interval_lp.optimize()
+        if self.interval_lp.getStatus() == "infeasible":
+            return False, 0.0, 0.0
         lower_bound = round(
             self.interval_lp.getObjVal(), s.StaticSettings.rounding_precision
         )
         self.interval_lp.freeTransform()
 
         self.interval_lp.setObjective(self.interval_lp_implied_var, "maximize")
-        self.interval_lp.writeProblem("model.lp")
         self.interval_lp.optimize()
+        if self.interval_lp.getStatus() == "infeasible":
+            return False, 0.0, 0.0
         upper_bound = round(
             self.interval_lp.getObjVal(), s.StaticSettings.rounding_precision
         )
-        return lower_bound, upper_bound
+        return True, lower_bound, upper_bound

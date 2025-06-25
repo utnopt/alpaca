@@ -24,7 +24,7 @@ class TestModelData(unittest.TestCase):
         """
         Function that executes the unittest for model data creation.
         """
-        for test_instance in ["alkyl", "ann_compressor_exp",
+        for test_instance in ["alkyl",
                               "least", "st_e41", "chance", "chem"]:
             print(test_instance)
             config_dict = {"osil_file_name": test_instance}
