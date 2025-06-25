@@ -45,6 +45,8 @@ class MultilinearExpression:
             )
         )
         self.representative_variable.add_nonlinearity_to_occurring_in("multilinear")
+        for variable in self.variables:
+            variable.add_nonlinearity_to_occurring_in("multilinear")
 
     def apply_piecewise_linear_approximation(self) -> None:
         """Apply piecewise linear approximation to the multilinear expression."""
