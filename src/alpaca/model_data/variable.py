@@ -103,7 +103,7 @@ class Variable:  # pylint: disable=too-many-instance-attributes
     def _add_pwl_constraints_multiple_choice(self) -> None:
         self.pwl_constraints.append(
             con.Constraint(
-                f"mc_varlink_{self.name}",
+                f"mc_varlink_cont_{self.name}",
                 con_type="==",
                 variables=[
                     (1.0, variable) for variable in self.pwl_variables_continuous
