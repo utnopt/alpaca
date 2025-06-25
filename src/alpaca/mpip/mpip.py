@@ -89,7 +89,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
 
         self.interval_lp.setObjective(self.interval_lp_implied_var, "minimize")
         self.interval_lp.optimize()
-        if self.interval_lp.getStatus() == "infeasible":
+        if self.interval_lp.getStatus() == scip.SCIP_STATUS_INFEASIBLE:
             return False, 0.0, 0.0
         lower_bound = round(
             self.interval_lp.getObjVal(), s.StaticSettings.rounding_precision
