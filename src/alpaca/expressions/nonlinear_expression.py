@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import alpaca.utils.datahandling as udh
-from alpaca.model_data import variable as var, model_data as mda
+from alpaca.model_data import variable as var
 from alpaca.expressions import (
     bilinear_expression as ble,
     multilinear_expression as mle,
@@ -35,7 +35,7 @@ class NonlinearExpression:
     """
 
     def __init__(
-        self, name: str, expression_tag, model_data: mda.ModelData | None = None
+        self, name: str, expression_tag, model_data: "ModelData" | None = None
     ):
         """Initialize a nonlinear expression with its XML tag and optional model data.
 
@@ -47,7 +47,7 @@ class NonlinearExpression:
         self.name = name
         self.expression_type = expression_tag.name
         self.expression_tag = expression_tag
-        self.model_data: mda.ModelData | None = model_data
+        self.model_data: "ModelData" | None = model_data
         self.child_expressions: list = []
         self.representative_variable = var.Variable(
             f"r_{self.name}", lb=-s.StaticSettings.infinity
@@ -425,14 +425,13 @@ class NonlinearExpression:
             )
             helper_inverse_expression.level = level + 1
             return level + 2
-        else:
-            level = self._handle_division_nonlinear_numerator(
-                helper_inverse_expression.representative_variable,
-                denominator_coeff,
-                level,
-            )
-            helper_inverse_expression.level = level
-            return level + 1
+        level = self._handle_division_nonlinear_numerator(
+            helper_inverse_expression.representative_variable,
+            denominator_coeff,
+            level,
+        )
+        helper_inverse_expression.level = level
+        return level + 1
 
     def _handle_division_float_numerator(
         self, variable: var.Variable, denominator_coeff: float, level: int

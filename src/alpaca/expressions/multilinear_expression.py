@@ -28,6 +28,8 @@ class MultilinearExpression(exn.Expression):
         level: int,
         representative_variable: var.Variable | None = None,
     ):
+        # pylint: disable=too-many-arguments
+        # pylint: disable=too-many-positional-arguments
         """Initialize multilinear expression.
 
         Args:

@@ -6,10 +6,6 @@ ignore-patterns=.venv
 [TYPECHECK]
 generated-members=pyo.*
 
-[DESIGN]
-max-args=6
-max-positional-args=6
-
 [MESSAGES CONTROL]
 disable=
     import-error,            # pylint is buggy in some import check cases

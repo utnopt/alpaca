@@ -34,7 +34,9 @@ def run_optimization():
         solver = slv.Solver(scip_model, user_settings)
 
         if user_settings.feature_mpip:
-            mpip_handler = mph.MPIPHandler(model_data.first_level_nonlinear_expressions)
+            mpip_handler = mph.MPIPHandler(
+                model_data.expressions.first_level_nonlinear_expressions
+            )
             mpip_separation_handler = mps.SeparationHandler(
                 mpip_handler, scip_model.opt_model
             )

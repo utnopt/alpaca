@@ -15,6 +15,8 @@ from alpaca.expressions import (
 
 @dataclass
 class ExpressionContainer:
+    """Container class for expressions."""
+
     nonlinear_expressions: dict[str, nle.NonlinearExpression] = field(
         default_factory=dict
     )
@@ -31,6 +33,7 @@ class ExpressionContainer:
     )
 
     def all_low_dim_expressions(self) -> list:
+        """Return all low dimensional expressions."""
         return (
             list(self.one_dim_expressions.values())
             + list(self.linear_expressions.values())
