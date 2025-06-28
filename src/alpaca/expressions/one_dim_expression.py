@@ -5,10 +5,10 @@
 import math
 
 from alpaca.model_data import variable as var, constraint as con
-import alpaca.settings as s
+import alpaca.expressions.expression as exn
 
 
-class OneDimExpression:
+class OneDimExpression(exn.Expression):
     """One dimensional expression representing a function of a single variable.
 
     This class serves as a base for various one-dimensional mathematical expressions
@@ -17,6 +17,7 @@ class OneDimExpression:
 
     Attributes:
         name: Unique identifier for the expression.
+        level: Level of expression in expression tree.
         representative_variable: Variable representing the result of the expression.
     """
 
@@ -25,6 +26,7 @@ class OneDimExpression:
         name: str,
         model_data: "ModelData",
         variable: var.Variable,
+        level: int,
         representative_variable: var.Variable | None = None,
     ):
         """Initialize a one-dimensional expression.
@@ -32,24 +34,16 @@ class OneDimExpression:
         Args:
             name: Unique identifier for the expression.
             model_data: Reference to the containing model data object.
+            level: Level of expression in expression tree.
             representative_variable: Optional existing variable to represent the expression result.
                 If None, a new variable will be created.
         """
-        self.name = name
-        # pylint: disable=duplicate-code
-        self.representative_variable = (
-            representative_variable
-            if representative_variable
-            else model_data.variables.setdefault(
-                f"r_{name}", var.Variable(f"r_{name}", lb=-s.StaticSettings.infinity)
-            )
-        )
+        super().__init__(name, model_data, level, representative_variable)
         self.model_data = model_data
         self.variable: var.Variable = variable
-        self._adjust_representative_variable_bounds()
 
-    def _adjust_representative_variable_bounds(self) -> None:
-        pass
+    def propagate_variable_bounds(self):
+        """Propagate variables bounds."""
 
     def apply_piecewise_linear_approximation(self) -> None:
         """Apply piecewise linear approximation to the expression.
@@ -116,6 +110,7 @@ class SquareExpression(OneDimExpression):
         name: str,
         model_data: "ModelData",
         variable: var.Variable,
+        level: int,
         representative_variable: var.Variable | None = None,
     ):
         """Initialize a square expression.
@@ -127,13 +122,13 @@ class SquareExpression(OneDimExpression):
             representative_variable: Optional existing variable to represent the result.
                 If None, a new variable will be created.
         """
-        super().__init__(name, model_data, variable, representative_variable)
+        super().__init__(name, model_data, variable, level, representative_variable)
         self.variable.add_nonlinearity_to_occurring_in("square")
 
     def _get_reference_points_multiple_choice(self) -> list[float]:
         return [bp * bp for bp in self.variable.breakpoints]
 
-    def _adjust_representative_variable_bounds(self) -> None:
+    def propagate_variable_bounds(self) -> None:
         self.representative_variable.ub = max(self.variable.ub, -self.variable.lb) ** 2
         self.representative_variable.lb = min(self.variable.lb**2, 0)
 
@@ -155,6 +150,7 @@ class ExponentialExpression(OneDimExpression):
         name: str,
         model_data: "ModelData",
         variable: var.Variable,
+        level: int,
         representative_variable: var.Variable | None = None,
     ):
         """Initialize an exponential expression.
@@ -166,13 +162,13 @@ class ExponentialExpression(OneDimExpression):
             representative_variable: Optional existing variable to represent the result.
                 If None, a new variable will be created.
         """
-        super().__init__(name, model_data, variable, representative_variable)
+        super().__init__(name, model_data, variable, level, representative_variable)
         self.variable.add_nonlinearity_to_occurring_in("exp")
 
     def _get_reference_points_multiple_choice(self) -> list[float]:
         return [math.exp(bp) for bp in self.variable.breakpoints]
 
-    def _adjust_representative_variable_bounds(self) -> None:
+    def propagate_variable_bounds(self) -> None:
         self.representative_variable.lb = math.exp(self.variable.lb)
         self.representative_variable.ub = math.exp(self.variable.ub)
 
@@ -194,6 +190,7 @@ class LnExpression(OneDimExpression):
         name: str,
         model_data: "ModelData",
         variable: var.Variable,
+        level: int,
         representative_variable: var.Variable | None = None,
     ):
         """Initialize a natural logarithm expression.
@@ -205,14 +202,14 @@ class LnExpression(OneDimExpression):
             representative_variable: Optional existing variable to represent the result.
                 If None, a new variable will be created.
         """
-        super().__init__(name, model_data, variable, representative_variable)
+        super().__init__(name, model_data, variable, level, representative_variable)
         self.variable.add_nonlinearity_to_occurring_in("ln")
 
     def _get_reference_points_multiple_choice(self) -> list[float]:
         return [math.log(bp) for bp in self.variable.breakpoints]
 
-    def _adjust_representative_variable_bounds(self) -> None:
-        self.variable.lb = max(self.variable.lb, s.StaticSettings.feasibility_tolerance)
+    def propagate_variable_bounds(self) -> None:
+        assert self.variable.lb > 0, "Invalid bounds for ln expression"
         self.representative_variable.lb = math.log(self.variable.lb)
         self.representative_variable.ub = math.log(self.variable.ub)
 
@@ -234,6 +231,7 @@ class SquareRootExpression(OneDimExpression):
         name: str,
         model_data: "ModelData",
         variable: var.Variable,
+        level: int,
         representative_variable: var.Variable | None = None,
     ):
         """Initialize a square root expression.
@@ -245,14 +243,14 @@ class SquareRootExpression(OneDimExpression):
             representative_variable: Optional existing variable to represent the result.
                 If None, a new variable will be created.
         """
-        super().__init__(name, model_data, variable, representative_variable)
+        super().__init__(name, model_data, variable, level, representative_variable)
         self.variable.add_nonlinearity_to_occurring_in("sqrt")
 
     def _get_reference_points_multiple_choice(self) -> list[float]:
         return [math.sqrt(bp) for bp in self.variable.breakpoints]
 
-    def _adjust_representative_variable_bounds(self) -> None:
-        self.variable.lb = max(self.variable.lb, 0.0)
+    def propagate_variable_bounds(self) -> None:
+        assert self.variable.lb >= 0, "Invalid bounds for sqrt expression"
         self.representative_variable.lb = math.sqrt(self.variable.lb)
         self.representative_variable.ub = math.sqrt(self.variable.ub)
 
@@ -274,6 +272,7 @@ class SineExpression(OneDimExpression):
         name: str,
         model_data: "ModelData",
         variable: var.Variable,
+        level: int,
         representative_variable: var.Variable | None = None,
     ):
         """Initialize a sine expression.
@@ -285,13 +284,13 @@ class SineExpression(OneDimExpression):
             representative_variable: Optional existing variable to represent the result.
                 If None, a new variable will be created.
         """
-        super().__init__(name, model_data, variable, representative_variable)
+        super().__init__(name, model_data, variable, level, representative_variable)
         self.variable.add_nonlinearity_to_occurring_in("sin")
 
     def _get_reference_points_multiple_choice(self) -> list[float]:
         return [math.sin(bp) for bp in self.variable.breakpoints]
 
-    def _adjust_representative_variable_bounds(self) -> None:
+    def propagate_variable_bounds(self) -> None:
         self.representative_variable.lb = -1.0
         self.representative_variable.ub = 1.0
 
@@ -313,6 +312,7 @@ class CosineExpression(OneDimExpression):
         name: str,
         model_data: "ModelData",
         variable: var.Variable,
+        level: int,
         representative_variable: var.Variable | None = None,
     ):
         """Initialize a cosine expression.
@@ -324,13 +324,13 @@ class CosineExpression(OneDimExpression):
             representative_variable: Optional existing variable to represent the result.
                 If None, a new variable will be created.
         """
-        super().__init__(name, model_data, variable, representative_variable)
+        super().__init__(name, model_data, variable, level, representative_variable)
         self.variable.add_nonlinearity_to_occurring_in("cos")
 
     def _get_reference_points_multiple_choice(self) -> list[float]:
         return [math.cos(bp) for bp in self.variable.breakpoints]
 
-    def _adjust_representative_variable_bounds(self) -> None:
+    def propagate_variable_bounds(self) -> None:
         self.representative_variable.lb = -1.0
         self.representative_variable.ub = 1.0
 
@@ -352,6 +352,7 @@ class LogExpression(OneDimExpression):
         name: str,
         model_data: "ModelData",
         variable: var.Variable,
+        level: int,
         representative_variable: var.Variable | None = None,
     ):
         """Initialize a base-10 logarithm expression.
@@ -363,14 +364,14 @@ class LogExpression(OneDimExpression):
             representative_variable: Optional existing variable to represent the result.
                 If None, a new variable will be created.
         """
-        super().__init__(name, model_data, variable, representative_variable)
+        super().__init__(name, model_data, variable, level, representative_variable)
         self.variable.add_nonlinearity_to_occurring_in("log10")
 
     def _get_reference_points_multiple_choice(self) -> list[float]:
         return [math.log10(bp) for bp in self.variable.breakpoints]
 
-    def _adjust_representative_variable_bounds(self) -> None:
-        self.variable.lb = max(self.variable.lb, s.StaticSettings.feasibility_tolerance)
+    def propagate_variable_bounds(self) -> None:
+        assert self.variable.lb > 0, "Invalid bounds for log10 expression"
         self.representative_variable.lb = math.log10(self.variable.lb)
         self.representative_variable.ub = math.log10(self.variable.ub)
 
@@ -434,7 +435,7 @@ class AbsExpression(OneDimExpression):
             }
         )
 
-    def _adjust_representative_variable_bounds(self) -> None:
+    def propagate_variable_bounds(self) -> None:
         self.representative_variable.lb = max(self.variable.lb, 0)
         self.representative_variable.ub = max(self.variable.ub, -self.variable.lb)
 
@@ -456,6 +457,7 @@ class TangensHExpression(OneDimExpression):
         name: str,
         model_data: "ModelData",
         variable: var.Variable,
+        level: int,
         representative_variable: var.Variable | None = None,
     ):
         """Initialize a hyperbolic tangent expression.
@@ -467,12 +469,55 @@ class TangensHExpression(OneDimExpression):
             representative_variable: Optional existing variable to represent the result.
                 If None, a new variable will be created.
         """
-        super().__init__(name, model_data, variable, representative_variable)
+        super().__init__(name, model_data, variable, level, representative_variable)
         self.variable.add_nonlinearity_to_occurring_in("tanh")
 
     def _get_reference_points_multiple_choice(self) -> list[float]:
         return [math.tanh(bp) for bp in self.variable.breakpoints]
 
-    def _adjust_representative_variable_bounds(self) -> None:
+    def propagate_variable_bounds(self) -> None:
         self.representative_variable.lb = math.tanh(self.variable.lb)
         self.representative_variable.ub = math.tanh(self.variable.ub)
+
+
+class InverseExpression(OneDimExpression):
+    """Inverse expression representing r = x^-1
+
+    A one-dimensional expression where the representative variable equals
+    the inverse of the input variable.
+
+    Attributes:
+        name: Unique identifier for the expression.
+        variable: Input variable to which inverse is applied.
+        representative_variable: Variable representing the result of the expression.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        model_data: "ModelData",
+        variable: var.Variable,
+        level: int,
+        representative_variable: var.Variable | None = None,
+    ):
+        """Initialize a inverse expression.
+
+        Args:
+            name: Unique identifier for the expression.
+            model_data: Reference to the containing model data object.
+            variable: Input variable to which inverse is applied.
+            representative_variable: Optional existing variable to represent the result.
+                If None, a new variable will be created.
+        """
+        super().__init__(name, model_data, variable, level, representative_variable)
+        self.variable.add_nonlinearity_to_occurring_in("tanh")
+
+    def _get_reference_points_multiple_choice(self) -> list[float]:
+        return [1 / bp for bp in self.variable.breakpoints]
+
+    def propagate_variable_bounds(self) -> None:
+        assert (self.variable.lb < 0 and self.variable.ub < 0) or (
+            self.variable.lb > 0 and self.variable.ub > 0
+        ), "invalid bounds for inverse expression"
+        self.representative_variable.lb = 1 / self.variable.ub
+        self.representative_variable.ub = 1 / self.variable.lb

@@ -6,7 +6,7 @@ import pyscipopt as scip
 
 from alpaca.utils.logger import logger
 import alpaca.utils.datahandling as udh
-from alpaca.model_data import nonlinear_expression as nle
+from alpaca.expressions import nonlinear_expression as nle
 import alpaca.mpip.mpip as mp
 
 

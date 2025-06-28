@@ -36,7 +36,7 @@ class TestModelData(unittest.TestCase):
 
             solver = slv.Solver(scip_model, user_settings)
 
-            mpip_handler = mph.MPIPHandler(model_data.first_level_nonlinear_expressions)
+            mpip_handler = mph.MPIPHandler(model_data.expressions.first_level_nonlinear_expressions)
 
             mpip_separation_handler = mps.SeparationHandler(mpip_handler, scip_model.opt_model)
             solver.mpip_separation_handler = mpip_separation_handler

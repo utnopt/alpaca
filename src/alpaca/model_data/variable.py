@@ -28,7 +28,7 @@ class Variable:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         name: str,
-        lb: float = 0,
+        lb: float = -s.StaticSettings.infinity,
         ub: float = s.StaticSettings.infinity,
         var_type: str = "C",
     ):
@@ -93,7 +93,6 @@ class Variable:  # pylint: disable=too-many-instance-attributes
             self.pwl_variables_continuous.append(
                 Variable(
                     f"{self.name}_c_{breakpoint_index}",
-                    lb=-s.StaticSettings.infinity,
                     var_type="C",
                 )
             )
