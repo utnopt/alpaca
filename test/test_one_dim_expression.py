@@ -293,8 +293,8 @@ class TestOneDimExpression(unittest.TestCase):
         # Check initialization
         self.assertEqual(inv_expr.variable, var_pos)
         self.assertIn(
-            "tanh", var_pos.occurring_in
-        )  # Note: This seems incorrect in the original code
+            "inverse", var_pos.occurring_in
+        ) 
 
         # Test reference points
         ref_points = inv_expr._get_reference_points_multiple_choice()
