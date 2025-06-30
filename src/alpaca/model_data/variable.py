@@ -119,7 +119,7 @@ class Variable:  # pylint: disable=too-many-instance-attributes
         for breakpoint_index in range(len(self.breakpoints) - 1):
             self.pwl_constraints.append(
                 con.Constraint(
-                    f"mc_lb_{self.name}",
+                    f"mc_lb_{self.name}_{breakpoint_index}",
                     con_type="<=",
                     variables=[
                         (
@@ -132,7 +132,7 @@ class Variable:  # pylint: disable=too-many-instance-attributes
             )
             self.pwl_constraints.append(
                 con.Constraint(
-                    f"mc_ub_{self.name}",
+                    f"mc_ub_{self.name}_{breakpoint_index}",
                     con_type=">=",
                     variables=[
                         (

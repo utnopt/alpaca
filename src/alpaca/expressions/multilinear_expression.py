@@ -55,4 +55,4 @@ class MultilinearExpression(exn.Expression):
             candidates = [lb * v.lb, lb * v.ub, ub * v.lb, ub * v.ub]
             lb, ub = min(candidates), max(candidates)
         self.representative_variable.lb = max(self.representative_variable.lb, lb)
-        self.representative_variable.ub = min(self.representative_variable.lb, ub)
+        self.representative_variable.ub = min(self.representative_variable.ub, ub)

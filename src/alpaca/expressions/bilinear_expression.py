@@ -55,5 +55,5 @@ class BilinearExpression(exn.Expression):
             self.representative_variable.lb, min(p1, p2, p3, p4)
         )
         self.representative_variable.ub = min(
-            self.representative_variable.lb, max(p1, p2, p3, p4)
+            self.representative_variable.ub, max(p1, p2, p3, p4)
         )

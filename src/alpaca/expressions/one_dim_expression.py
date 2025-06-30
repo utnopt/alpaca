@@ -131,8 +131,10 @@ class SquareExpression(OneDimExpression):
         return [bp * bp for bp in self.variable.breakpoints]
 
     def propagate_variable_bounds(self) -> None:
-        self.representative_variable.ub = max(self.variable.ub, -self.variable.lb) ** 2
-        self.representative_variable.lb = min(self.variable.lb**2, 0)
+        ub = max(self.variable.ub, -self.variable.lb) ** 2
+        lb = self.variable.lb**2 if self.variable.lb >= 0 else 0.0
+        self.representative_variable.lb = max(lb, self.representative_variable.lb)
+        self.representative_variable.ub = min(ub, self.representative_variable.ub)
 
 
 class ExponentialExpression(OneDimExpression):
@@ -171,8 +173,10 @@ class ExponentialExpression(OneDimExpression):
         return [math.exp(bp) for bp in self.variable.breakpoints]
 
     def propagate_variable_bounds(self) -> None:
-        self.representative_variable.lb = math.exp(self.variable.lb)
-        self.representative_variable.ub = math.exp(self.variable.ub)
+        lb = math.exp(self.variable.lb)
+        ub = math.exp(self.variable.ub)
+        self.representative_variable.lb = max(lb, self.representative_variable.lb)
+        self.representative_variable.ub = min(ub, self.representative_variable.ub)
 
 
 class LnExpression(OneDimExpression):
@@ -212,8 +216,10 @@ class LnExpression(OneDimExpression):
 
     def propagate_variable_bounds(self) -> None:
         assert self.variable.lb > 0, "Invalid bounds for ln expression"
-        self.representative_variable.lb = math.log(self.variable.lb)
-        self.representative_variable.ub = math.log(self.variable.ub)
+        lb = math.log(self.variable.lb)
+        ub = math.log(self.variable.ub)
+        self.representative_variable.lb = max(lb, self.representative_variable.lb)
+        self.representative_variable.ub = min(ub, self.representative_variable.ub)
 
 
 class SquareRootExpression(OneDimExpression):
@@ -253,8 +259,10 @@ class SquareRootExpression(OneDimExpression):
 
     def propagate_variable_bounds(self) -> None:
         assert self.variable.lb >= 0, "Invalid bounds for sqrt expression"
-        self.representative_variable.lb = math.sqrt(self.variable.lb)
-        self.representative_variable.ub = math.sqrt(self.variable.ub)
+        lb = math.sqrt(self.variable.lb)
+        ub = math.sqrt(self.variable.ub)
+        self.representative_variable.lb = max(lb, self.representative_variable.lb)
+        self.representative_variable.ub = min(ub, self.representative_variable.ub)
 
 
 class SineExpression(OneDimExpression):
@@ -293,8 +301,10 @@ class SineExpression(OneDimExpression):
         return [math.sin(bp) for bp in self.variable.breakpoints]
 
     def propagate_variable_bounds(self) -> None:
-        self.representative_variable.lb = -1.0
-        self.representative_variable.ub = 1.0
+        lb = -1.0
+        ub = 1.0
+        self.representative_variable.lb = max(lb, self.representative_variable.lb)
+        self.representative_variable.ub = min(ub, self.representative_variable.ub)
 
 
 class CosineExpression(OneDimExpression):
@@ -333,8 +343,10 @@ class CosineExpression(OneDimExpression):
         return [math.cos(bp) for bp in self.variable.breakpoints]
 
     def propagate_variable_bounds(self) -> None:
-        self.representative_variable.lb = -1.0
-        self.representative_variable.ub = 1.0
+        lb = -1.0
+        ub = 1.0
+        self.representative_variable.lb = max(lb, self.representative_variable.lb)
+        self.representative_variable.ub = min(ub, self.representative_variable.ub)
 
 
 class LogExpression(OneDimExpression):
@@ -374,8 +386,10 @@ class LogExpression(OneDimExpression):
 
     def propagate_variable_bounds(self) -> None:
         assert self.variable.lb > 0, "Invalid bounds for log10 expression"
-        self.representative_variable.lb = math.log10(self.variable.lb)
-        self.representative_variable.ub = math.log10(self.variable.ub)
+        lb = math.log10(self.variable.lb)
+        ub = math.log10(self.variable.ub)
+        self.representative_variable.lb = max(lb, self.representative_variable.lb)
+        self.representative_variable.ub = min(ub, self.representative_variable.ub)
 
 
 class AbsExpression(OneDimExpression):
@@ -438,8 +452,14 @@ class AbsExpression(OneDimExpression):
         )
 
     def propagate_variable_bounds(self) -> None:
-        self.representative_variable.lb = max(self.variable.lb, 0)
-        self.representative_variable.ub = max(self.variable.ub, -self.variable.lb)
+        lb = (
+            min(abs(self.variable.lb), abs(self.variable.ub))
+            if self.variable.lb * self.variable.ub >= 0
+            else 0
+        )
+        ub = max(abs(self.variable.lb), abs(self.variable.ub))
+        self.representative_variable.lb = max(lb, self.representative_variable.lb)
+        self.representative_variable.ub = min(ub, self.representative_variable.ub)
 
 
 class TangensHExpression(OneDimExpression):
@@ -478,8 +498,10 @@ class TangensHExpression(OneDimExpression):
         return [math.tanh(bp) for bp in self.variable.breakpoints]
 
     def propagate_variable_bounds(self) -> None:
-        self.representative_variable.lb = math.tanh(self.variable.lb)
-        self.representative_variable.ub = math.tanh(self.variable.ub)
+        lb = math.tanh(self.variable.lb)
+        ub = math.tanh(self.variable.ub)
+        self.representative_variable.lb = max(lb, self.representative_variable.lb)
+        self.representative_variable.ub = min(ub, self.representative_variable.ub)
 
 
 class InverseExpression(OneDimExpression):
@@ -521,5 +543,7 @@ class InverseExpression(OneDimExpression):
         assert (self.variable.lb < 0 and self.variable.ub < 0) or (
             self.variable.lb > 0 and self.variable.ub > 0
         ), "invalid bounds for inverse expression"
-        self.representative_variable.lb = 1 / self.variable.ub
-        self.representative_variable.ub = 1 / self.variable.lb
+        lb = 1 / self.variable.ub
+        ub = 1 / self.variable.lb
+        self.representative_variable.lb = max(lb, self.representative_variable.lb)
+        self.representative_variable.ub = min(ub, self.representative_variable.ub)

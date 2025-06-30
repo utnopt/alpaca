@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=duplicate-code
 """
 @authors: kuen,
 """
@@ -24,8 +25,7 @@ class TestModelData(unittest.TestCase):
         """
         Function that executes the unittest for model data creation.
         """
-        for test_instance in ["alkyl",
-                              "least", "st_e41", "chance", "chem"]:
+        for test_instance in ["alkyl", "least", "st_e41", "chance", "chem"]:
             print(test_instance)
             config_dict = {"osil_file_name": test_instance}
             user_settings = s.UserSettings(config_dict)
@@ -36,9 +36,13 @@ class TestModelData(unittest.TestCase):
 
             solver = slv.Solver(scip_model, user_settings)
 
-            mpip_handler = mph.MPIPHandler(model_data.expressions.first_level_nonlinear_expressions)
+            mpip_handler = mph.MPIPHandler(
+                model_data.expressions.first_level_nonlinear_expressions
+            )
 
-            mpip_separation_handler = mps.SeparationHandler(mpip_handler, scip_model.opt_model)
+            mpip_separation_handler = mps.SeparationHandler(
+                mpip_handler, scip_model.opt_model
+            )
             solver.mpip_separation_handler = mpip_separation_handler
 
             solver.solve_instance()
