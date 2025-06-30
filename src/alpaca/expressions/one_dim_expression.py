@@ -534,7 +534,7 @@ class InverseExpression(OneDimExpression):
                 If None, a new variable will be created.
         """
         super().__init__(name, model_data, variable, level, representative_variable)
-        self.variable.add_nonlinearity_to_occurring_in("tanh")
+        self.variable.add_nonlinearity_to_occurring_in("inverse")
 
     def _get_reference_points_multiple_choice(self) -> list[float]:
         return [1 / bp for bp in self.variable.breakpoints]
