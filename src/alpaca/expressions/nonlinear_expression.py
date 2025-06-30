@@ -153,13 +153,25 @@ class NonlinearExpression:
         )
 
         if product_coeff != 1.0:
-            helper_variable = self._create_coeff_intermediate_expression(
-                product_coeff, level
-            )
-            level += 1
-            self._create_product_expression(
-                variables_in_product, helper_variable, level
-            )
+            if len(variables_in_product) == 1:
+                lin_expression = lie.LinearExpression(
+                    f"le_{self.name}",
+                    self.model_data,
+                    level,
+                    representative_variable=self.representative_variable,
+                )
+                lin_expression.variables = [(product_coeff, variables_in_product[0])]
+                self.model_data.expressions.linear_expressions[f"le_{self.name}"] = (
+                    lin_expression
+                )
+            else:
+                helper_variable = self._create_coeff_intermediate_expression(
+                    product_coeff, level
+                )
+                level += 1
+                self._create_product_expression(
+                    variables_in_product, helper_variable, level
+                )
         else:
             self._create_product_expression(
                 variables_in_product, self.representative_variable, level
@@ -209,11 +221,14 @@ class NonlinearExpression:
     ) -> var.Variable:
         helper_variable = var.Variable(f"h_{self.name}")
         lin_expression = lie.LinearExpression(
-            f"le_{self.name}", self.model_data, level, self.representative_variable
+            f"le_h_{self.name}",
+            self.model_data,
+            level,
+            representative_variable=self.representative_variable,
         )
         lin_expression.variables = [(product_coeff, helper_variable)]
         self.model_data.variables[f"h_{self.name}"] = helper_variable
-        self.model_data.expressions.linear_expressions[f"le_{self.name}"] = (
+        self.model_data.expressions.linear_expressions[f"le_h_{self.name}"] = (
             lin_expression
         )
         return helper_variable
@@ -238,13 +253,7 @@ class NonlinearExpression:
                 variables_in_product, representative_variable, level
             )
         else:
-            lin_expression = lie.LinearExpression(
-                f"le_{self.name}", self.model_data, level
-            )
-            self.model_data.expressions.linear_expressions[f"le_{self.name}"] = (
-                lin_expression
-            )
-            lin_expression.variables.append((1.0, variables_in_product[0]))
+            raise AssertionError("Product containing 1 variable not allowed!")
 
     def _create_multilinear_expression(
         self,
@@ -302,7 +311,7 @@ class NonlinearExpression:
             f"le_{self.expression_type}_{self.name}",
             self.model_data,
             level,
-            self.representative_variable,
+            representative_variable=self.representative_variable,
         )
         self.model_data.expressions.linear_expressions[
             f"le_{self.expression_type}_{self.name}"
