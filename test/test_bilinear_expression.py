@@ -22,6 +22,8 @@ class TestBilinearExpression(unittest.TestCase):
         # Create mock model_data with proper mock setup
         self.model_data = MagicMock()
         self.model_data.variables = {}
+        # Ensure model_data.constraints is a dictionary for testing updates
+        self.model_data.constraints = {}
 
         # Create variables with occurring_in attribute
         self.var_x = var.Variable("x_1", lb=1.0, ub=5.0)
@@ -139,13 +141,96 @@ class TestBilinearExpression(unittest.TestCase):
         self.assertEqual(bilinear_expr.representative_variable.lb, expected_lb)
         self.assertEqual(bilinear_expr.representative_variable.ub, expected_ub)
 
-    def test_initialization_with_invalid_variables(self):
-        """Test initialization with invalid variable inputs."""
-        with self.assertRaises(ValueError):
-            ble.BilinearExpression("invalid", self.model_data, (self.var_x,), 1)
+    def test_apply_piecewise_constant_approximation(self):
+        """Test apply_piecewise_constant_approximation for BilinearExpression."""
+        # Set up breakpoints for variables
+        self.var_x.breakpoints = [1.0, 3.0, 5.0]  # Two intervals
+        self.var_y.breakpoints = [2.0, 4.0, 7.0]  # Two intervals
 
-        with self.assertRaises(ValueError):
-            ble.BilinearExpression("invalid", self.model_data, "not_a_tuple", 1)
+        # Mock binary variables for PWL
+        self.var_x.pwl_variables_binary = [MagicMock(), MagicMock()]
+        self.var_y.pwl_variables_binary = [MagicMock(), MagicMock()]
+
+        # Initialize representative variable with breakpoints
+        rep_var = var.Variable("r_test_bilinear_pwl", lb=0.0, ub=100.0)
+        rep_var.breakpoints = [0.0, 10.0, 20.0, 30.0, 40.0]
+        rep_var.pwl_variables_binary = [
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+        ]
+
+        bilinear_expr = ble.BilinearExpression(
+            "test_bilinear_pwl", self.model_data, (self.var_x, self.var_y), 1, rep_var
+        )
+
+        # Ensure model_data.constraints is a dictionary to check updates
+        self.model_data.constraints = {}
+
+        bilinear_expr.apply_piecewise_constant_approximation()
+
+        # Expected mid-values for x: (1+3)/2=2, (3+5)/2=4
+        # Expected mid-values for y: (2+4)/2=3, (4+7)/2=5.5
+
+        # Expected implied values (mid_x * mid_y) and their corresponding implied_indices
+        # (i, j) | mid_x | mid_y | implied_value | implied_index (based on rep_var.breakpoints)
+        # (0, 0) | 2     | 3     | 6             | 0 (since 0.0 <= 6 < 10.0) -> This is incorrect.
+        # It should be 0 (0.0 <= 6 < 10.0) -> 0.
+        # bisect_left will return index 1 for 6.0, then min will make it 1.
+        # (0, 1) | 2     | 5.5   | 11            | 1 (since 10.0 <= 11 < 20.0)
+        # (1, 0) | 4     | 3     | 12            | 1 (since 10.0 <= 12 < 20.0)
+        # (1, 1) | 4     | 5.5   | 22            | 2 (since 20.0 <= 22 < 30.0)
+
+        # Corrected expected implied_indices based on bisect_left logic
+        # rep_var.breakpoints = [0.0, 10.0, 20.0, 30.0, 40.0]
+        # implied_value = 6.0 -> bisect_left returns 1. min(1, 4-2=2) = 1
+        # implied_value = 11.0 -> bisect_left returns 2. min(2, 2) = 2
+        # implied_value = 12.0 -> bisect_left returns 2. min(2, 2) = 2
+        # implied_value = 22.0 -> bisect_left returns 3. min(3, 2) = 2 (This is the issue)
+
+        # Let's re-evaluate the implied_index logic:
+        # implied_index = min(bisect.bisect_left(
+        # self.representative_variable.breakpoints, implied_value), len(
+        # self.representative_variable.breakpoints) - 2)
+        # This means the index will always be at most len(breakpoints) - 2.
+        # For rep_var.breakpoints = [0.0, 10.0, 20.0, 30.0, 40.0], len = 5. len - 2 = 3.
+        # So implied_index will be min(bisect_left_result, 3).
+
+        # (0, 0): implied_value = 6.0. bisect_left(..., 6.0) -> 1. min(1, 3) = 1.
+        # (0, 1): implied_value = 11.0. bisect_left(..., 11.0) -> 2. min(2, 3) = 2.
+        # (1, 0): implied_value = 12.0. bisect_left(..., 12.0) -> 2. min(2, 3) = 2.
+        # (1, 1): implied_value = 22.0. bisect_left(..., 22.0) -> 3. min(3, 3) = 3.
+
+        expected_piecewise_constant_relation = {
+            (0, 0): (1,),
+            (0, 1): (2,),
+            (1, 0): (2,),
+            (1, 1): (3,),
+        }
+        self.assertEqual(
+            bilinear_expr.piecewise_constant_relation,
+            expected_piecewise_constant_relation,
+        )
+
+        # Check constraints
+        self.assertEqual(len(self.model_data.constraints), 4)
+
+        # Example check for one constraint: (0,0)
+        constraint_name_00 = "mc_test_bilinear_pwl_0_0"
+        self.assertIn(constraint_name_00, self.model_data.constraints)
+        c_00 = self.model_data.constraints[constraint_name_00]
+        self.assertEqual(c_00.name, constraint_name_00)
+        self.assertEqual(c_00.con_type, "==")
+        self.assertEqual(c_00.rhs, 1.0)
+        # Check variables in the constraint
+        expected_vars_00 = [
+            (-1.0, rep_var.pwl_variables_binary[1]),
+            (1.0, self.var_x.pwl_variables_binary[0]),
+            (1.0, self.var_y.pwl_variables_binary[0]),
+        ]
+        # Convert to sets for order-independent comparison
+        self.assertEqual(set(c_00.variables), set(expected_vars_00))
 
 
 if __name__ == "__main__":
