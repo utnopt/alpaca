@@ -7,6 +7,7 @@ import bisect
 import pyscipopt as scip
 
 import alpaca.settings as s
+from alpaca.model_data import variable as var
 
 
 class MPIP:  # pylint: disable=too-many-instance-attributes
@@ -34,17 +35,28 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         self._add_implying_function_to_interval_lp()
         self._calculate_relation_function()
 
-    def add_implied_id(self, implied_id: str, breakpoints: list[float]) -> None:
+    def add_implied_id(
+        self,
+        implied_id: str,
+        breakpoints: list[float],
+        pwl_variables_binary: list[var.Variable],
+    ) -> None:
         """Add implied variable information."""
         self.implied_id = implied_id
         self.implied_breakpoints = breakpoints
+        self.implied_variables = pwl_variables_binary
         self.interval_lp_implied_var = self.interval_lp.addVar(
             f"x_{self.implied_id}", lb=-s.StaticSettings.infinity
         )
 
-    def add_implying_id(self, implying_id: str, breakpoints: list[float]) -> None:
+    def add_implying_id(
+        self,
+        implying_id: str,
+        breakpoints: list[float],
+        pwl_variables_binary: list[var.Variable],
+    ) -> None:
         """Add implying variable information."""
-        self.implying_variables.update({implying_id: []})
+        self.implying_variables.update({implying_id: pwl_variables_binary})
         self.implying_breakpoints[implying_id] = breakpoints
         var_name = f"x_{implying_id}"
         self.interval_lp_implying_vars[implying_id] = self.interval_lp.addVar(var_name)
@@ -83,9 +95,9 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
     ) -> tuple[bool, float, float]:
         self.interval_lp.freeTransform()
         for implying_index, (low, high) in intervals.items():
-            var = self.interval_lp_implying_vars[implying_index]
-            self.interval_lp.chgVarLb(var, low)
-            self.interval_lp.chgVarUb(var, high)
+            implying_var = self.interval_lp_implying_vars[implying_index]
+            self.interval_lp.chgVarLb(implying_var, low)
+            self.interval_lp.chgVarUb(implying_var, high)
 
         self.interval_lp.setObjective(self.interval_lp_implied_var, "minimize")
         self.interval_lp.optimize()

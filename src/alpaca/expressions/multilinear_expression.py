@@ -69,8 +69,11 @@ class MultilinearExpression(exn.Expression):
             for mid_value, index in combination_with_indices:
                 implied_value *= mid_value
                 current_variable_indices.append(index)
-            implied_index = bisect.bisect_left(
-                self.representative_variable.breakpoints, implied_value
+            implied_index = min(
+                bisect.bisect_left(
+                    self.representative_variable.breakpoints, implied_value
+                ),
+                len(self.representative_variable.breakpoints) - 2,
             )
             self.piecewise_constant_relation[tuple(current_variable_indices)] = (
                 implied_index,
