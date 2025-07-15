@@ -3,10 +3,10 @@
 @authors: kuen,
 """
 from alpaca.model_data import variable as var
-import alpaca.settings as s
+import alpaca.expressions.expression as exn
 
 
-class MultilinearExpression:
+class MultilinearExpression(exn.Expression):
     """Represents a multilinear expression with multiple variables.
 
     A multilinear expression is a product of multiple variables where each variable appears
@@ -16,6 +16,7 @@ class MultilinearExpression:
     Attributes:
         name: Identifier for the expression
         variables: List of variables involved in the multilinear expression
+        level: Level of expression in expression tree
         representative_variable: Variable representing the result of the expression
     """
 
@@ -24,32 +25,34 @@ class MultilinearExpression:
         name: str,
         model_data: "ModelData",
         variables: list[var.Variable],
+        level: int,
         representative_variable: var.Variable | None = None,
     ):
+        # pylint: disable=too-many-arguments
+        # pylint: disable=too-many-positional-arguments
         """Initialize multilinear expression.
 
         Args:
             name: Expression identifier
             model_data: Container for model components
             variables: List of variables involved in the multilinear expression
+            level: Level of expression in expression tree
             representative_variable: Optional existing variable to represent result
         """
-        self.name = name
+        super().__init__(name, model_data, level, representative_variable)
         self.variables = variables
-        # pylint: disable=duplicate-code
-        self.representative_variable = (
-            representative_variable
-            if representative_variable
-            else model_data.variables.setdefault(
-                f"r_{name}", var.Variable(f"r_{name}", lb=-s.StaticSettings.infinity)
-            )
-        )
         self.representative_variable.add_nonlinearity_to_occurring_in("multilinear")
         for variable in self.variables:
             variable.add_nonlinearity_to_occurring_in("multilinear")
 
-    def apply_piecewise_linear_approximation(self) -> None:
-        """Apply piecewise linear approximation to the multilinear expression."""
+    def apply_piecewise_constant_approximation(self):
+        """Apply piecewise constant approximation."""
 
-    def __repr__(self) -> str:
-        return self.name
+    def propagate_variable_bounds(self):
+        """Propagate variables bounds."""
+        lb, ub = self.variables[0].lb, self.variables[0].ub
+        for v in self.variables[1:]:
+            candidates = [lb * v.lb, lb * v.ub, ub * v.lb, ub * v.ub]
+            lb, ub = min(candidates), max(candidates)
+        self.representative_variable.lb = max(self.representative_variable.lb, lb)
+        self.representative_variable.ub = min(self.representative_variable.ub, ub)

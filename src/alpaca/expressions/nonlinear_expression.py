@@ -5,12 +5,12 @@
 from __future__ import annotations
 
 import alpaca.utils.datahandling as udh
-from alpaca.model_data import (
-    variable as var,
+from alpaca.model_data import variable as var
+from alpaca.expressions import (
     bilinear_expression as ble,
     multilinear_expression as mle,
     one_dim_expression as ode,
-    constraint as con,
+    linear_expression as lie,
 )
 from alpaca.utils.logger import logger
 import alpaca.settings as s
@@ -52,7 +52,7 @@ class NonlinearExpression:
         self.representative_variable = var.Variable(
             f"r_{self.name}", lb=-s.StaticSettings.infinity
         )
-        if not model_data is None:
+        if model_data is not None:
             model_data.variables[f"r_{self.name}"] = self.representative_variable
         self.fragmented = False
 
@@ -82,7 +82,7 @@ class NonlinearExpression:
                     child_expression_tag_name, child_expression_tag
                 )
 
-    def fragment_expression_tree_to_low_dimensional_functions(self) -> None:
+    def fragment_expression_tree_to_low_dimensional_functions(self, level: int) -> None:
         # pylint: disable=too-many-branches
         """Decompose complex expressions into simple low-dimensional functions.
 
@@ -94,37 +94,43 @@ class NonlinearExpression:
         The method recursively processes child expressions and marks them as fragmented.
         """
         if self.expression_type == "product":
-            self._fragment_product_expression()
+            next_level = self._fragment_product_expression(level)
         elif self.expression_type == "sum":
-            self._fragment_sum_expression()
+            next_level = self._fragment_sum_expression(level)
         elif self.expression_type == "divide":
-            self._fragment_division_expression()
+            next_level = self._fragment_division_expression(level)
         elif self.expression_type == "square":
-            self._fragment_one_dim_expression(ode.SquareExpression)
+            next_level = self._fragment_one_dim_expression(ode.SquareExpression, level)
         elif self.expression_type == "exp":
-            self._fragment_one_dim_expression(ode.ExponentialExpression)
+            next_level = self._fragment_one_dim_expression(
+                ode.ExponentialExpression, level
+            )
         elif self.expression_type == "ln":
-            self._fragment_one_dim_expression(ode.LnExpression)
+            next_level = self._fragment_one_dim_expression(ode.LnExpression, level)
         elif self.expression_type == "sqrt":
-            self._fragment_one_dim_expression(ode.SquareRootExpression)
+            next_level = self._fragment_one_dim_expression(
+                ode.SquareRootExpression, level
+            )
         elif self.expression_type == "sin":
-            self._fragment_one_dim_expression(ode.SineExpression)
+            next_level = self._fragment_one_dim_expression(ode.SineExpression, level)
         elif self.expression_type == "cos":
-            self._fragment_one_dim_expression(ode.CosineExpression)
+            next_level = self._fragment_one_dim_expression(ode.CosineExpression, level)
         elif self.expression_type == "log10":
-            self._fragment_one_dim_expression(ode.LogExpression)
+            next_level = self._fragment_one_dim_expression(ode.LogExpression, level)
         elif self.expression_type == "tanh":
-            self._fragment_one_dim_expression(ode.TangensHExpression)
+            next_level = self._fragment_one_dim_expression(
+                ode.TangensHExpression, level
+            )
         elif self.expression_type == "min":
-            logger.warning("Expression type min not supported yet!")
+            next_level = logger.warning("Expression type min not supported yet!")
         elif self.expression_type == "inverse":
-            self._fragment_inverse_expression()
+            next_level = self._fragment_one_dim_expression(ode.InverseExpression, level)
         elif self.expression_type == "power":
-            logger.warning("Expression type power not supported yet!")
+            next_level = logger.warning("Expression type power not supported yet!")
         elif self.expression_type == "xabsx":
-            self._fragment_one_dim_expression(ode.AbsExpression)
+            next_level = self._fragment_one_dim_expression(ode.AbsExpression, level)
         elif self.expression_type == "negate":
-            self._fragment_negate_expression()
+            next_level = self._fragment_negate_expression(level)
         else:
             raise KeyError(f"Expression type {self.expression_type} not supported yet!")
         for child_expression in self.child_expressions:
@@ -132,12 +138,14 @@ class NonlinearExpression:
                 isinstance(child_expression, NonlinearExpression)
                 and not child_expression.fragmented
             ):
-                child_expression.fragment_expression_tree_to_low_dimensional_functions()
+                child_expression.fragment_expression_tree_to_low_dimensional_functions(
+                    next_level
+                )
                 child_expression.fragmented = True
 
-    def _fragment_product_expression(self) -> None:
+    def _fragment_product_expression(self, level: int) -> int:
         float_children, variable_children, nonlinear_children = (
-            self._separate_children()
+            self._classify_children()
         )
         product_coeff = self._calculate_product_coeff(float_children, variable_children)
         variables_in_product = self._get_variables_in_product(
@@ -145,14 +153,32 @@ class NonlinearExpression:
         )
 
         if product_coeff != 1.0:
-            helper_variable = self._create_helper_variable_and_constraint(product_coeff)
-            self._create_product_expression(variables_in_product, helper_variable)
+            if len(variables_in_product) == 1:
+                lin_expression = lie.LinearExpression(
+                    f"le_{self.name}",
+                    self.model_data,
+                    level,
+                    representative_variable=self.representative_variable,
+                )
+                lin_expression.variables = [(product_coeff, variables_in_product[0])]
+                self.model_data.expressions.linear_expressions[f"le_{self.name}"] = (
+                    lin_expression
+                )
+            else:
+                helper_variable = self._create_coeff_intermediate_expression(
+                    product_coeff, level
+                )
+                level += 1
+                self._create_product_expression(
+                    variables_in_product, helper_variable, level
+                )
         else:
             self._create_product_expression(
-                variables_in_product, self.representative_variable
+                variables_in_product, self.representative_variable, level
             )
+        return level + 1
 
-    def _separate_children(
+    def _classify_children(
         self,
     ) -> tuple[
         list[float], list[tuple[float, var.Variable]], list[NonlinearExpression]
@@ -190,25 +216,20 @@ class NonlinearExpression:
         variables.extend(child.representative_variable for child in nonlinear_children)
         return variables
 
-    def _create_helper_variable_and_constraint(
-        self, product_coeff: float
+    def _create_coeff_intermediate_expression(
+        self, product_coeff: float, level: int
     ) -> var.Variable:
-        lb = self.representative_variable.lb / product_coeff
-        ub = self.representative_variable.ub / product_coeff
-        helper_var_lb, helper_var_ub = min(lb, ub), max(lb, ub)
-
-        helper_variable = var.Variable(
-            f"h_{self.name}", lb=helper_var_lb, ub=helper_var_ub
+        helper_variable = var.Variable(f"h_{self.name}")
+        lin_expression = lie.LinearExpression(
+            f"le_h_{self.name}",
+            self.model_data,
+            level,
+            representative_variable=self.representative_variable,
         )
-
+        lin_expression.variables = [(product_coeff, helper_variable)]
         self.model_data.variables[f"h_{self.name}"] = helper_variable
-        self.model_data.constraints[f"c_{self.name}"] = con.Constraint(
-            f"c_{self.name}",
-            variables=[
-                (-1.0, self.representative_variable),
-                (product_coeff, helper_variable),
-            ],
-            con_type="==",
+        self.model_data.expressions.linear_expressions[f"le_h_{self.name}"] = (
+            lin_expression
         )
         return helper_variable
 
@@ -216,94 +237,107 @@ class NonlinearExpression:
         self,
         variables_in_product: list[var.Variable],
         representative_variable: var.Variable,
+        level: int,
     ) -> None:
         num_vars = len(variables_in_product)
         if num_vars > 2:
             self._create_multilinear_expression(
-                variables_in_product, representative_variable
+                variables_in_product, representative_variable, level
             )
         elif num_vars == 2 and not variables_in_product[0] is variables_in_product[1]:
             self._create_bilinear_expression(
-                tuple(variables_in_product), representative_variable
+                tuple(variables_in_product), representative_variable, level
             )
         elif num_vars == 2 and variables_in_product[0] is variables_in_product[1]:
             self._create_square_expression(
-                variables_in_product, representative_variable
+                variables_in_product, representative_variable, level
             )
         else:
-            self.model_data.constraints[f"cl_{self.name}"] = con.Constraint(
-                f"cl_{self.name}",
-                con_type="==",
-                variables=[
-                    (1.0, representative_variable),
-                    (-1.0, variables_in_product[0]),
-                ],
-            )
+            raise AssertionError("Product containing 1 variable not allowed!")
 
     def _create_multilinear_expression(
-        self, variables: list[var.Variable], representative_variable: var.Variable
+        self,
+        variables: list[var.Variable],
+        representative_variable: var.Variable,
+        level: int,
     ) -> None:
         expr_name = f"ml_{representative_variable.name}"
-        self.model_data.multilinear_expressions[expr_name] = mle.MultilinearExpression(
-            expr_name,
-            self.model_data,
-            variables,
-            representative_variable=representative_variable,
+        self.model_data.expressions.multilinear_expressions[expr_name] = (
+            mle.MultilinearExpression(
+                expr_name,
+                self.model_data,
+                variables,
+                level,
+                representative_variable=representative_variable,
+            )
         )
 
     def _create_bilinear_expression(
         self,
         variables: tuple[var.Variable, var.Variable],
         representative_variable: var.Variable,
+        level: int,
     ) -> None:
         expr_name = f"bl_{representative_variable.name}"
-        self.model_data.bilinear_expressions[expr_name] = ble.BilinearExpression(
-            expr_name,
-            self.model_data,
-            variables,
-            representative_variable=representative_variable,
+        self.model_data.expressions.bilinear_expressions[expr_name] = (
+            ble.BilinearExpression(
+                expr_name,
+                self.model_data,
+                variables,
+                level,
+                representative_variable=representative_variable,
+            )
         )
 
     def _create_square_expression(
-        self, variables: list[var.Variable], representative_variable: var.Variable
+        self,
+        variables: list[var.Variable],
+        representative_variable: var.Variable,
+        level: int,
     ) -> None:
         expr_name = f"square_{representative_variable.name}"
-        self.model_data.one_dim_expressions[expr_name] = ode.SquareExpression(
-            expr_name,
-            self.model_data,
-            variables[0],
-            representative_variable=representative_variable,
+        self.model_data.expressions.one_dim_expressions[expr_name] = (
+            ode.SquareExpression(
+                expr_name,
+                self.model_data,
+                variables[0],
+                level,
+                representative_variable=representative_variable,
+            )
         )
 
-    def _fragment_sum_expression(self) -> None:
-        constraint = con.Constraint(
-            f"c_{self.expression_type}_{self.name}",
-            con_type="==",
+    def _fragment_sum_expression(self, level: int) -> int:
+        lin_expression = lie.LinearExpression(
+            f"le_{self.expression_type}_{self.name}",
+            self.model_data,
+            level,
+            representative_variable=self.representative_variable,
         )
-        self.model_data.constraints[f"c_{self.expression_type}_{self.name}"] = (
-            constraint
-        )
-        constraint.variables.append((-1.0, self.representative_variable))
+        self.model_data.expressions.linear_expressions[
+            f"le_{self.expression_type}_{self.name}"
+        ] = lin_expression
         for child_expression in self.child_expressions:
             if isinstance(child_expression, tuple):
                 child_expression: tuple[float, var.Variable]
-                constraint.variables.append(child_expression)
+                lin_expression.variables.append(child_expression)
             elif isinstance(child_expression, float):
-                constraint.rhs -= child_expression
+                lin_expression.constant += child_expression
             else:
                 child_expression: NonlinearExpression
-                constraint.variables.append(
+                lin_expression.variables.append(
                     (1.0, child_expression.representative_variable)
                 )
+        return level + 1
 
-    def _fragment_one_dim_expression(self, expression_class: type) -> None:
+    def _fragment_one_dim_expression(self, expression_class: type, level: int) -> int:
         if len(self.child_expressions) == 2:
-            self._fragment_one_dim_expression_with_coefficient(expression_class)
-        elif len(self.child_expressions) == 1:
-            self._fragment_one_dim_expression_without_coefficient(expression_class)
+            self._fragment_one_dim_expression_with_coefficient(expression_class, level)
+            return level + 2
+        self._fragment_one_dim_expression_without_coefficient(expression_class, level)
+        return level + 1
 
     def _fragment_one_dim_expression_with_coefficient(
-        self, expression_class: type
+        self, expression_class: type, level: int
     ) -> None:
         if isinstance(self.child_expressions[0], float):
             coeff = self.child_expressions[0]
@@ -320,149 +354,154 @@ class NonlinearExpression:
                 if isinstance(self.child_expressions[0], tuple)
                 else self.child_expressions[0].representative_variable
             )
-        helper_var_lb, helper_var_ub = tuple(
-            sorted([variable.lb * coeff, variable.ub * coeff])
-        )
-        helper_variable = var.Variable(
-            f"h_{self.name}", lb=helper_var_lb, ub=helper_var_ub
-        )
+        helper_variable = var.Variable(f"h_{self.name}")
         self.model_data.variables[f"h_{self.name}"] = helper_variable
-        self.model_data.constraints[f"c_{self.name}"] = con.Constraint(
-            f"c_{self.name}",
-            variables=[(coeff, variable), (-1.0, helper_variable)],
-            con_type="==",
+        lin_expression = lie.LinearExpression(
+            f"le_{self.name}",
+            self.model_data,
+            level + 1,
+            representative_variable=helper_variable,
         )
-        self.model_data.one_dim_expressions[
+        lin_expression.variables.append((coeff, variable))
+        self.model_data.expressions.linear_expressions[f"le_{self.name}"] = (
+            lin_expression
+        )
+        self.model_data.expressions.one_dim_expressions[
             f"{self.expression_type}_{helper_variable.name}"
         ] = expression_class(
             f"{self.expression_type}_{helper_variable.name}",
             self.model_data,
             helper_variable,
+            level,
             representative_variable=self.representative_variable,
         )
 
     def _fragment_one_dim_expression_without_coefficient(
-        self, expression_class: type
+        self, expression_class: type, level: int
     ) -> None:
         variable = (
             self.child_expressions[0][1]
             if isinstance(self.child_expressions[0], tuple)
             else self.child_expressions[0].representative_variable
         )
-        self.model_data.one_dim_expressions[
+        self.model_data.expressions.one_dim_expressions[
             f"{self.expression_type}_{variable.name}"
         ] = expression_class(
             f"{self.expression_type}_{variable.name}",
             self.model_data,
             variable,
+            level,
             representative_variable=self.representative_variable,
         )
 
-    def _fragment_negate_expression(self) -> None:
-        self.model_data.constraints[f"c_{self.name}"] = con.Constraint(
-            f"c_{self.name}",
-            variables=[
-                (1.0, self.representative_variable),
-                (1.0, self.child_expressions[0].representative_variable),
-            ],
-            con_type="==",
-        )
-
-    def _fragment_inverse_expression(self) -> None:
-        helper_bilinear_expression = ble.BilinearExpression(
-            f"bl_{self.name}",
+    def _fragment_negate_expression(self, level: int) -> int:
+        lin_expression = lie.LinearExpression(
+            f"le_{self.name}",
             self.model_data,
-            (
-                self.child_expressions[0].representative_variable,
-                self.representative_variable,
-            ),
+            level,
+            representative_variable=self.representative_variable,
         )
-        self.model_data.bilinear_expressions[f"bl_{self.name}"] = (
-            helper_bilinear_expression
+        self.model_data.expressions.linear_expressions[f"le_{self.name}"] = (
+            lin_expression
         )
-        self.model_data.constraints[f"c_{self.name}"] = con.Constraint(
-            f"c_{self.name}",
-            variables=[
-                (1.0, helper_bilinear_expression.representative_variable),
-            ],
-            rhs=1.0,
+        lin_expression.variables.append(
+            (-1.0, self.child_expressions[0].representative_variable)
         )
+        return level + 1
 
-    def _fragment_division_expression(self) -> None:
+    def _fragment_division_expression(self, level: int) -> int:
         denominator_variable = (
             self.child_expressions[1][1]
             if isinstance(self.child_expressions[1], tuple)
             else self.child_expressions[1].representative_variable
         )
-        helper_bilinear_expression = ble.BilinearExpression(
-            f"bl_{self.name}",
-            self.model_data,
-            (denominator_variable, self.representative_variable),
+        denominator_coeff = (
+            1.0
+            if not isinstance(self.child_expressions[1], tuple)
+            else 1 / self.child_expressions[1][0]
         )
-        self.model_data.bilinear_expressions[f"bl_{self.name}"] = (
-            helper_bilinear_expression
+        helper_inverse_expression = ode.InverseExpression(
+            f"iv_{self.name}", self.model_data, denominator_variable, 0
+        )
+        self.model_data.expressions.one_dim_expressions[f"iv_{self.name}"] = (
+            helper_inverse_expression
         )
         if isinstance(self.child_expressions[0], float):
-            self._handle_division_float_numerator(helper_bilinear_expression)
-        else:
-            self._handle_division_nonlinear_numerator(helper_bilinear_expression)
+            self._handle_division_float_numerator(
+                helper_inverse_expression.representative_variable,
+                denominator_coeff,
+                level,
+            )
+            helper_inverse_expression.level = level + 1
+            return level + 2
+        level = self._handle_division_nonlinear_numerator(
+            helper_inverse_expression.representative_variable,
+            denominator_coeff,
+            level,
+        )
+        helper_inverse_expression.level = level
+        return level + 1
 
     def _handle_division_float_numerator(
-        self, helper_bilinear_expression: ble.BilinearExpression
-    ) -> None:
-        rhs = (
-            self.child_expressions[0]
-            if not isinstance(self.child_expressions[1], tuple)
-            else self.child_expressions[0] / self.child_expressions[1][0]
+        self, variable: var.Variable, denominator_coeff: float, level: int
+    ):
+        lin_expression = lie.LinearExpression(
+            f"le_{self.name}",
+            self.model_data,
+            level,
+            representative_variable=self.representative_variable,
         )
-        self.model_data.constraints[f"c_{self.name}"] = con.Constraint(
-            f"c_{self.name}",
-            variables=[
-                (1.0, helper_bilinear_expression.representative_variable),
-            ],
-            rhs=rhs,
+        self.model_data.expressions.linear_expressions[f"le_{self.name}"] = (
+            lin_expression
+        )
+        lin_expression.variables.append(
+            (denominator_coeff * self.child_expressions[0], variable)
         )
 
     def _handle_division_nonlinear_numerator(
-        self, helper_bilinear_expression: ble.BilinearExpression
-    ) -> None:
-        rhs_denominator = (
-            1.0
-            if not isinstance(self.child_expressions[1], tuple)
-            else self.child_expressions[1][0]
-        )
-        rhs_variable = (
-            (
-                self.child_expressions[0][0] / rhs_denominator,
-                self.child_expressions[0][1],
-            )
+        self, variable: var.Variable, denominator_coeff: float, level: int
+    ) -> int:
+        numerator_variable = (
+            self.child_expressions[0][1]
             if isinstance(self.child_expressions[0], tuple)
-            else (
-                1.0 / rhs_denominator,
-                self.child_expressions[0].representative_variable,
+            else self.child_expressions[0].representative_variable
+        )
+        product_coeff = (
+            denominator_coeff
+            if not isinstance(self.child_expressions[0], tuple)
+            else denominator_coeff * self.child_expressions[0][0]
+        )
+        if product_coeff != 1.0:
+            helper_variable = self._create_coeff_intermediate_expression(
+                product_coeff, level
             )
-        )
-        self.model_data.constraints[f"c_{self.name}"] = con.Constraint(
-            f"c_{self.name}",
-            variables=[
-                rhs_variable,
-                (-1.0, helper_bilinear_expression.representative_variable),
-            ],
-            rhs=0.0,
-        )
+            level += 1
+            self._create_product_expression(
+                [numerator_variable, variable], helper_variable, level
+            )
+        else:
+            self._create_product_expression(
+                [numerator_variable, variable], self.representative_variable, level
+            )
+        return level + 1
 
     def _add_nonlinear_expression_child(
         self, child_expression_tag_name: str, child_expression_tag
     ) -> None:
-        if child_expression_tag_name in self.model_data.nonlinear_expressions:
+        if (
+            child_expression_tag_name
+            in self.model_data.expressions.nonlinear_expressions
+        ):
             self.child_expressions.append(
-                self.model_data.nonlinear_expressions[child_expression_tag_name]
+                self.model_data.expressions.nonlinear_expressions[
+                    child_expression_tag_name
+                ]
             )
             return
         child_expression = NonlinearExpression(
             child_expression_tag_name, child_expression_tag, self.model_data
         )
-        self.model_data.nonlinear_expressions[child_expression_tag_name] = (
+        self.model_data.expressions.nonlinear_expressions[child_expression_tag_name] = (
             child_expression
         )
         self.child_expressions.append(child_expression)

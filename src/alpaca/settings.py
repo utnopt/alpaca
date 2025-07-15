@@ -31,7 +31,7 @@ class StaticSettings:
     log_rotation_type = "size"  # use "size", "time" or "none"
 
     # ===== Data settings =====
-    infinity = 1e2
+    infinity = 1e4
     feasibility_tolerance = 1e-3
 
     # ===== MPIP settings =====

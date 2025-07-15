@@ -28,7 +28,7 @@ class Variable:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         name: str,
-        lb: float = 0,
+        lb: float = -s.StaticSettings.infinity,
         ub: float = s.StaticSettings.infinity,
         var_type: str = "C",
     ):
@@ -93,7 +93,6 @@ class Variable:  # pylint: disable=too-many-instance-attributes
             self.pwl_variables_continuous.append(
                 Variable(
                     f"{self.name}_c_{breakpoint_index}",
-                    lb=-s.StaticSettings.infinity,
                     var_type="C",
                 )
             )
@@ -120,7 +119,7 @@ class Variable:  # pylint: disable=too-many-instance-attributes
         for breakpoint_index in range(len(self.breakpoints) - 1):
             self.pwl_constraints.append(
                 con.Constraint(
-                    f"mc_lb_{self.name}",
+                    f"mc_lb_{self.name}_{breakpoint_index}",
                     con_type="<=",
                     variables=[
                         (
@@ -133,7 +132,7 @@ class Variable:  # pylint: disable=too-many-instance-attributes
             )
             self.pwl_constraints.append(
                 con.Constraint(
-                    f"mc_ub_{self.name}",
+                    f"mc_ub_{self.name}_{breakpoint_index}",
                     con_type=">=",
                     variables=[
                         (

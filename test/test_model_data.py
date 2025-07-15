@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=duplicate-code
 """
 @authors: kuen,
 """
@@ -15,33 +16,46 @@ class TestModelData(unittest.TestCase):
     """Unit test for the model data buildup."""
 
     def setUp(self):
-        """
-        Function that creates a problem instance and executes the unittests on it.
-        """
-        self.test_model_data_creation()
+        """Common setup for all test methods."""
 
-    def test_model_data_creation(self):
-        """
-        Function that executes the unittest for model data creation.
-        """
-        for test_instance in ["alkyl",
-                              "least", "st_e41", "chance", "chem"]:
-            print(test_instance)
-            config_dict = {"osil_file_name": test_instance}
-            user_settings = s.UserSettings(config_dict)
+    @staticmethod
+    def _run_model_test(instance_name):
+        """Helper method to test model creation for a given instance."""
+        config_dict = {"osil_file_name": instance_name}
+        user_settings = s.UserSettings(config_dict)
 
-            model_data = mda.ModelData(user_settings)
+        model_data = mda.ModelData(user_settings)
+        scip_model = msc.ModelScip(model_data, user_settings)
+        solver = slv.Solver(scip_model, user_settings)
 
-            scip_model = msc.ModelScip(model_data, user_settings)
+        mpip_handler = mph.MPIPHandler(
+            model_data.expressions.first_level_nonlinear_expressions
+        )
 
-            solver = slv.Solver(scip_model, user_settings)
+        mpip_separation_handler = mps.SeparationHandler(
+            mpip_handler, scip_model.opt_model
+        )
+        solver.mpip_separation_handler = mpip_separation_handler
 
-            mpip_handler = mph.MPIPHandler(model_data.first_level_nonlinear_expressions)
+    def test_alkyl_model_data_creation(self):
+        """Test model data creation for alkyl instance."""
+        self._run_model_test("alkyl")
 
-            mpip_separation_handler = mps.SeparationHandler(mpip_handler, scip_model.opt_model)
-            solver.mpip_separation_handler = mpip_separation_handler
+    def test_least_model_data_creation(self):
+        """Test model data creation for least instance."""
+        self._run_model_test("least")
 
-            solver.solve_instance()
+    def test_st_e41_model_data_creation(self):
+        """Test model data creation for st_e41 instance."""
+        self._run_model_test("st_e41")
+
+    def test_chance_model_data_creation(self):
+        """Test model data creation for chance instance."""
+        self._run_model_test("chance")
+
+    def test_chem_model_data_creation(self):
+        """Test model data creation for chem instance."""
+        self._run_model_test("chem")
 
 
 if __name__ == "__main__":
