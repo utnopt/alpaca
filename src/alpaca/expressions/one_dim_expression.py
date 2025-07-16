@@ -58,29 +58,27 @@ class OneDimExpression(exn.Expression):
 
     def _apply_multiple_choice_method(self):
         reference_points = self._get_reference_points_multiple_choice()
-        self.model_data.constraints.update(
-            {
-                f"mc_{self.name}": con.Constraint(
-                    f"mc_{self.name}",
-                    con_type="==",
-                    variables=[(-1.0, self.representative_variable)]
-                    + [
-                        (
-                            (reference_points[i + 1] - reference_point)
-                            / (
-                                self.variable.breakpoints[i + 1]
-                                - self.variable.breakpoints[i]
-                            ),
-                            self.variable.pwl_variables_continuous[i],
-                        )
-                        for i, reference_point in enumerate(reference_points[:-1])
-                    ]
-                    + [
-                        (reference_point, self.variable.pwl_variables_binary[i])
-                        for i, reference_point in enumerate(reference_points[:-1])
-                    ],
-                )
-            }
+        self.model_data.add_constraint(
+            con.Constraint(
+                f"mc_{self.name}",
+                con_type="==",
+                variables=[(-1.0, self.representative_variable)]
+                + [
+                    (
+                        (reference_points[i + 1] - reference_point)
+                        / (
+                            self.variable.breakpoints[i + 1]
+                            - self.variable.breakpoints[i]
+                        ),
+                        self.variable.pwl_variables_continuous[i],
+                    )
+                    for i, reference_point in enumerate(reference_points[:-1])
+                ]
+                + [
+                    (reference_point, self.variable.pwl_variables_binary[i])
+                    for i, reference_point in enumerate(reference_points[:-1])
+                ],
+            )
         )
 
     def _get_reference_points_multiple_choice(self) -> list[float]:
@@ -405,50 +403,51 @@ class AbsExpression(OneDimExpression):
     """
 
     def apply_piecewise_linear_approximation(self):
-        binary_abs_variable = var.Variable(
-            f"abs_bin_{self.variable.name}", var_type="B"
+        binary_abs_variable = self.model_data.add_variable(
+            var.Variable(f"abs_bin_{self.variable.name}", var_type="B")
         )
-        self.model_data.variables.update(
-            {f"abs_bin_{self.variable.name}": binary_abs_variable}
+        self.model_data.add_constraint(
+            con.Constraint(
+                f"abs_neg_{self.variable.name}",
+                con_type=">=",
+                variables=[
+                    (1.0, self.representative_variable),
+                    (1.0, self.variable),
+                ],
+            )
         )
-        self.model_data.constraints.update(
-            {
-                f"abs_neg_{self.variable.name}": con.Constraint(
-                    f"abs_neg_{self.variable.name}",
-                    con_type=">=",
-                    variables=[
-                        (1.0, self.representative_variable),
-                        (1.0, self.variable),
-                    ],
-                ),
-                f"abs_pos_{self.variable.name}": con.Constraint(
-                    f"abs_pos_{self.variable.name}",
-                    con_type=">=",
-                    variables=[
-                        (1.0, self.representative_variable),
-                        (-1.0, self.variable),
-                    ],
-                ),
-                f"abs_neg_bigm_{self.variable.name}": con.Constraint(
-                    f"abs_neg_bigm_{self.variable.name}",
-                    con_type="<=",
-                    variables=[
-                        (1.0, self.representative_variable),
-                        (1.0, self.variable),
-                        (-self.variable.ub + self.variable.lb, binary_abs_variable),
-                    ],
-                ),
-                f"abs_pos_bigm_{self.variable.name}": con.Constraint(
-                    f"abs_pos_bigm_{self.variable.name}",
-                    con_type="<=",
-                    variables=[
-                        (1.0, self.representative_variable),
-                        (-1.0, self.variable),
-                        (2 * self.variable.ub, binary_abs_variable),
-                    ],
-                    rhs=2 * self.variable.ub,
-                ),
-            }
+        self.model_data.add_constraint(
+            con.Constraint(
+                f"abs_pos_{self.variable.name}",
+                con_type=">=",
+                variables=[
+                    (1.0, self.representative_variable),
+                    (-1.0, self.variable),
+                ],
+            )
+        )
+        self.model_data.add_constraint(
+            con.Constraint(
+                f"abs_neg_bigm_{self.variable.name}",
+                con_type="<=",
+                variables=[
+                    (1.0, self.representative_variable),
+                    (1.0, self.variable),
+                    (-self.variable.ub + self.variable.lb, binary_abs_variable),
+                ],
+            )
+        )
+        self.model_data.add_constraint(
+            con.Constraint(
+                f"abs_pos_bigm_{self.variable.name}",
+                con_type="<=",
+                variables=[
+                    (1.0, self.representative_variable),
+                    (-1.0, self.variable),
+                    (2 * self.variable.ub, binary_abs_variable),
+                ],
+                rhs=2 * self.variable.ub,
+            )
         )
 
     def propagate_variable_bounds(self) -> None:

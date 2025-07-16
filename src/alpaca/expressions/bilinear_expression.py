@@ -67,25 +67,22 @@ class BilinearExpression(exn.Expression):
                     len(self.representative_variable.breakpoints) - 2,
                 )
                 self.piecewise_constant_relation[(i, j)] = (implied_index,)
-                constraint_name = f"mc_{self.name}_{i}_{j}"
-                self.model_data.constraints.update(
-                    {
-                        constraint_name: con.Constraint(
-                            constraint_name,
-                            con_type="==",
-                            variables=[
-                                (
-                                    -1.0,
-                                    self.representative_variable.pwl_variables_binary[
-                                        implied_index
-                                    ],
-                                ),
-                                (1.0, self.first_var.pwl_variables_binary[i]),
-                                (1.0, self.second_var.pwl_variables_binary[j]),
-                            ],
-                            rhs=1.0,
-                        )
-                    }
+                self.model_data.add_constraint(
+                    con.Constraint(
+                        f"mc_{self.name}_{i}_{j}",
+                        con_type="==",
+                        variables=[
+                            (
+                                -1.0,
+                                self.representative_variable.pwl_variables_binary[
+                                    implied_index
+                                ],
+                            ),
+                            (1.0, self.first_var.pwl_variables_binary[i]),
+                            (1.0, self.second_var.pwl_variables_binary[j]),
+                        ],
+                        rhs=1.0,
+                    )
                 )
 
     def propagate_variable_bounds(self):

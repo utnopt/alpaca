@@ -52,14 +52,9 @@ class MultilinearExpression(exn.Expression):
 
     def apply_piecewise_constant_approximation(self):
         """Apply piecewise constant approximation for multilinear expressions."""
-        all_variables_mid_values_with_indices = []
-        for variable in self.variables:
-            mid_values_for_current_var = []
-            for i, breakpoint_val in enumerate(variable.breakpoints[:-1]):
-                mid_value = (variable.breakpoints[i + 1] + breakpoint_val) / 2
-                mid_values_for_current_var.append((mid_value, i))
-            all_variables_mid_values_with_indices.append(mid_values_for_current_var)
-
+        all_variables_mid_values_with_indices = (
+            self._get_all_variables_mid_values_with_indices()
+        )
         for combination_with_indices in itertools.product(
             *all_variables_mid_values_with_indices
         ):
@@ -80,15 +75,24 @@ class MultilinearExpression(exn.Expression):
             self.piecewise_constant_relation[tuple(current_variable_indices)] = (
                 implied_index,
             )
-            constraint_variables = [
-                (
-                    -1.0,
-                    self.representative_variable.pwl_variables_binary[implied_index],
+            constraint = self.model_data.add_constraint(
+                con.Constraint(
+                    f"mc_{self.name}_{'_'.join(map(str, current_variable_indices))}",
+                    con_type="==",
+                    variables=[
+                        (
+                            -1.0,
+                            self.representative_variable.pwl_variables_binary[
+                                implied_index
+                            ],
+                        )
+                    ],
+                    rhs=1.0,
                 )
-            ]
+            )
 
             for var_idx, index_in_combination in enumerate(current_variable_indices):
-                constraint_variables.append(
+                constraint.variables.append(
                     (
                         1.0,
                         self.variables[var_idx].pwl_variables_binary[
@@ -96,17 +100,18 @@ class MultilinearExpression(exn.Expression):
                         ],
                     )
                 )
-            self.model_data.constraints.update(
-                {
-                    f"mc_{self.name}_"
-                    f"{'_'.join(map(str, current_variable_indices))}": con.Constraint(
-                        f"mc_{self.name}_{'_'.join(map(str, current_variable_indices))}",
-                        con_type="==",
-                        variables=constraint_variables,
-                        rhs=1.0,
-                    )
-                }
-            )
+
+    def _get_all_variables_mid_values_with_indices(
+        self,
+    ) -> list[list[tuple[float, int]]]:
+        all_variables_mid_values_with_indices = []
+        for variable in self.variables:
+            mid_values_for_current_var = []
+            for i, breakpoint_val in enumerate(variable.breakpoints[:-1]):
+                mid_value = (variable.breakpoints[i + 1] + breakpoint_val) / 2
+                mid_values_for_current_var.append((mid_value, i))
+            all_variables_mid_values_with_indices.append(mid_values_for_current_var)
+        return all_variables_mid_values_with_indices
 
     def propagate_variable_bounds(self):
         """Propagate variables bounds."""

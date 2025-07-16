@@ -33,7 +33,7 @@ class Expression:
         self.representative_variable = (
             representative_variable
             if representative_variable
-            else model_data.variables.setdefault(f"r_{name}", var.Variable(f"r_{name}"))
+            else model_data.add_variable(var.Variable(f"r_{name}"))
         )
         self.level = level
 

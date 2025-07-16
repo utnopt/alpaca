@@ -53,7 +53,7 @@ class NonlinearExpression:
             f"r_{self.name}", lb=-s.StaticSettings.infinity
         )
         if model_data is not None:
-            model_data.variables[f"r_{self.name}"] = self.representative_variable
+            model_data.add_variable(self.representative_variable)
         self.fragmented = False
 
     def grow_expression_tree(self) -> None:
@@ -219,7 +219,7 @@ class NonlinearExpression:
     def _create_coeff_intermediate_expression(
         self, product_coeff: float, level: int
     ) -> var.Variable:
-        helper_variable = var.Variable(f"h_{self.name}")
+        helper_variable = self.model_data.add_variable(var.Variable(f"h_{self.name}"))
         lin_expression = lie.LinearExpression(
             f"le_h_{self.name}",
             self.model_data,
@@ -227,7 +227,6 @@ class NonlinearExpression:
             representative_variable=self.representative_variable,
         )
         lin_expression.variables = [(product_coeff, helper_variable)]
-        self.model_data.variables[f"h_{self.name}"] = helper_variable
         self.model_data.expressions.linear_expressions[f"le_h_{self.name}"] = (
             lin_expression
         )
@@ -354,8 +353,7 @@ class NonlinearExpression:
                 if isinstance(self.child_expressions[0], tuple)
                 else self.child_expressions[0].representative_variable
             )
-        helper_variable = var.Variable(f"h_{self.name}")
-        self.model_data.variables[f"h_{self.name}"] = helper_variable
+        helper_variable = self.model_data.add_variable(var.Variable(f"h_{self.name}"))
         lin_expression = lie.LinearExpression(
             f"le_{self.name}",
             self.model_data,

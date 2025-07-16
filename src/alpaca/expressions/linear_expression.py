@@ -40,11 +40,13 @@ class LinearExpression(exn.Expression):
 
     def add_constraint_from_linear_expression(self):
         """Add constraint from linear expression."""
-        self.model_data.constraints[f"c_{self.name}"] = con.Constraint(
-            f"c_{self.name}",
-            con_type="==",
-            rhs=-self.constant,
-            variables=self.variables + [(-1.0, self.representative_variable)],
+        self.model_data.add_constraint(
+            con.Constraint(
+                f"c_{self.name}",
+                con_type="==",
+                rhs=-self.constant,
+                variables=self.variables + [(-1.0, self.representative_variable)],
+            )
         )
 
     def propagate_variable_bounds(self):
