@@ -31,7 +31,7 @@ class StaticSettings:
     log_rotation_type = "size"  # use "size", "time" or "none"
 
     # ===== Data settings =====
-    infinity = 1e7
+    infinity = 1e4
     feasibility_tolerance = 1e-3
 
     # ===== MPIP settings =====
@@ -51,6 +51,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods
         self.number_of_breakpoints = int(config_dict.get("number_of_breakpoints", 4))
         self.feature_mpip = int(config_dict.get("feature_mpip", 0))
         self.pwl_method = str(config_dict.get("pwl_method", "multiple-choice"))
+        self.external_solver = str(config_dict.get("external_solver", "scip"))
 
         self.export_path = (
             StaticSettings.base_path

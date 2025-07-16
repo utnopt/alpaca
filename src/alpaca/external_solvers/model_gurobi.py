@@ -2,18 +2,18 @@
 """
 @authors: kuen,
 """
-import pyscipopt as scip
+import gurobipy as gp
 
 from alpaca.model_data import model_data as mda
 from alpaca.settings import UserSettings
 from alpaca.utils.logger import logger
 
 
-class ModelScip:
+class ModelGurobi:
     """Optimization model object."""
 
     def __init__(self, data: mda.ModelData, settings: UserSettings):
-        self.opt_model = scip.Model()
+        self.opt_model = gp.Model()
         self.data = data
         self.settings = settings
         self._build_optimization_model()
@@ -39,8 +39,8 @@ class ModelScip:
     def _add_constraints(self):
         for constraint in self.data.constraints.values():
             if constraint.con_type == "==":
-                constraint.solver_constraint = self.opt_model.addCons(
-                    scip.quicksum(
+                constraint.solver_constraint = self.opt_model.addConstr(
+                    gp.quicksum(
                         coeff * variable.solver_variable
                         for coeff, variable in constraint.variables
                     )
@@ -48,8 +48,8 @@ class ModelScip:
                     name=constraint.name,
                 )
             elif constraint.con_type == "<=":
-                constraint.solver_constraint = self.opt_model.addCons(
-                    scip.quicksum(
+                constraint.solver_constraint = self.opt_model.addConstr(
+                    gp.quicksum(
                         coeff * variable.solver_variable
                         for coeff, variable in constraint.variables
                     )
@@ -57,8 +57,8 @@ class ModelScip:
                     name=constraint.name,
                 )
             elif constraint.con_type == ">=":
-                constraint.solver_constraint = self.opt_model.addCons(
-                    -scip.quicksum(
+                constraint.solver_constraint = self.opt_model.addConstr(
+                    -gp.quicksum(
                         coeff * variable.solver_variable
                         for coeff, variable in constraint.variables
                     )
@@ -69,5 +69,5 @@ class ModelScip:
     def _add_objective(self):
         self.opt_model.setObjective(
             self.data.variables["x_-1"].solver_variable,
-            sense="minimize",
+            sense=gp.GRB.MINIMIZE,
         )

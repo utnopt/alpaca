@@ -6,7 +6,7 @@
 import unittest
 
 import alpaca.settings as s
-import alpaca.model_scip.model_scip as msc
+from alpaca.external_solvers import model_scip as msc, model_gurobi as mgu
 import alpaca.model_data.model_data as mda
 import alpaca.solver.solver as slv
 from alpaca.mpip import mpiphandler as mph, separationhandler as mps
@@ -41,6 +41,8 @@ class TestModelData(unittest.TestCase):
             mpip_handler, scip_model.opt_model
         )
         solver.mpip_separation_handler = mpip_separation_handler
+
+        mgu.ModelGurobi(model_data, user_settings)
 
     def test_alkyl_model_data_creation(self):
         """Test model data creation for alkyl instance."""
