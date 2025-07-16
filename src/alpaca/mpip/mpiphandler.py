@@ -86,6 +86,7 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         for var in multilinear_expression.variables:
             mpip.add_implying_id(var.name, var.breakpoints, var.pwl_variables_binary)
         mpip.relation = multilinear_expression.piecewise_constant_relation
+        self.mpip_dict[mpip_id] = mpip
 
     def _process_expression_tree(
         self, nonlinear_expression: nle.NonlinearExpression
