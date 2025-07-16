@@ -216,7 +216,7 @@ class TestMultilinearExpression(unittest.TestCase):
                 current_variable_indices.append(index)
 
             implied_index = min(
-                bisect.bisect_left(rep_var.breakpoints, implied_value),
+                bisect.bisect_left(rep_var.breakpoints, implied_value) - 1,
                 len(rep_var.breakpoints) - 2,
             )
             expected_piecewise_constant_relation[tuple(current_variable_indices)] = (
