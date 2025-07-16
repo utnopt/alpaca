@@ -1,6 +1,7 @@
 name: YOUR_PROJECT_NAME
 channels:
   - conda-forge
+  - gurobi
   - nodefaults # never remove this!
 dependencies:
   - python=3.11
@@ -11,3 +12,4 @@ dependencies:
   - scip=9.1
   - bs4=4.13
   - lxml=5.4
+  - gurobi=12.0
