@@ -70,6 +70,7 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
             second_var.name, second_var.breakpoints, second_var.pwl_variables_binary
         )
         mpip.relation = bilinear_expression.piecewise_constant_relation
+        self.mpip_dict[mpip_id] = mpip
 
     def _add_mpip_instance_from_multilinear_expression(
         self, multilinear_expression: mle.MultilinearExpression
