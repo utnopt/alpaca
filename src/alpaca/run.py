@@ -35,7 +35,9 @@ def run_optimization():
 
         if user_settings.feature_mpip:
             mpip_handler = mph.MPIPHandler(
-                model_data.expressions.first_level_nonlinear_expressions
+                model_data.expressions.first_level_nonlinear_expressions,
+                model_data.expressions.bilinear_expressions,
+                model_data.expressions.multilinear_expressions,
             )
             mpip_separation_handler = mps.SeparationHandler(
                 mpip_handler, scip_model.opt_model

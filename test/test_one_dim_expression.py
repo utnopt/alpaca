@@ -292,10 +292,7 @@ class TestOneDimExpression(unittest.TestCase):
 
         # Check initialization
         self.assertEqual(inv_expr.variable, var_pos)
-        self.assertIn(
-            "inverse", var_pos.occurring_in
-        ) 
-
+        self.assertIn("inverse", var_pos.occurring_in)
         # Test reference points
         ref_points = inv_expr._get_reference_points_multiple_choice()
         expected_points = [1 / x for x in var_pos.breakpoints]

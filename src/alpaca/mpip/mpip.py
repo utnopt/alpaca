@@ -7,6 +7,7 @@ import bisect
 import pyscipopt as scip
 
 import alpaca.settings as s
+from alpaca.model_data import variable as var
 
 
 class MPIP:  # pylint: disable=too-many-instance-attributes
@@ -34,17 +35,28 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         self._add_implying_function_to_interval_lp()
         self._calculate_relation_function()
 
-    def add_implied_id(self, implied_id: str, breakpoints: list[float]) -> None:
+    def add_implied_id(
+        self,
+        implied_id: str,
+        breakpoints: list[float],
+        pwl_variables_binary: list[var.Variable],
+    ) -> None:
         """Add implied variable information."""
         self.implied_id = implied_id
         self.implied_breakpoints = breakpoints
+        self.implied_variables = pwl_variables_binary
         self.interval_lp_implied_var = self.interval_lp.addVar(
             f"x_{self.implied_id}", lb=-s.StaticSettings.infinity
         )
 
-    def add_implying_id(self, implying_id: str, breakpoints: list[float]) -> None:
+    def add_implying_id(
+        self,
+        implying_id: str,
+        breakpoints: list[float],
+        pwl_variables_binary: list[var.Variable],
+    ) -> None:
         """Add implying variable information."""
-        self.implying_variables.update({implying_id: []})
+        self.implying_variables.update({implying_id: pwl_variables_binary})
         self.implying_breakpoints[implying_id] = breakpoints
         var_name = f"x_{implying_id}"
         self.interval_lp_implying_vars[implying_id] = self.interval_lp.addVar(var_name)
@@ -52,12 +64,13 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
     def _calculate_relation_function(self) -> None:
         breakpoint_ranges = []
         for bp in self.implying_breakpoints.values():
-            intervals = [(bp[i], bp[i + 1]) for i in range(len(bp) - 1)]
+            intervals = [(i, (bp[i], bp[i + 1])) for i in range(len(bp) - 1)]
             breakpoint_ranges.append(intervals)
 
         for combo in itertools.product(*breakpoint_ranges):
-            key = tuple(low for low, _ in combo)
-            interval_dict = dict(zip(list(self.implying_breakpoints.keys()), combo))
+            key = tuple(implying_index for implying_index, _ in combo)
+            intervals = tuple(interval for _, interval in combo)
+            interval_dict = dict(zip(list(self.implying_breakpoints.keys()), intervals))
             feasible, lb, ub = self._implied_interval_scip(interval_dict)
             if feasible:
                 self.relation[key] = self._calculate_implied_relation_from_interval(
@@ -72,8 +85,11 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         if self.implied_breakpoints[0] > ub or self.implied_breakpoints[-1] < lb:
             return ()
         idx1 = max(0, bisect.bisect_left(self.implied_breakpoints, lb) - 1)
-        idx2 = bisect.bisect_left(self.implied_breakpoints, ub) - 1
-        return tuple(self.implied_breakpoints[idx1 : idx2 + 1])
+        idx2 = min(
+            bisect.bisect_left(self.implied_breakpoints, ub) - 1,
+            len(self.implied_breakpoints) - 2,
+        )
+        return tuple(range(idx1, idx2 + 1))
 
     def _add_implying_function_to_interval_lp(self) -> None:
         self.interval_lp.addCons(self.interval_lp_implied_var == self.implying_function)
@@ -83,9 +99,9 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
     ) -> tuple[bool, float, float]:
         self.interval_lp.freeTransform()
         for implying_index, (low, high) in intervals.items():
-            var = self.interval_lp_implying_vars[implying_index]
-            self.interval_lp.chgVarLb(var, low)
-            self.interval_lp.chgVarUb(var, high)
+            implying_var = self.interval_lp_implying_vars[implying_index]
+            self.interval_lp.chgVarLb(implying_var, low)
+            self.interval_lp.chgVarUb(implying_var, high)
 
         self.interval_lp.setObjective(self.interval_lp_implied_var, "minimize")
         self.interval_lp.optimize()

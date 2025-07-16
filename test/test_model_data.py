@@ -29,7 +29,9 @@ class TestModelData(unittest.TestCase):
         solver = slv.Solver(scip_model, user_settings)
 
         mpip_handler = mph.MPIPHandler(
-            model_data.expressions.first_level_nonlinear_expressions
+            model_data.expressions.first_level_nonlinear_expressions,
+            model_data.expressions.bilinear_expressions,
+            model_data.expressions.multilinear_expressions,
         )
 
         mpip_separation_handler = mps.SeparationHandler(

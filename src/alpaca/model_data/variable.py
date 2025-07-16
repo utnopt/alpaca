@@ -72,9 +72,9 @@ class Variable:  # pylint: disable=too-many-instance-attributes
         """
         self.breakpoints = np.linspace(self.lb, self.ub, number_of_breakpoints)
         if pwl_method == "multiple-choice":
-            self._add_pwl_approximation()
+            self._add_pwl_approximation_multiple_choice()
 
-    def _add_pwl_approximation(self):
+    def _add_pwl_approximation_multiple_choice(self):
         self._add_pwl_variables_multiple_choice()
         self._add_pwl_constraints_multiple_choice()
 

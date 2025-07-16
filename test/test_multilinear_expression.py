@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import itertools
 from operator import mul
 from functools import reduce
+import bisect
 
 import alpaca.settings as s
 from alpaca.model_data import variable as var
@@ -24,6 +25,8 @@ class TestMultilinearExpression(unittest.TestCase):
         # Create mock model_data with proper mock setup
         self.model_data = MagicMock()
         self.model_data.variables = {}
+        # Ensure model_data.constraints is a dictionary for testing updates
+        self.model_data.constraints = {}
 
         # Create variables with occurring_in attribute
         self.var_x = var.Variable("x_1", lb=1.0, ub=5.0)
@@ -137,6 +140,118 @@ class TestMultilinearExpression(unittest.TestCase):
 
         self.assertEqual(len(multilinear_expr.variables), 1)
         self.assertEqual(multilinear_expr.variables[0], self.var_x)
+
+    def test_apply_piecewise_constant_approximation(
+        self,
+    ):  # pylint: disable=too-many-locals
+        """Test apply_piecewise_constant_approximation for MultilinearExpression."""
+        # Set up breakpoints for variables
+        self.var_x.breakpoints = [1.0, 3.0, 5.0]  # Two intervals
+        self.var_y.breakpoints = [2.0, 4.0, 7.0]  # Two intervals
+        self.var_z.breakpoints = [-3.0, 0.0, 4.0]  # Two intervals
+
+        # Mock binary variables for PWL
+        self.var_x.pwl_variables_binary = [MagicMock(), MagicMock()]
+        self.var_y.pwl_variables_binary = [MagicMock(), MagicMock()]
+        self.var_z.pwl_variables_binary = [MagicMock(), MagicMock()]
+
+        # Initialize representative variable with breakpoints
+        rep_var = var.Variable("r_test_multilinear_pwl", lb=-100.0, ub=100.0)
+        rep_var.breakpoints = [-50.0, 0.0, 10.0, 20.0, 30.0, 40.0]
+        rep_var.pwl_variables_binary = [
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+        ]
+
+        variables = [self.var_x, self.var_y, self.var_z]
+        multilinear_expr = mle.MultilinearExpression(
+            "test_multilinear_pwl", self.model_data, variables, 1, rep_var
+        )
+
+        # Ensure model_data.constraints is a dictionary to check updates
+        self.model_data.constraints = {}
+
+        multilinear_expr.apply_piecewise_constant_approximation()
+
+        # Expected mid-values:
+        # x: (1+3)/2=2, (3+5)/2=4
+        # y: (2+4)/2=3, (4+7)/2=5.5
+        # z: (-3+0)/2=-1.5, (0+4)/2=2
+
+        # There will be 2*2*2 = 8 combinations
+        # Let's calculate some expected implied_values and indices
+        # rep_var.breakpoints = [-50.0, 0.0, 10.0, 20.0, 30.0, 40.0]
+        # len = 6, len - 2 = 4. So implied_index will be min(bisect_left_result, 4).
+
+        expected_piecewise_constant_relation = {}
+        expected_constraints_count = 0
+
+        x_mid_values = [
+            (self.var_x.breakpoints[i + 1] + bp) / 2
+            for i, bp in enumerate(self.var_x.breakpoints[:-1])
+        ]
+        y_mid_values = [
+            (self.var_y.breakpoints[i + 1] + bp) / 2
+            for i, bp in enumerate(self.var_y.breakpoints[:-1])
+        ]
+        z_mid_values = [
+            (self.var_z.breakpoints[i + 1] + bp) / 2
+            for i, bp in enumerate(self.var_z.breakpoints[:-1])
+        ]
+
+        all_mid_values_with_indices = [
+            [(val, i) for i, val in enumerate(x_mid_values)],
+            [(val, i) for i, val in enumerate(y_mid_values)],
+            [(val, i) for i, val in enumerate(z_mid_values)],
+        ]
+        # pylint: disable=duplicate-code
+        for combination_with_indices in itertools.product(*all_mid_values_with_indices):
+            implied_value = 1.0
+            current_variable_indices = []
+            for mid_value, index in combination_with_indices:
+                implied_value *= mid_value
+                current_variable_indices.append(index)
+
+            implied_index = min(
+                bisect.bisect_left(rep_var.breakpoints, implied_value) - 1,
+                len(rep_var.breakpoints) - 2,
+            )
+            expected_piecewise_constant_relation[tuple(current_variable_indices)] = (
+                implied_index,
+            )
+            expected_constraints_count += 1
+
+            # Verify a few specific constraints
+            constraint_name = (
+                f"mc_{multilinear_expr.name}_"
+                f"{'_'.join(map(str, current_variable_indices))}"
+            )
+            self.assertIn(constraint_name, self.model_data.constraints)
+            c = self.model_data.constraints[constraint_name]
+            self.assertEqual(c.name, constraint_name)
+            self.assertEqual(c.con_type, "==")
+            self.assertEqual(c.rhs, 1.0)
+
+            expected_vars = [(-1.0, rep_var.pwl_variables_binary[implied_index])]
+            for var_idx, index_in_combination in enumerate(current_variable_indices):
+                expected_vars.append(
+                    (
+                        1.0,
+                        multilinear_expr.variables[var_idx].pwl_variables_binary[
+                            index_in_combination
+                        ],
+                    )
+                )
+            self.assertEqual(set(c.variables), set(expected_vars))
+
+        self.assertEqual(
+            multilinear_expr.piecewise_constant_relation,
+            expected_piecewise_constant_relation,
+        )
+        self.assertEqual(len(self.model_data.constraints), expected_constraints_count)
 
 
 if __name__ == "__main__":
