@@ -175,38 +175,16 @@ class TestBilinearExpression(unittest.TestCase):
 
         # Expected implied values (mid_x * mid_y) and their corresponding implied_indices
         # (i, j) | mid_x | mid_y | implied_value | implied_index (based on rep_var.breakpoints)
-        # (0, 0) | 2     | 3     | 6             | 0 (since 0.0 <= 6 < 10.0) -> This is incorrect.
-        # It should be 0 (0.0 <= 6 < 10.0) -> 0.
-        # bisect_left will return index 1 for 6.0, then min will make it 1.
+        # (0, 0) | 2     | 3     | 6             | 0 (since 0.0 <= 6 < 10.0)
         # (0, 1) | 2     | 5.5   | 11            | 1 (since 10.0 <= 11 < 20.0)
         # (1, 0) | 4     | 3     | 12            | 1 (since 10.0 <= 12 < 20.0)
         # (1, 1) | 4     | 5.5   | 22            | 2 (since 20.0 <= 22 < 30.0)
 
-        # Corrected expected implied_indices based on bisect_left logic
-        # rep_var.breakpoints = [0.0, 10.0, 20.0, 30.0, 40.0]
-        # implied_value = 6.0 -> bisect_left returns 1. min(1, 4-2=2) = 1
-        # implied_value = 11.0 -> bisect_left returns 2. min(2, 2) = 2
-        # implied_value = 12.0 -> bisect_left returns 2. min(2, 2) = 2
-        # implied_value = 22.0 -> bisect_left returns 3. min(3, 2) = 2 (This is the issue)
-
-        # Let's re-evaluate the implied_index logic:
-        # implied_index = min(bisect.bisect_left(
-        # self.representative_variable.breakpoints, implied_value), len(
-        # self.representative_variable.breakpoints) - 2)
-        # This means the index will always be at most len(breakpoints) - 2.
-        # For rep_var.breakpoints = [0.0, 10.0, 20.0, 30.0, 40.0], len = 5. len - 2 = 3.
-        # So implied_index will be min(bisect_left_result, 3).
-
-        # (0, 0): implied_value = 6.0. bisect_left(..., 6.0) -> 1. min(1, 3) = 1.
-        # (0, 1): implied_value = 11.0. bisect_left(..., 11.0) -> 2. min(2, 3) = 2.
-        # (1, 0): implied_value = 12.0. bisect_left(..., 12.0) -> 2. min(2, 3) = 2.
-        # (1, 1): implied_value = 22.0. bisect_left(..., 22.0) -> 3. min(3, 3) = 3.
-
         expected_piecewise_constant_relation = {
-            (0, 0): (1,),
-            (0, 1): (2,),
-            (1, 0): (2,),
-            (1, 1): (3,),
+            (0, 0): (0,),
+            (0, 1): (1,),
+            (1, 0): (1,),
+            (1, 1): (2,),
         }
         self.assertEqual(
             bilinear_expr.piecewise_constant_relation,
@@ -225,7 +203,7 @@ class TestBilinearExpression(unittest.TestCase):
         self.assertEqual(c_00.rhs, 1.0)
         # Check variables in the constraint
         expected_vars_00 = [
-            (-1.0, rep_var.pwl_variables_binary[1]),
+            (-1.0, rep_var.pwl_variables_binary[0]),
             (1.0, self.var_x.pwl_variables_binary[0]),
             (1.0, self.var_y.pwl_variables_binary[0]),
         ]

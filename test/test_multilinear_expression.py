@@ -141,8 +141,9 @@ class TestMultilinearExpression(unittest.TestCase):
         self.assertEqual(len(multilinear_expr.variables), 1)
         self.assertEqual(multilinear_expr.variables[0], self.var_x)
 
-    def test_apply_piecewise_constant_approximation(self):  # pylint: disable=too-many-locals
-
+    def test_apply_piecewise_constant_approximation(
+        self,
+    ):  # pylint: disable=too-many-locals
         """Test apply_piecewise_constant_approximation for MultilinearExpression."""
         # Set up breakpoints for variables
         self.var_x.breakpoints = [1.0, 3.0, 5.0]  # Two intervals
@@ -206,7 +207,7 @@ class TestMultilinearExpression(unittest.TestCase):
             [(val, i) for i, val in enumerate(y_mid_values)],
             [(val, i) for i, val in enumerate(z_mid_values)],
         ]
-
+        # pylint: disable=duplicate-code
         for combination_with_indices in itertools.product(*all_mid_values_with_indices):
             implied_value = 1.0
             current_variable_indices = []

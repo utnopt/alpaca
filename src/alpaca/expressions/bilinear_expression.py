@@ -49,11 +49,11 @@ class BilinearExpression(exn.Expression):
     def apply_piecewise_constant_approximation(self):
         """Apply piecewise constant approximation."""
         mid_values_first = [
-            (self.first_var.breakpoints[i + 1] - breakpoint_first) / 2
+            (self.first_var.breakpoints[i + 1] + breakpoint_first) / 2
             for i, breakpoint_first in enumerate(self.first_var.breakpoints[:-1])
         ]
         mid_values_second = [
-            (self.second_var.breakpoints[i + 1] - breakpoint_second) / 2
+            (self.second_var.breakpoints[i + 1] + breakpoint_second) / 2
             for i, breakpoint_second in enumerate(self.second_var.breakpoints[:-1])
         ]
         for i, mid_value_first in enumerate(mid_values_first):
@@ -62,7 +62,8 @@ class BilinearExpression(exn.Expression):
                 implied_index = min(
                     bisect.bisect_left(
                         self.representative_variable.breakpoints, implied_value
-                    ),
+                    )
+                    - 1,
                     len(self.representative_variable.breakpoints) - 2,
                 )
                 self.piecewise_constant_relation[(i, j)] = (implied_index,)
