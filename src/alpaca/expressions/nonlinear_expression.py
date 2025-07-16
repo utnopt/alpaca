@@ -34,9 +34,7 @@ class NonlinearExpression:
         fragmented: Flag indicating if the expression has been decomposed
     """
 
-    def __init__(
-        self, name: str, expression_tag, model_data: "ModelData" | None = None
-    ):
+    def __init__(self, name: str, expression_tag, model_data: "ModelData"):
         """Initialize a nonlinear expression with its XML tag and optional model data.
 
         Args:
@@ -47,13 +45,11 @@ class NonlinearExpression:
         self.name = name
         self.expression_type = expression_tag.name
         self.expression_tag = expression_tag
-        self.model_data: "ModelData" | None = model_data
+        self.model_data: "ModelData" = model_data
         self.child_expressions: list = []
-        self.representative_variable = var.Variable(
-            f"r_{self.name}", lb=-s.StaticSettings.infinity
+        self.representative_variable = model_data.add_variable(
+            var.Variable(f"r_{self.name}", lb=-s.StaticSettings.infinity)
         )
-        if model_data is not None:
-            model_data.add_variable(self.representative_variable)
         self.fragmented = False
 
     def grow_expression_tree(self) -> None:

@@ -35,7 +35,10 @@ def run_optimization():
 
         if user_settings.feature_mpip:
             mpip_handler = mph.MPIPHandler(
-                model_data.expressions.first_level_nonlinear_expressions,
+                [
+                    model_data.expressions.nonlinear_expressions[expr_key]
+                    for expr_key in model_data.expressions.first_level_nonlinear_expression_keys
+                ],
                 model_data.expressions.bilinear_expressions,
                 model_data.expressions.multilinear_expressions,
             )

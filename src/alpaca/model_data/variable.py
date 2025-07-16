@@ -44,6 +44,7 @@ class Variable:  # pylint: disable=too-many-instance-attributes
         self.lb = lb
         self.ub = ub
         self.var_type = var_type
+        self.solver_variable = None
         self.is_discretized = False
         self.breakpoints: list[float] = []
         self.occurring_in: list[str] = []
@@ -94,6 +95,8 @@ class Variable:  # pylint: disable=too-many-instance-attributes
                 Variable(
                     f"{self.name}_c_{breakpoint_index}",
                     var_type="C",
+                    lb=self.lb,
+                    ub=self.ub,
                 )
             )
 

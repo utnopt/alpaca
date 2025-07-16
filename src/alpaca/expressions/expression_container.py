@@ -20,9 +20,7 @@ class ExpressionContainer:
     nonlinear_expressions: dict[str, nle.NonlinearExpression] = field(
         default_factory=dict
     )
-    first_level_nonlinear_expressions: dict[str, nle.NonlinearExpression] = field(
-        default_factory=dict
-    )
+    first_level_nonlinear_expression_keys: list[str] = field(default_factory=list)
     one_dim_expressions: dict[str, ode.OneDimExpression] = field(default_factory=dict)
     linear_expressions: dict[str, lie.LinearExpression] = field(default_factory=dict)
     bilinear_expressions: dict[str, ble.BilinearExpression] = field(

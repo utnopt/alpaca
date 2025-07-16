@@ -32,6 +32,7 @@ class Constraint:
         """
         self.name = name
         self.con_type = con_type
+        self.solver_constraint = None
         self.rhs = rhs
         self.variables: list[tuple[float, var.Variable]] = (
             [] if variables is None else variables

@@ -2,7 +2,6 @@
 """
 @authors: kuen,
 """
-import copy
 from bs4 import BeautifulSoup
 
 from alpaca.settings import UserSettings, StaticSettings
@@ -35,8 +34,8 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             settings: User configuration settings for the model.
         """
         self.settings = settings
-        self.variables = {"x_-1": var.Variable("x_-1")}
-        self.constraints = {}
+        self.variables: dict[str, var.Variable] = {"x_-1": var.Variable("x_-1")}
+        self.constraints: dict[str, con.Constraint] = {}
         self.expressions = eco.ExpressionContainer()
         self._build_model_from_osil_data()
 
@@ -81,10 +80,9 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         self._add_linear_expressions_from_osil_data(osil_data)
         self._add_quadratic_expressions_from_osil_data(osil_data)
         self._add_nonlinear_expressions_from_osil_data(osil_data)
-        self.expressions.first_level_nonlinear_expressions = copy.deepcopy(
-            self.expressions.nonlinear_expressions
+        self.expressions.first_level_nonlinear_expression_keys = list(
+            self.expressions.nonlinear_expressions.keys()
         )
-        self._add_model_data_to_nonlinear_expressions()
         self._grow_nonlinear_expression_trees()
         self._fragment_expression_trees_to_low_dimensional_functions()
         self._propagate_bounds()
@@ -260,28 +258,28 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             if expr_hash in self.expressions.nonlinear_expressions:
                 nonlinear_expression = self.expressions.nonlinear_expressions[expr_hash]
             else:
-                nonlinear_expression = nle.NonlinearExpression(expr_hash, n.next)
+                nonlinear_expression = nle.NonlinearExpression(expr_hash, n.next, self)
                 self.expressions.nonlinear_expressions[expr_hash] = nonlinear_expression
             self.constraints[f"c_{n.get('idx')}"].variables.append(
                 (coeff, nonlinear_expression.representative_variable)
             )
 
-    def _add_model_data_to_nonlinear_expressions(self) -> None:
-        for nonlinear_expression in self.expressions.nonlinear_expressions.values():
-            nonlinear_expression.model_data = self
-
     def _grow_nonlinear_expression_trees(self) -> None:
         for (
-            nonlinear_expression
-        ) in self.expressions.first_level_nonlinear_expressions.values():
-            self.add_variable(nonlinear_expression.representative_variable)
-            nonlinear_expression.model_data = self
+            nonlinear_expression_key
+        ) in self.expressions.first_level_nonlinear_expression_keys:
+            nonlinear_expression = self.expressions.nonlinear_expressions[
+                nonlinear_expression_key
+            ]
             nonlinear_expression.grow_expression_tree()
 
     def _fragment_expression_trees_to_low_dimensional_functions(self) -> None:
         for (
-            nonlinear_expression
-        ) in self.expressions.first_level_nonlinear_expressions.values():
+            nonlinear_expression_key
+        ) in self.expressions.first_level_nonlinear_expression_keys:
+            nonlinear_expression = self.expressions.nonlinear_expressions[
+                nonlinear_expression_key
+            ]
             nonlinear_expression.fragment_expression_tree_to_low_dimensional_functions(
                 1
             )

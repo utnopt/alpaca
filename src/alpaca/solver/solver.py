@@ -20,6 +20,7 @@ class Solver:
         logger.info("Solve instance..")
         self._attach_event_handlers()
         self.model_scip.opt_model.optimize()
+        self.model_scip.opt_model.writeProblem("model.lp")
 
     def _attach_event_handlers(self):
         if self.mpip_separation_handler is not None:

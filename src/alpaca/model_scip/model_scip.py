@@ -25,15 +25,49 @@ class ModelScip:
         logger.info("Creating model..")
         self._add_variables()
         self._add_constraints()
+        self._add_objective()
 
     def _add_variables(self):
-        pass
+        for variable in self.data.variables.values():
+            variable.solver_variable = self.opt_model.addVar(
+                name=variable.name,
+                vtype=variable.var_type,
+                lb=variable.lb,
+                ub=variable.ub,
+            )
 
     def _add_constraints(self):
-        pass
+        for constraint in self.data.constraints.values():
+            if constraint.con_type == "==":
+                constraint.solver_constraint = self.opt_model.addCons(
+                    scip.quicksum(
+                        coeff * variable.solver_variable
+                        for coeff, variable in constraint.variables
+                    )
+                    == constraint.rhs,
+                    name=constraint.name,
+                )
+            elif constraint.con_type == "<=":
+                constraint.solver_constraint = self.opt_model.addCons(
+                    scip.quicksum(
+                        coeff * variable.solver_variable
+                        for coeff, variable in constraint.variables
+                    )
+                    <= constraint.rhs,
+                    name=constraint.name,
+                )
+            elif constraint.con_type == ">=":
+                constraint.solver_constraint = self.opt_model.addCons(
+                    -scip.quicksum(
+                        coeff * variable.solver_variable
+                        for coeff, variable in constraint.variables
+                    )
+                    <= -constraint.rhs,
+                    name=constraint.name,
+                )
 
-    def set_parameters_and_optimize(self):
-        """
-        Optimize model.
-        """
-        logger.info("Solving model..")
+    def _add_objective(self):
+        self.opt_model.setObjective(
+            self.data.variables["x_-1"].solver_variable,
+            sense="minimize",
+        )
