@@ -70,7 +70,7 @@ class BilinearExpression(exn.Expression):
                 self.model_data.add_constraint(
                     con.Constraint(
                         f"mc_{self.name}_{i}_{j}",
-                        con_type="==",
+                        con_type="<=",
                         variables=[
                             (
                                 -1.0,

@@ -80,12 +80,13 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         self._add_linear_expressions_from_osil_data(osil_data)
         self._add_quadratic_expressions_from_osil_data(osil_data)
         self._add_nonlinear_expressions_from_osil_data(osil_data)
+        self._propagate_bounds_linear_constraints()
         self.expressions.first_level_nonlinear_expression_keys = list(
             self.expressions.nonlinear_expressions.keys()
         )
         self._grow_nonlinear_expression_trees()
         self._fragment_expression_trees_to_low_dimensional_functions()
-        self._propagate_bounds()
+        self._propagate_bounds_expressions()
         self._discretize_variables()
         self._translate_expressions_to_constraints()
 
@@ -284,13 +285,19 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
                 1
             )
 
-    def _propagate_bounds(self):
+    def _propagate_bounds_expressions(self):
         sorted_expressions = sorted(
             self.expressions.all_low_dim_expressions(),
             key=lambda e: -e.level,
         )
         for expression in sorted_expressions:
             expression.propagate_variable_bounds()
+
+    def _propagate_bounds_linear_constraints(self):
+        for _ in range(self.settings.bound_propagation_rounds):
+            for constraint in self.constraints.values():
+                if constraint.con_type == "==":
+                    constraint.propagate_variable_bounds()
 
     def _discretize_variables(
         self,

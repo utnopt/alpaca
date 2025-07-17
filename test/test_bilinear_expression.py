@@ -208,7 +208,7 @@ class TestBilinearExpression(unittest.TestCase):
         self.assertIn(constraint_name_00, self.model_data.constraints)
         c_00 = self.model_data.constraints[constraint_name_00]
         self.assertEqual(c_00.name, constraint_name_00)
-        self.assertEqual(c_00.con_type, "==")
+        self.assertEqual(c_00.con_type, "<=")
         self.assertEqual(c_00.rhs, 1.0)
         # Check variables in the constraint
         expected_vars_00 = [

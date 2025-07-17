@@ -22,8 +22,6 @@ class Solver:
         logger.info("Solve instance..")
         self._attach_event_handlers()
         self.external_solver.opt_model.optimize()
-        self.external_solver.opt_model.computeIIS()
-        self.external_solver.opt_model.write("model.ilp")
 
     def _attach_event_handlers(self):
         if self.mpip_separation_handler is not None:

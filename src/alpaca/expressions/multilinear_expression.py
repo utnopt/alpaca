@@ -78,7 +78,7 @@ class MultilinearExpression(exn.Expression):
             constraint = self.model_data.add_constraint(
                 con.Constraint(
                     f"mc_{self.name}_{'_'.join(map(str, current_variable_indices))}",
-                    con_type="==",
+                    con_type="<=",
                     variables=[
                         (
                             -1.0,
@@ -87,7 +87,7 @@ class MultilinearExpression(exn.Expression):
                             ],
                         )
                     ],
-                    rhs=1.0,
+                    rhs=len(self.variables) - 1.0,
                 )
             )
 

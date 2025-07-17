@@ -246,8 +246,8 @@ class TestMultilinearExpression(unittest.TestCase):
             self.assertIn(constraint_name, self.model_data.constraints)
             c = self.model_data.constraints[constraint_name]
             self.assertEqual(c.name, constraint_name)
-            self.assertEqual(c.con_type, "==")
-            self.assertEqual(c.rhs, 1.0)
+            self.assertEqual(c.con_type, "<=")
+            self.assertEqual(c.rhs, len(variables) - 1)
 
             expected_vars = [(-1.0, rep_var.pwl_variables_binary[implied_index])]
             for var_idx, index_in_combination in enumerate(current_variable_indices):
