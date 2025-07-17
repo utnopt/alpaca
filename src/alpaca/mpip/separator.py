@@ -245,7 +245,6 @@ class Separator:
 
     def separate_solution(self) -> None:
         """Extract solution point and initiate separation."""
-        # Extract current solution values
         self.point_to_be_separated.implying_values = {
             implying_index: [self.opt_model.getVal(var) for var in variables]
             for implying_index, variables in self.mpip.implying_variables.items()
@@ -253,8 +252,6 @@ class Separator:
         self.point_to_be_separated.implied_values = [
             self.opt_model.getVal(var) for var in self.mpip.implied_variables
         ]
-
-        # Skip separation if solution is integer
         if self.point_to_be_separated.is_integer():
             self.cut.rhs = 0
         else:

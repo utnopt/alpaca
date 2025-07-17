@@ -61,11 +61,11 @@ class SeparationHandler(scip.Eventhdlr):
 
     def eventinit(self):
         """Catch callback event."""
-        self.opt_model.catchEvent(scip.SCIP_EVENTTYPE.NODESOLVED, self)
+        self.opt_model.catchEvent(scip.SCIP_EVENTTYPE.LPSOLVED, self)
 
     def eventexit(self):
         """Stop callback event."""
-        self.opt_model.dropEvent(scip.SCIP_EVENTTYPE.NODESOLVED, self)
+        self.opt_model.dropEvent(scip.SCIP_EVENTTYPE.LPSOLVED, self)
 
     def eventexec(self, _):
         """Run callback event."""

@@ -7,7 +7,6 @@ import bisect
 import pyscipopt as scip
 
 import alpaca.settings as s
-from alpaca.model_data import variable as var
 
 
 class MPIP:  # pylint: disable=too-many-instance-attributes
@@ -39,7 +38,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         self,
         implied_id: str,
         breakpoints: list[float],
-        pwl_variables_binary: list[var.Variable],
+        pwl_variables_binary: list[scip.Variable],
     ) -> None:
         """Add implied variable information."""
         self.implied_id = implied_id
@@ -53,7 +52,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         self,
         implying_id: str,
         breakpoints: list[float],
-        pwl_variables_binary: list[var.Variable],
+        pwl_variables_binary: list[scip.Variable],
     ) -> None:
         """Add implying variable information."""
         self.implying_variables.update({implying_id: pwl_variables_binary})

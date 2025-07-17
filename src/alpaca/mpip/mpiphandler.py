@@ -61,15 +61,22 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         mpip.add_implied_id(
             representative_variable.name,
             representative_variable.breakpoints,
-            representative_variable.pwl_variables_binary,
+            [
+                variable.solver_variable
+                for variable in representative_variable.pwl_variables_binary
+            ],
         )
         first_var = bilinear_expression.first_var
         mpip.add_implying_id(
-            first_var.name, first_var.breakpoints, first_var.pwl_variables_binary
+            first_var.name,
+            first_var.breakpoints,
+            [variable.solver_variable for variable in first_var.pwl_variables_binary],
         )
         second_var = bilinear_expression.second_var
         mpip.add_implying_id(
-            second_var.name, second_var.breakpoints, second_var.pwl_variables_binary
+            second_var.name,
+            second_var.breakpoints,
+            [variable.solver_variable for variable in second_var.pwl_variables_binary],
         )
         mpip.relation = bilinear_expression.piecewise_constant_relation
         self.mpip_dict[mpip_id] = mpip
@@ -84,10 +91,17 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         mpip.add_implied_id(
             representative_variable.name,
             representative_variable.breakpoints,
-            representative_variable.pwl_variables_binary,
+            [
+                variable.solver_variable
+                for variable in representative_variable.pwl_variables_binary
+            ],
         )
         for var in multilinear_expression.variables:
-            mpip.add_implying_id(var.name, var.breakpoints, var.pwl_variables_binary)
+            mpip.add_implying_id(
+                var.name,
+                var.breakpoints,
+                [variable.solver_variable for variable in var.pwl_variables_binary],
+            )
         mpip.relation = multilinear_expression.piecewise_constant_relation
         self.mpip_dict[mpip_id] = mpip
 
@@ -112,7 +126,10 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         mpip.add_implied_id(
             representative_variable.name,
             representative_variable.breakpoints,
-            representative_variable.pwl_variables_binary,
+            [
+                variable.solver_variable
+                for variable in representative_variable.pwl_variables_binary
+            ],
         )
         mpip.implying_function = self._nonlinear_expression_to_scip_expression(
             nonlinear_expression, mpip
@@ -160,7 +177,9 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
             coeff, variable = nonlinear_expression
             if variable.is_discretized:
                 mpip.add_implying_id(
-                    variable.name, variable.breakpoints, variable.pwl_variables_binary
+                    variable.name,
+                    variable.breakpoints,
+                    [var.solver_variable for var in variable.pwl_variables_binary],
                 )
                 return coeff * mpip.interval_lp_implying_vars[variable.name]
             mpip.feasible = False
@@ -172,7 +191,10 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
             mpip.add_implying_id(
                 representative_variable.name,
                 representative_variable.breakpoints,
-                representative_variable.pwl_variables_binary,
+                [
+                    var.solver_variable
+                    for var in representative_variable.pwl_variables_binary
+                ],
             )
             self._start_new_mpip_instance(nonlinear_expression)
             return mpip.interval_lp_implying_vars[representative_variable.name]
