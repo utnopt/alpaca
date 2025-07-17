@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=duplicate-code
 """
 Unit tests for MultilinearExpression class
 """
@@ -27,6 +28,20 @@ class TestMultilinearExpression(unittest.TestCase):
         self.model_data.variables = {}
         # Ensure model_data.constraints is a dictionary for testing updates
         self.model_data.constraints = {}
+
+        # Configure the mock add_constraint method to actually add to the dictionary
+        def mock_add_constraint(constraint):
+            self.model_data.constraints[constraint.name] = constraint
+            return constraint
+
+        self.model_data.add_constraint.side_effect = mock_add_constraint
+
+        # Configure the mock add_variable method to actually add to the dictionary
+        def mock_add_variable(variable):
+            self.model_data.variables[variable.name] = variable
+            return variable
+
+        self.model_data.add_variable.side_effect = mock_add_variable
 
         # Create variables with occurring_in attribute
         self.var_x = var.Variable("x_1", lb=1.0, ub=5.0)
@@ -207,7 +222,6 @@ class TestMultilinearExpression(unittest.TestCase):
             [(val, i) for i, val in enumerate(y_mid_values)],
             [(val, i) for i, val in enumerate(z_mid_values)],
         ]
-        # pylint: disable=duplicate-code
         for combination_with_indices in itertools.product(*all_mid_values_with_indices):
             implied_value = 1.0
             current_variable_indices = []
@@ -232,8 +246,8 @@ class TestMultilinearExpression(unittest.TestCase):
             self.assertIn(constraint_name, self.model_data.constraints)
             c = self.model_data.constraints[constraint_name]
             self.assertEqual(c.name, constraint_name)
-            self.assertEqual(c.con_type, "==")
-            self.assertEqual(c.rhs, 1.0)
+            self.assertEqual(c.con_type, "<=")
+            self.assertEqual(c.rhs, len(variables) - 1)
 
             expected_vars = [(-1.0, rep_var.pwl_variables_binary[implied_index])]
             for var_idx, index_in_combination in enumerate(current_variable_indices):

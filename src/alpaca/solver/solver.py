@@ -2,7 +2,7 @@
 """
 @authors: kuen,
 """
-from alpaca.model_scip import model_scip as msc
+from alpaca.external_solvers import model_scip as msc, model_gurobi as mgu
 from alpaca.settings import UserSettings
 from alpaca.utils.logger import logger
 
@@ -10,8 +10,10 @@ from alpaca.utils.logger import logger
 class Solver:
     """Solver object."""
 
-    def __init__(self, model_scip: msc.ModelScip, settings: UserSettings):
-        self.model_scip = model_scip
+    def __init__(
+        self, external_solver: msc.ModelScip | mgu.ModelGurobi, settings: UserSettings
+    ):
+        self.external_solver = external_solver
         self.settings = settings
         self.mpip_separation_handler = None
 
@@ -19,11 +21,11 @@ class Solver:
         """Solve instance."""
         logger.info("Solve instance..")
         self._attach_event_handlers()
-        self.model_scip.opt_model.optimize()
+        self.external_solver.opt_model.optimize()
 
     def _attach_event_handlers(self):
         if self.mpip_separation_handler is not None:
-            self.model_scip.opt_model.includeEventhdlr(
+            self.external_solver.opt_model.includeEventhdlr(
                 self.mpip_separation_handler,
                 "mpip_event_handler",
                 "Event handler that separates mpip cuts",

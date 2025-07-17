@@ -19,12 +19,14 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
 
     def __init__(
         self,
-        first_level_nonlinear_expressions: dict[str, nle.NonlinearExpression],
+        first_level_nonlinear_expression_values: list[nle.NonlinearExpression],
         bilinear_expressions: dict[str, ble.BilinearExpression],
         multilinear_expressions: dict[str, mle.MultilinearExpression],
     ) -> None:
         """Initialize MPIP instance."""
-        self.first_level_nonlinear_expressions = first_level_nonlinear_expressions
+        self.first_level_nonlinear_expression_values = (
+            first_level_nonlinear_expression_values
+        )
         self.bilinear_expressions = bilinear_expressions
         self.multilinear_expressions = multilinear_expressions
         self.mpip_dict: dict[str, mp.MPIP] = {}
@@ -36,7 +38,7 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
 
     def _find_mpip_instances_in_nonlinear_expressions(self) -> None:
         """Extract mpip instances from nonlinear expression trees."""
-        for nonlinear_expression in self.first_level_nonlinear_expressions.values():
+        for nonlinear_expression in self.first_level_nonlinear_expression_values:
             self._process_expression_tree(nonlinear_expression)
 
     def _find_mpip_instances_in_bilinear_expressions(self) -> None:

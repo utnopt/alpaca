@@ -6,7 +6,7 @@
 import unittest
 
 import alpaca.settings as s
-import alpaca.model_scip.model_scip as msc
+from alpaca.external_solvers import model_scip as msc, model_gurobi as mgu
 import alpaca.model_data.model_data as mda
 import alpaca.solver.solver as slv
 from alpaca.mpip import mpiphandler as mph, separationhandler as mps
@@ -29,7 +29,10 @@ class TestModelData(unittest.TestCase):
         solver = slv.Solver(scip_model, user_settings)
 
         mpip_handler = mph.MPIPHandler(
-            model_data.expressions.first_level_nonlinear_expressions,
+            [
+                model_data.expressions.nonlinear_expressions[expr_key]
+                for expr_key in model_data.expressions.first_level_nonlinear_expression_keys
+            ],
             model_data.expressions.bilinear_expressions,
             model_data.expressions.multilinear_expressions,
         )
@@ -38,6 +41,8 @@ class TestModelData(unittest.TestCase):
             mpip_handler, scip_model.opt_model
         )
         solver.mpip_separation_handler = mpip_separation_handler
+
+        mgu.ModelGurobi(model_data, user_settings)
 
     def test_alkyl_model_data_creation(self):
         """Test model data creation for alkyl instance."""

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=duplicate-code, no-member
 """
 Unit tests for LinearExpression class
 """
@@ -22,6 +23,20 @@ class TestLinearExpression(unittest.TestCase):
         self.model_data = MagicMock()
         self.model_data.variables = {}
         self.model_data.constraints = MagicMock()
+
+        # Configure the mock add_constraint method to actually add to the dictionary
+        def mock_add_constraint(constraint):
+            self.model_data.constraints[constraint.name] = constraint
+            return constraint
+
+        self.model_data.add_constraint.side_effect = mock_add_constraint
+
+        # Configure the mock add_variable method to actually add to the dictionary
+        def mock_add_variable(variable):
+            self.model_data.variables[variable.name] = variable
+            return variable
+
+        self.model_data.add_variable.side_effect = mock_add_variable
 
         # Create variables
         self.var_x = var.Variable("x_1", lb=1.0, ub=5.0)

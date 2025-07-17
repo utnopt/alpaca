@@ -2,7 +2,6 @@
 """
 @authors: kuen,
 """
-import copy
 from bs4 import BeautifulSoup
 
 from alpaca.settings import UserSettings, StaticSettings
@@ -35,10 +34,36 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             settings: User configuration settings for the model.
         """
         self.settings = settings
-        self.variables = {"x_-1": var.Variable("x_-1")}
-        self.constraints = {}
+        self.variables: dict[str, var.Variable] = {"x_-1": var.Variable("x_-1")}
+        self.constraints: dict[str, con.Constraint] = {}
         self.expressions = eco.ExpressionContainer()
         self._build_model_from_osil_data()
+
+    def add_constraint(self, constraint: con.Constraint) -> con.Constraint:
+        """Add a constraint to the model.
+
+        Args:
+            constraint: The constraint to be added.
+        """
+        constraint_name = constraint.name
+        assert (
+            constraint_name not in self.constraints
+        ), f"Duplicate constraint name {constraint_name}."
+        self.constraints[constraint_name] = constraint
+        return constraint
+
+    def add_variable(self, variable: var.Variable) -> var.Variable:
+        """Add a variable to the model.
+
+        Args:
+            variable: The variable to be added.
+        """
+        variable_name = variable.name
+        assert (
+            variable_name not in self.variables
+        ), f"Duplicate variable name {variable_name}."
+        self.variables[variable_name] = variable
+        return variable
 
     def _build_model_from_osil_data(self) -> None:
         """Create a complete model from OSiL data file.
@@ -55,13 +80,13 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         self._add_linear_expressions_from_osil_data(osil_data)
         self._add_quadratic_expressions_from_osil_data(osil_data)
         self._add_nonlinear_expressions_from_osil_data(osil_data)
-        self.expressions.first_level_nonlinear_expressions = copy.deepcopy(
-            self.expressions.nonlinear_expressions
+        self._propagate_bounds_linear_constraints()
+        self.expressions.first_level_nonlinear_expression_keys = list(
+            self.expressions.nonlinear_expressions.keys()
         )
-        self._add_model_data_to_nonlinear_expressions()
         self._grow_nonlinear_expression_trees()
         self._fragment_expression_trees_to_low_dimensional_functions()
-        self._propagate_bounds()
+        self._propagate_bounds_expressions()
         self._discretize_variables()
         self._translate_expressions_to_constraints()
 
@@ -78,8 +103,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
     def _add_variables_from_osil_data(self, osil_data: BeautifulSoup) -> None:
         var_tags = osil_data.find("variables").find_all("var")
         for v in var_tags:
-            var_name = f"x_{len(self.variables) - 1}"
-            variable = var.Variable(var_name)
+            variable = self.add_variable(var.Variable(f"x_{len(self.variables) - 1}"))
             lb = v.get("lb")
             variable.lb = (
                 0
@@ -94,7 +118,6 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             )
             var_type = v.get("type")
             variable.var_type = "C" if var_type is None else var_type
-            self.variables[var_name] = variable
 
     def _add_constraints_from_osil_data(self, osil_data: BeautifulSoup) -> None:
         try:
@@ -102,19 +125,18 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         except AttributeError:
             return
         for c in cons_tags:
-            con_name = f"c_{len(self.constraints) - 1}"
-            constraint = con.Constraint(con_name)
+            constraint = self.add_constraint(
+                con.Constraint(f"c_{len(self.constraints) - 1}")
+            )
             lb = c.get("lb")
             ub = c.get("ub")
             constraint.con_type = "<=" if lb is None else ">=" if ub is None else "=="
             constraint.rhs = float(ub) if lb is None else float(lb)
-            self.constraints[con_name] = constraint
 
     def _add_objective_from_osil_data(self, osil_data: BeautifulSoup) -> None:
         objective = osil_data.find("objectives").find_all("obj")[0]
-        con_name = f"c_{-1}"
-        constraint = con.Constraint(con_name, con_type="<=")
-        self.constraints[con_name] = constraint
+        constraint = con.Constraint(f"c_{-1}", con_type="<=")
+        self.add_constraint(constraint)
         constraint.variables.append((-1.0, self.variables["x_-1"]))
         coeff_tags = objective.find_all("coef")
         for c in coeff_tags:
@@ -237,41 +259,45 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             if expr_hash in self.expressions.nonlinear_expressions:
                 nonlinear_expression = self.expressions.nonlinear_expressions[expr_hash]
             else:
-                nonlinear_expression = nle.NonlinearExpression(expr_hash, n.next)
+                nonlinear_expression = nle.NonlinearExpression(expr_hash, n.next, self)
                 self.expressions.nonlinear_expressions[expr_hash] = nonlinear_expression
             self.constraints[f"c_{n.get('idx')}"].variables.append(
                 (coeff, nonlinear_expression.representative_variable)
             )
 
-    def _add_model_data_to_nonlinear_expressions(self) -> None:
-        for nonlinear_expression in self.expressions.nonlinear_expressions.values():
-            nonlinear_expression.model_data = self
-
     def _grow_nonlinear_expression_trees(self) -> None:
         for (
-            nonlinear_expression
-        ) in self.expressions.first_level_nonlinear_expressions.values():
-            self.variables[f"r_{nonlinear_expression.name}"] = (
-                nonlinear_expression.representative_variable
-            )
-            nonlinear_expression.model_data = self
+            nonlinear_expression_key
+        ) in self.expressions.first_level_nonlinear_expression_keys:
+            nonlinear_expression = self.expressions.nonlinear_expressions[
+                nonlinear_expression_key
+            ]
             nonlinear_expression.grow_expression_tree()
 
     def _fragment_expression_trees_to_low_dimensional_functions(self) -> None:
         for (
-            nonlinear_expression
-        ) in self.expressions.first_level_nonlinear_expressions.values():
+            nonlinear_expression_key
+        ) in self.expressions.first_level_nonlinear_expression_keys:
+            nonlinear_expression = self.expressions.nonlinear_expressions[
+                nonlinear_expression_key
+            ]
             nonlinear_expression.fragment_expression_tree_to_low_dimensional_functions(
                 1
             )
 
-    def _propagate_bounds(self):
+    def _propagate_bounds_expressions(self):
         sorted_expressions = sorted(
             self.expressions.all_low_dim_expressions(),
             key=lambda e: -e.level,
         )
         for expression in sorted_expressions:
             expression.propagate_variable_bounds()
+
+    def _propagate_bounds_linear_constraints(self):
+        for _ in range(self.settings.bound_propagation_rounds):
+            for constraint in self.constraints.values():
+                if constraint.con_type == "==":
+                    constraint.propagate_variable_bounds()
 
     def _discretize_variables(
         self,
@@ -287,10 +313,10 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
                     variable.pwl_variables_binary + variable.pwl_variables_continuous
                 )
                 pwl_constraints.extend(variable.pwl_constraints)
-        self.variables.update({variable.name: variable for variable in pwl_variables})
-        self.constraints.update(
-            {constraint.name: constraint for constraint in pwl_constraints}
-        )
+        for variable in pwl_variables:
+            self.add_variable(variable)
+        for constraint in pwl_constraints:
+            self.add_constraint(constraint)
 
     def _translate_expressions_to_constraints(
         self,

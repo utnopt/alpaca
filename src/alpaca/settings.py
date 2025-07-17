@@ -40,7 +40,7 @@ class StaticSettings:
     rounding_precision = 5
 
 
-class UserSettings:  # pylint: disable=too-few-public-methods
+class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance-attributes
     """
     Class containing user settings.
     """
@@ -51,7 +51,10 @@ class UserSettings:  # pylint: disable=too-few-public-methods
         self.number_of_breakpoints = int(config_dict.get("number_of_breakpoints", 4))
         self.feature_mpip = int(config_dict.get("feature_mpip", 0))
         self.pwl_method = str(config_dict.get("pwl_method", "multiple-choice"))
-
+        self.external_solver = str(config_dict.get("external_solver", "scip"))
+        self.bound_propagation_rounds = int(
+            config_dict.get("bound_propagation_rounds", 3)
+        )
         self.export_path = (
             StaticSettings.base_path
             + f"/data/export/{time.strftime('%Y-%m-%d_%H-%M-%S')}_"

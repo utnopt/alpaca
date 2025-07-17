@@ -1,4 +1,5 @@
 {
 "solver_time_limit": 3600,
-  "osil_file_name": "alkyl"
+  "osil_file_name": "st_glmp_kk92",
+  "external_solver": "scip"
 }

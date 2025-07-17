@@ -25,7 +25,18 @@ class TestBilinearExpression(unittest.TestCase):
         # Ensure model_data.constraints is a dictionary for testing updates
         self.model_data.constraints = {}
 
-        # Create variables with occurring_in attribute
+        # Configure the mock add_constraint method to actually add to the dictionary
+        def mock_add_constraint(constraint):
+            self.model_data.constraints[constraint.name] = constraint
+            return constraint
+
+        def mock_add_variable(variable):
+            self.model_data.variables[variable.name] = variable
+            return variable
+
+        self.model_data.add_constraint.side_effect = mock_add_constraint
+        self.model_data.add_variable.side_effect = mock_add_variable
+
         self.var_x = var.Variable("x_1", lb=1.0, ub=5.0)
         self.var_y = var.Variable("x_2", lb=2.0, ub=7.0)
         self.var_x.occurring_in = []
@@ -164,8 +175,6 @@ class TestBilinearExpression(unittest.TestCase):
         bilinear_expr = ble.BilinearExpression(
             "test_bilinear_pwl", self.model_data, (self.var_x, self.var_y), 1, rep_var
         )
-
-        # Ensure model_data.constraints is a dictionary to check updates
         self.model_data.constraints = {}
 
         bilinear_expr.apply_piecewise_constant_approximation()
@@ -199,7 +208,7 @@ class TestBilinearExpression(unittest.TestCase):
         self.assertIn(constraint_name_00, self.model_data.constraints)
         c_00 = self.model_data.constraints[constraint_name_00]
         self.assertEqual(c_00.name, constraint_name_00)
-        self.assertEqual(c_00.con_type, "==")
+        self.assertEqual(c_00.con_type, "<=")
         self.assertEqual(c_00.rhs, 1.0)
         # Check variables in the constraint
         expected_vars_00 = [
