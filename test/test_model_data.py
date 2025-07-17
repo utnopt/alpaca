@@ -64,6 +64,10 @@ class TestModelData(unittest.TestCase):
         """Test model data creation for chem instance."""
         self._run_model_test("chem")
 
+    def test_st_glmp_kk92_model_data_creation(self):
+        """Test model data creation for st_glmp_kk92 instance."""
+        self._run_model_test("st_glmp_kk92")
+
 
 if __name__ == "__main__":
     unittest.main()
