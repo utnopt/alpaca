@@ -171,8 +171,11 @@ class ExponentialExpression(OneDimExpression):
         return [math.exp(bp) for bp in self.variable.breakpoints]
 
     def propagate_variable_bounds(self) -> None:
-        lb = math.exp(self.variable.lb)
-        ub = math.exp(self.variable.ub)
+        try:
+            lb = math.exp(self.variable.lb)
+            ub = math.exp(self.variable.ub)
+        except OverflowError:
+            return
         self.representative_variable.lb = max(lb, self.representative_variable.lb)
         self.representative_variable.ub = min(ub, self.representative_variable.ub)
 
@@ -213,7 +216,8 @@ class LnExpression(OneDimExpression):
         return [math.log(bp) for bp in self.variable.breakpoints]
 
     def propagate_variable_bounds(self) -> None:
-        assert self.variable.lb > 0, "Invalid bounds for ln expression"
+        if self.variable.lb <= 0:
+            return
         lb = math.log(self.variable.lb)
         ub = math.log(self.variable.ub)
         self.representative_variable.lb = max(lb, self.representative_variable.lb)
@@ -256,7 +260,8 @@ class SquareRootExpression(OneDimExpression):
         return [math.sqrt(bp) for bp in self.variable.breakpoints]
 
     def propagate_variable_bounds(self) -> None:
-        assert self.variable.lb >= 0, "Invalid bounds for sqrt expression"
+        if self.variable.lb < 0:
+            return
         lb = math.sqrt(self.variable.lb)
         ub = math.sqrt(self.variable.ub)
         self.representative_variable.lb = max(lb, self.representative_variable.lb)
@@ -383,7 +388,8 @@ class LogExpression(OneDimExpression):
         return [math.log10(bp) for bp in self.variable.breakpoints]
 
     def propagate_variable_bounds(self) -> None:
-        assert self.variable.lb > 0, "Invalid bounds for log10 expression"
+        if self.variable.lb <= 0:
+            return
         lb = math.log10(self.variable.lb)
         ub = math.log10(self.variable.ub)
         self.representative_variable.lb = max(lb, self.representative_variable.lb)
@@ -539,9 +545,11 @@ class InverseExpression(OneDimExpression):
         return [1 / bp for bp in self.variable.breakpoints]
 
     def propagate_variable_bounds(self) -> None:
-        assert (self.variable.lb < 0 and self.variable.ub < 0) or (
-            self.variable.lb > 0 and self.variable.ub > 0
-        ), "invalid bounds for inverse expression"
+        if not (
+            (self.variable.lb < 0 and self.variable.ub < 0)
+            or (self.variable.lb > 0 and self.variable.ub > 0)
+        ):
+            return
         lb = 1 / self.variable.ub
         ub = 1 / self.variable.lb
         self.representative_variable.lb = max(lb, self.representative_variable.lb)
