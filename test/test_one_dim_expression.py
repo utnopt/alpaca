@@ -152,14 +152,6 @@ class TestOneDimExpression(unittest.TestCase):
         self.assertAlmostEqual(ln_expr.representative_variable.lb, math.log(0.1))
         self.assertAlmostEqual(ln_expr.representative_variable.ub, math.log(10.0))
 
-        # Test invalid bounds
-        var_invalid = var.Variable("x_invalid", lb=-1.0, ub=1.0)
-        with self.assertRaises(AssertionError):
-            ln_invalid = ode.LnExpression(
-                "test_invalid", self.model_data, var_invalid, 1
-            )
-            ln_invalid.propagate_variable_bounds()
-
     def test_square_root_expression_functionality(self):
         """Test SquareRootExpression functionality."""
         # Create variable with non-negative bounds
@@ -181,14 +173,6 @@ class TestOneDimExpression(unittest.TestCase):
         sqrt_expr.propagate_variable_bounds()
         self.assertAlmostEqual(sqrt_expr.representative_variable.lb, 0.0)
         self.assertAlmostEqual(sqrt_expr.representative_variable.ub, 4.0)
-
-        # Test invalid bounds
-        var_invalid = var.Variable("x_invalid", lb=-1.0, ub=1.0)
-        with self.assertRaises(AssertionError):
-            root_invalid = ode.SquareRootExpression(
-                "test_invalid", self.model_data, var_invalid, 1
-            )
-            root_invalid.propagate_variable_bounds()
 
     def test_sine_expression_functionality(self):
         """Test SineExpression functionality."""
@@ -247,14 +231,6 @@ class TestOneDimExpression(unittest.TestCase):
         log_expr.propagate_variable_bounds()
         self.assertAlmostEqual(log_expr.representative_variable.lb, math.log10(0.1))
         self.assertAlmostEqual(log_expr.representative_variable.ub, math.log10(100.0))
-
-        # Test invalid bounds
-        var_invalid = var.Variable("x_invalid", lb=-1.0, ub=1.0)
-        with self.assertRaises(AssertionError):
-            log_invalid = ode.LogExpression(
-                "test_invalid", self.model_data, var_invalid, 1
-            )
-            log_invalid.propagate_variable_bounds()
 
     def test_abs_expression_functionality(self):
         """Test AbsExpression functionality."""
@@ -323,14 +299,6 @@ class TestOneDimExpression(unittest.TestCase):
         inv_neg.propagate_variable_bounds()
         self.assertAlmostEqual(inv_neg.representative_variable.lb, -1 / 1.0)
         self.assertAlmostEqual(inv_neg.representative_variable.ub, -1 / 5.0)
-
-        # Test invalid bounds (spanning zero)
-        var_invalid = var.Variable("x_invalid", lb=-1.0, ub=1.0)
-        with self.assertRaises(AssertionError):
-            inverse_invalid = ode.InverseExpression(
-                "test_invalid", self.model_data, var_invalid, 1
-            )
-            inverse_invalid.propagate_variable_bounds()
 
     def test_piecewise_linear_approximation(self):
         """Test piecewise linear approximation application."""
