@@ -290,8 +290,9 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             self.expressions.all_low_dim_expressions(),
             key=lambda e: -e.level,
         )
-        for expression in sorted_expressions:
-            expression.propagate_variable_bounds()
+        for _ in range(self.settings.bound_propagation_rounds):
+            for expression in sorted_expressions:
+                expression.propagate_variable_bounds()
 
     def _propagate_bounds_linear_constraints(self):
         for _ in range(self.settings.bound_propagation_rounds):
