@@ -3,7 +3,6 @@
 @authors: kuen,
 """
 import json
-import dataclasses
 import logging
 import os
 import time
@@ -11,7 +10,6 @@ import time
 from alpaca.utils.logger import logger
 
 
-@dataclasses.dataclass
 class StaticSettings:
     """
     Class containing static settings.

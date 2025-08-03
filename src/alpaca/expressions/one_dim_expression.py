@@ -44,9 +44,6 @@ class OneDimExpression(exn.Expression):
         self.model_data = model_data
         self.variable: var.Variable = variable
 
-    def propagate_variable_bounds(self):
-        """Propagate variables bounds."""
-
     def apply_piecewise_linear_approximation(self) -> None:
         """Apply piecewise linear approximation to the expression.
 
