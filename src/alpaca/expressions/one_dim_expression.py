@@ -5,6 +5,7 @@
 @authors: kuen,
 """
 import math
+from typing import List, Tuple
 
 from alpaca.model_data import variable as var, constraint as con
 import alpaca.expressions.expression as exn
@@ -44,42 +45,84 @@ class OneDimExpression(exn.Expression):
         self.model_data = model_data
         self.variable: var.Variable = variable
 
-    def apply_piecewise_linear_approximation(self) -> None:
-        """Apply piecewise linear approximation to the expression.
-
-        This method is implemented by subclasses to create appropriate linear constraints
-        that approximate the nonlinear function represented by this expression.
+    def apply_piecewise_linear_relaxation(self, approximation=False) -> None:
+        """Apply piecewise linear relaxation to the expression.
+        If approximation is True, the approximation error term is set to 0
         """
         if self.model_data.settings.pwl_method == "multiple-choice":
-            self._apply_multiple_choice_method()
+            if approximation:
+                self._apply_multiple_choice_method_approximation()
+            else:
+                self._apply_multiple_choice_method_relaxation()
 
-    def _apply_multiple_choice_method(self):
-        reference_points = self._get_reference_points_multiple_choice()
+    def _apply_multiple_choice_method_approximation(self):
+        variables_in_constraint = [(-1.0, self.representative_variable)]
+        for i, bp in enumerate(self.variable.breakpoints[:-1]):
+            slope, _ = self._get_linear_approximation_function_parameters_for_segment(
+                bp, self.variable.breakpoints[i + 1]
+            )
+            variables_in_constraint.append(
+                (slope, self.variable.pwl_variables_continuous[i])
+            )
+            variables_in_constraint.append(
+                (self._f(bp), self.variable.pwl_variables_binary[i])
+            )
         self.model_data.add_constraint(
             con.Constraint(
                 f"mc_{self.name}",
                 con_type="==",
-                variables=[(-1.0, self.representative_variable)]
-                + [
-                    (
-                        (reference_points[i + 1] - reference_point)
-                        / (
-                            self.variable.breakpoints[i + 1]
-                            - self.variable.breakpoints[i]
-                        ),
-                        self.variable.pwl_variables_continuous[i],
-                    )
-                    for i, reference_point in enumerate(reference_points[:-1])
-                ]
-                + [
-                    (reference_point, self.variable.pwl_variables_binary[i])
-                    for i, reference_point in enumerate(reference_points[:-1])
-                ],
+                variables=variables_in_constraint,
             )
         )
 
+    def _apply_multiple_choice_method_relaxation(self):
+        continuous_variables_in_constraint = [(-1.0, self.representative_variable)]
+        binary_variables_in_underestimating_constraint = []
+        binary_variables_in_overestimating_constraint = []
+        for i, bp in enumerate(self.variable.breakpoints[:-1]):
+            slope, intercept = (
+                self._get_linear_approximation_function_parameters_for_segment(
+                    bp, self.variable.breakpoints[i + 1]
+                )
+            )
+            min_deviation, max_deviation = self._get_min_max_deviation(
+                bp, self.variable.breakpoints[i + 1], slope, intercept
+            )
+            continuous_variables_in_constraint.append(
+                (slope, self.variable.pwl_variables_continuous[i])
+            )
+            binary_variables_in_underestimating_constraint.append(
+                (self._f(bp) + min_deviation, self.variable.pwl_variables_binary[i])
+            )
+            binary_variables_in_overestimating_constraint.append(
+                (self._f(bp) + max_deviation, self.variable.pwl_variables_binary[i])
+            )
+        self.model_data.add_constraint(
+            con.Constraint(
+                f"mc_under_{self.name}",
+                con_type="<=",
+                variables=continuous_variables_in_constraint
+                + binary_variables_in_underestimating_constraint,
+            )
+        )
+        self.model_data.add_constraint(
+            con.Constraint(
+                f"mc_over_{self.name}",
+                con_type=">=",
+                variables=continuous_variables_in_constraint
+                + binary_variables_in_overestimating_constraint,
+            )
+        )
+
+    def _get_linear_approximation_function_parameters_for_segment(
+        self, var_lb: float, var_ub: float
+    ) -> tuple[float, float]:
+        slope = (self._f(var_ub) - self._f(var_lb)) / (var_ub - var_lb)
+        intercept = self._f(var_lb) - slope * var_lb
+        return slope, intercept
+
     def _get_reference_points_multiple_choice(self) -> list[float]:
-        return []
+        return [self._f(bp) for bp in self.variable.breakpoints]
 
     def __repr__(self) -> str:
         """Return string representation of the expression.
@@ -88,6 +131,43 @@ class OneDimExpression(exn.Expression):
             String identifier of the expression.
         """
         return self.name
+
+    def _f(self, x: float) -> float:
+        """Evaluates the function f(x) for the expression."""
+        raise NotImplementedError(
+            "Subclasses must implement the function evaluation _f(x)."
+        )
+
+    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+        """Solves f'(x) = m for x."""
+        raise NotImplementedError("Subclasses must implement the solver for f'(x) = m.")
+
+    def _get_deviation(self, x: float, m: float, t: float) -> float:
+        """Helper method to calculate the deviation f(x) - m*x - t."""
+        return self._f(x) - m * x - t
+
+    def _get_min_max_deviation(
+        self, var_lb: float, var_ub: float, m: float, t: float
+    ) -> Tuple[float, float]:
+        """
+        Calculates the min and max values of f(x) - m*x - t in [var_lb, var_ub].
+
+        The calculation is based on checking the function's value at the
+        interval boundaries and at any points within the interval where the
+        derivative f'(x) equals m.
+        """
+        points_to_check = [var_lb, var_ub]
+        critical_points = self._solve_for_f_prime_equals_m(m)
+        for p in critical_points:
+            if var_lb <= p <= var_ub:
+                points_to_check.append(p)
+
+        if not points_to_check:
+            return float("inf"), float("-inf")
+
+        deviations = [self._get_deviation(p, m, t) for p in points_to_check]
+
+        return min(deviations), max(deviations)
 
 
 class SquareExpression(OneDimExpression):
@@ -122,14 +202,24 @@ class SquareExpression(OneDimExpression):
         super().__init__(name, model_data, variable, level, representative_variable)
         self.variable.add_nonlinearity_to_occurring_in("square")
 
-    def _get_reference_points_multiple_choice(self) -> list[float]:
-        return [bp * bp for bp in self.variable.breakpoints]
-
     def propagate_variable_bounds(self) -> None:
+        """Propagates bounds for r = x^2.
+
+        The lower bound of r is 0 if the interval for x contains 0, otherwise
+        it's the minimum of x.lb^2 and x.ub^2. The upper bound is the maximum
+        of x.lb^2 and x.ub^2.
+        """
         ub = max(self.variable.ub, -self.variable.lb) ** 2
         lb = self.variable.lb**2 if self.variable.lb >= 0 else 0.0
         self.representative_variable.lb = max(lb, self.representative_variable.lb)
         self.representative_variable.ub = min(ub, self.representative_variable.ub)
+
+    def _f(self, x: float) -> float:
+        return x**2
+
+    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+        # f'(x) = 2x.  2x = m => x = m/2
+        return [m / 2.0]
 
 
 class ExponentialExpression(OneDimExpression):
@@ -164,10 +254,12 @@ class ExponentialExpression(OneDimExpression):
         super().__init__(name, model_data, variable, level, representative_variable)
         self.variable.add_nonlinearity_to_occurring_in("exp")
 
-    def _get_reference_points_multiple_choice(self) -> list[float]:
-        return [math.exp(bp) for bp in self.variable.breakpoints]
-
     def propagate_variable_bounds(self) -> None:
+        """Propagates bounds for r = e^x.
+
+        Since e^x is monotonically increasing, the new bounds for r are
+        [e^(x.lb), e^(x.ub)]. Handles potential OverflowError during calculation.
+        """
         try:
             lb = math.exp(self.variable.lb)
             ub = math.exp(self.variable.ub)
@@ -175,6 +267,15 @@ class ExponentialExpression(OneDimExpression):
             return
         self.representative_variable.lb = max(lb, self.representative_variable.lb)
         self.representative_variable.ub = min(ub, self.representative_variable.ub)
+
+    def _f(self, x: float) -> float:
+        return math.exp(x)
+
+    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+        # f'(x) = e^x. e^x = m => x = ln(m). Requires m > 0.
+        if m > 0:
+            return [math.log(m)]
+        return []
 
 
 class LnExpression(OneDimExpression):
@@ -209,16 +310,28 @@ class LnExpression(OneDimExpression):
         super().__init__(name, model_data, variable, level, representative_variable)
         self.variable.add_nonlinearity_to_occurring_in("ln")
 
-    def _get_reference_points_multiple_choice(self) -> list[float]:
-        return [math.log(bp) for bp in self.variable.breakpoints]
-
     def propagate_variable_bounds(self) -> None:
+        """Propagates bounds for r = ln(x).
+
+        The natural logarithm is only defined for x > 0. If this condition
+        is met, the new bounds for r are [ln(x.lb), ln(x.ub)] because
+        ln(x) is monotonically increasing.
+        """
         if self.variable.lb <= 0:
             return
         lb = math.log(self.variable.lb)
         ub = math.log(self.variable.ub)
         self.representative_variable.lb = max(lb, self.representative_variable.lb)
         self.representative_variable.ub = min(ub, self.representative_variable.ub)
+
+    def _f(self, x: float) -> float:
+        return math.log(x)
+
+    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+        # f'(x) = 1/x. 1/x = m => x = 1/m. Requires m != 0.
+        if m != 0:
+            return [1.0 / m]
+        return []
 
 
 class SquareRootExpression(OneDimExpression):
@@ -253,16 +366,28 @@ class SquareRootExpression(OneDimExpression):
         super().__init__(name, model_data, variable, level, representative_variable)
         self.variable.add_nonlinearity_to_occurring_in("sqrt")
 
-    def _get_reference_points_multiple_choice(self) -> list[float]:
-        return [math.sqrt(bp) for bp in self.variable.breakpoints]
-
     def propagate_variable_bounds(self) -> None:
+        """Propagates bounds for r = sqrt(x).
+
+        The square root is only defined for x >= 0. If this condition is met,
+        the new bounds for r are [sqrt(x.lb), sqrt(x.ub)] because sqrt(x)
+        is monotonically increasing.
+        """
         if self.variable.lb < 0:
             return
         lb = math.sqrt(self.variable.lb)
         ub = math.sqrt(self.variable.ub)
         self.representative_variable.lb = max(lb, self.representative_variable.lb)
         self.representative_variable.ub = min(ub, self.representative_variable.ub)
+
+    def _f(self, x: float) -> float:
+        return math.sqrt(x)
+
+    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+        # f'(x) = 1/(2*sqrt(x)). 1/(2*sqrt(x)) = m => x = (1/(2m))^2. Requires m > 0.
+        if m > 0:
+            return [(0.5 / m) ** 2]
+        return []
 
 
 class SineExpression(OneDimExpression):
@@ -297,14 +422,47 @@ class SineExpression(OneDimExpression):
         super().__init__(name, model_data, variable, level, representative_variable)
         self.variable.add_nonlinearity_to_occurring_in("sin")
 
-    def _get_reference_points_multiple_choice(self) -> list[float]:
-        return [math.sin(bp) for bp in self.variable.breakpoints]
-
     def propagate_variable_bounds(self) -> None:
+        """Propagates bounds for r = sin(x).
+
+        The range of sin(x) is [-1, 1]. This method tightens the bounds of the
+        representative variable to be within this range. A more precise
+        propagation would consider the specific interval of x, but this
+        provides a simple and correct outer approximation.
+        """
         lb = -1.0
         ub = 1.0
         self.representative_variable.lb = max(lb, self.representative_variable.lb)
         self.representative_variable.ub = min(ub, self.representative_variable.ub)
+
+    def _f(self, x: float) -> float:
+        return math.sin(x)
+
+    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+        # f'(x) = cos(x). cos(x) = m. Requires |m| <= 1.
+        if not -1.0 <= m <= 1.0:
+            return []
+
+        solutions = []
+        x0 = math.acos(m)  # Principal value in [0, pi]
+
+        # General solutions are 2*k*pi +/- x0. Find all in variable's bounds.
+        var_lb, var_ub = self.variable.lb, self.variable.ub
+
+        # Type 1 solutions: 2*k*pi + x0
+        k_min = (var_lb - x0) / (2 * math.pi)
+        k_max = (var_ub - x0) / (2 * math.pi)
+        for k in range(math.ceil(k_min), math.floor(k_max) + 1):
+            solutions.append(2 * k * math.pi + x0)
+
+        # Type 2 solutions: 2*k*pi - x0 (if distinct)
+        if x0 > 1e-9:  # Avoid duplicates when x0 is 0
+            k_min = (var_lb + x0) / (2 * math.pi)
+            k_max = (var_ub + x0) / (2 * math.pi)
+            for k in range(math.ceil(k_min), math.floor(k_max) + 1):
+                solutions.append(2 * k * math.pi - x0)
+
+        return list(set(solutions))
 
 
 class CosineExpression(OneDimExpression):
@@ -339,14 +497,48 @@ class CosineExpression(OneDimExpression):
         super().__init__(name, model_data, variable, level, representative_variable)
         self.variable.add_nonlinearity_to_occurring_in("cos")
 
-    def _get_reference_points_multiple_choice(self) -> list[float]:
-        return [math.cos(bp) for bp in self.variable.breakpoints]
-
     def propagate_variable_bounds(self) -> None:
+        """Propagates bounds for r = cos(x).
+
+        The range of cos(x) is [-1, 1]. This method tightens the bounds of the
+        representative variable to be within this range. A more precise
+        propagation would consider the specific interval of x, but this
+        provides a simple and correct outer approximation.
+        """
         lb = -1.0
         ub = 1.0
         self.representative_variable.lb = max(lb, self.representative_variable.lb)
         self.representative_variable.ub = min(ub, self.representative_variable.ub)
+
+    def _f(self, x: float) -> float:
+        return math.cos(x)
+
+    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+        # f'(x) = -sin(x). -sin(x) = m => sin(x) = -m. Requires |m| <= 1.
+        m_prime = -m
+        if not -1.0 <= m_prime <= 1.0:
+            return []
+
+        solutions = []
+        x0 = math.asin(m_prime)  # Principal value in [-pi/2, pi/2]
+
+        # General solutions for sin(x)=y are 2k*pi+x0 and (2k+1)*pi-x0
+        var_lb, var_ub = self.variable.lb, self.variable.ub
+
+        # Type 1: 2*k*pi + x0
+        k_min = (var_lb - x0) / (2 * math.pi)
+        k_max = (var_ub - x0) / (2 * math.pi)
+        for k in range(math.ceil(k_min), math.floor(k_max) + 1):
+            solutions.append(2 * k * math.pi + x0)
+
+        # Type 2: (2*k+1)*pi - x0
+        pi_minus_x0 = math.pi - x0
+        k_min = (var_lb - pi_minus_x0) / (2 * math.pi)
+        k_max = (var_ub - pi_minus_x0) / (2 * math.pi)
+        for k in range(math.ceil(k_min), math.floor(k_max) + 1):
+            solutions.append(2 * k * math.pi + pi_minus_x0)
+
+        return list(set(solutions))
 
 
 class LogExpression(OneDimExpression):
@@ -381,16 +573,28 @@ class LogExpression(OneDimExpression):
         super().__init__(name, model_data, variable, level, representative_variable)
         self.variable.add_nonlinearity_to_occurring_in("log10")
 
-    def _get_reference_points_multiple_choice(self) -> list[float]:
-        return [math.log10(bp) for bp in self.variable.breakpoints]
-
     def propagate_variable_bounds(self) -> None:
+        """Propagates bounds for r = log10(x).
+
+        The base-10 logarithm is only defined for x > 0. If this holds,
+        the new bounds for r are [log10(x.lb), log10(x.ub)] because log10(x)
+        is monotonically increasing.
+        """
         if self.variable.lb <= 0:
             return
         lb = math.log10(self.variable.lb)
         ub = math.log10(self.variable.ub)
         self.representative_variable.lb = max(lb, self.representative_variable.lb)
         self.representative_variable.ub = min(ub, self.representative_variable.ub)
+
+    def _f(self, x: float) -> float:
+        return math.log10(x)
+
+    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+        # f'(x) = 1/(x*ln(10)). 1/(x*ln(10)) = m => x = 1/(m*ln(10)).
+        if m != 0:
+            return [1.0 / (m * math.log(10))]
+        return []
 
 
 class AbsExpression(OneDimExpression):
@@ -405,7 +609,7 @@ class AbsExpression(OneDimExpression):
         representative_variable: Variable representing the result of the expression.
     """
 
-    def apply_piecewise_linear_approximation(self):
+    def apply_piecewise_linear_relaxation(self, approximation=False) -> None:
         binary_abs_variable = self.model_data.add_variable(
             var.Variable(f"abs_bin_{self.variable.name}", var_type="B")
         )
@@ -454,6 +658,12 @@ class AbsExpression(OneDimExpression):
         )
 
     def propagate_variable_bounds(self) -> None:
+        """Propagates bounds for r = |x|.
+
+        If the interval for x contains 0, the lower bound of r is 0.
+        Otherwise, the lower bound is min(|x.lb|, |x.ub|). The upper
+        bound is always max(|x.lb|, |x.ub|).
+        """
         lb = (
             min(abs(self.variable.lb), abs(self.variable.ub))
             if self.variable.lb * self.variable.ub >= 0
@@ -463,6 +673,26 @@ class AbsExpression(OneDimExpression):
         self.representative_variable.lb = max(lb, self.representative_variable.lb)
         self.representative_variable.ub = min(ub, self.representative_variable.ub)
 
+    def _f(self, x: float) -> float:
+        return abs(x)
+
+    def _get_min_max_deviation(
+        self, var_lb: float, var_ub: float, m: float, t: float
+    ) -> Tuple[float, float]:
+        """
+        Specialized calculation for |x| - m*x - t.
+        The function is piecewise linear, so extrema are at the boundaries
+        or the "kink" at x=0.
+        """
+        points_to_check = [var_lb, var_ub]
+        if var_lb <= 0.0 <= var_ub:
+            points_to_check.append(0.0)
+
+        deviations = [abs(p) - m * p - t for p in points_to_check]
+        return min(deviations), max(deviations)
+
+    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+        return []
 
 class TangensHExpression(OneDimExpression):
     """Hyperbolic tangent expression representing r = tanh(x).
@@ -496,14 +726,33 @@ class TangensHExpression(OneDimExpression):
         super().__init__(name, model_data, variable, level, representative_variable)
         self.variable.add_nonlinearity_to_occurring_in("tanh")
 
-    def _get_reference_points_multiple_choice(self) -> list[float]:
-        return [math.tanh(bp) for bp in self.variable.breakpoints]
-
     def propagate_variable_bounds(self) -> None:
+        """Propagates bounds for r = tanh(x).
+
+        Since tanh(x) is monotonically increasing, the new bounds for r are
+        [tanh(x.lb), tanh(x.ub)].
+        """
         lb = math.tanh(self.variable.lb)
         ub = math.tanh(self.variable.ub)
         self.representative_variable.lb = max(lb, self.representative_variable.lb)
         self.representative_variable.ub = min(ub, self.representative_variable.ub)
+
+    def _f(self, x: float) -> float:
+        return math.tanh(x)
+
+    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+        # f'(x) = 1 - tanh^2(x). 1 - tanh^2(x) = m => tanh^2(x) = 1 - m.
+        # f'(x) is in (0, 1], so m must be in (0, 1].
+        if not 0.0 < m <= 1.0:
+            return []
+
+        val_squared = 1.0 - m
+        val = math.sqrt(val_squared)
+
+        # x = atanh(y) = 0.5 * log((1+y)/(1-y))
+        sol1 = math.atanh(val)
+        sol2 = -sol1  # atanh is an odd function
+        return [sol1, sol2]
 
 
 class InverseExpression(OneDimExpression):
@@ -538,10 +787,14 @@ class InverseExpression(OneDimExpression):
         super().__init__(name, model_data, variable, level, representative_variable)
         self.variable.add_nonlinearity_to_occurring_in("inverse")
 
-    def _get_reference_points_multiple_choice(self) -> list[float]:
-        return [1 / bp for bp in self.variable.breakpoints]
-
     def propagate_variable_bounds(self) -> None:
+        """Propagates bounds for r = 1/x.
+
+        The inverse function is only defined if the interval for x does not
+        contain 0. If the interval is strictly positive or strictly negative,
+        the function is monotonically decreasing, so the new bounds for r
+        are [1/x.ub, 1/x.lb].
+        """
         if not (
             (self.variable.lb < 0 and self.variable.ub < 0)
             or (self.variable.lb > 0 and self.variable.ub > 0)
@@ -551,3 +804,13 @@ class InverseExpression(OneDimExpression):
         ub = 1 / self.variable.lb
         self.representative_variable.lb = max(lb, self.representative_variable.lb)
         self.representative_variable.ub = min(ub, self.representative_variable.ub)
+
+    def _f(self, x: float) -> float:
+        return 1.0 / x
+
+    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+        # f'(x) = -1/x^2. -1/x^2 = m => x^2 = -1/m. Requires m < 0.
+        if m >= 0:
+            return []
+        val = math.sqrt(-1.0 / m)
+        return [val, -val]

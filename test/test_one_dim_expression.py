@@ -300,30 +300,44 @@ class TestOneDimExpression(unittest.TestCase):
         self.assertAlmostEqual(inv_neg.representative_variable.lb, -1 / 1.0)
         self.assertAlmostEqual(inv_neg.representative_variable.ub, -1 / 5.0)
 
-    def test_piecewise_linear_approximation(self):
-        """Test piecewise linear approximation application."""
+    def test_piecewise_linear_approximation_mc(self):
+        """Test piecewise linear approximation (multiple-choice)."""
         square_expr = ode.SquareExpression(
             "test_square", self.model_data, self.var_x, 1
         )
 
         # Call the approximation method
-        square_expr.apply_piecewise_linear_approximation()
+        square_expr.apply_piecewise_linear_relaxation(approximation=True)
 
-        # Verify constraints were added
-        # The mock_add_constraint handles the update, so we check if it was called
-        self.model_data.add_constraint.assert_called()
-
+        # Verify constraint was added
+        self.model_data.add_constraint.assert_called_once()
         self.assertIn("mc_test_square", self.model_data.constraints)
-
         constraint = self.model_data.constraints["mc_test_square"]
         self.assertEqual(constraint.con_type, "==")
+        self.assertEqual(len(self.model_data.constraints), 1)
 
-    def test_different_pwl_methods(self):
-        """Test behavior with different piecewise linear methods."""
-        # Test multiple-choice method
-        self.model_data.settings.pwl_method = "multiple-choice"
-        square_mc = ode.SquareExpression("test_mc", self.model_data, self.var_x, 1)
-        square_mc.apply_piecewise_linear_approximation()
+    def test_piecewise_linear_relaxation_mc(self):
+        """Test piecewise linear relaxation (multiple-choice)."""
+        square_expr = ode.SquareExpression(
+            "test_square", self.model_data, self.var_x, 1
+        )
+
+        # Call the relaxation method (approximation=False is default)
+        square_expr.apply_piecewise_linear_relaxation()
+
+        # Verify constraints were added
+        self.assertEqual(self.model_data.add_constraint.call_count, 2)
+        self.assertEqual(len(self.model_data.constraints), 2)
+
+        # Check underestimating constraint
+        self.assertIn("mc_under_test_square", self.model_data.constraints)
+        under_constraint = self.model_data.constraints["mc_under_test_square"]
+        self.assertEqual(under_constraint.con_type, "<=")
+
+        # Check overestimating constraint
+        self.assertIn("mc_over_test_square", self.model_data.constraints)
+        over_constraint = self.model_data.constraints["mc_over_test_square"]
+        self.assertEqual(over_constraint.con_type, ">=")
 
 
 if __name__ == "__main__":
