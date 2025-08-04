@@ -58,14 +58,16 @@ class OneDimExpression(exn.Expression):
     def _apply_multiple_choice_method_approximation(self):
         variables_in_constraint = [(-1.0, self.representative_variable)]
         for i, bp in enumerate(self.variable.breakpoints[:-1]):
-            slope, _ = self._get_linear_approximation_function_parameters_for_segment(
-                bp, self.variable.breakpoints[i + 1]
+            slope, intercept = (
+                self._get_linear_approximation_function_parameters_for_segment(
+                    bp, self.variable.breakpoints[i + 1]
+                )
             )
             variables_in_constraint.append(
                 (slope, self.variable.pwl_variables_continuous[i])
             )
             variables_in_constraint.append(
-                (self._f(bp), self.variable.pwl_variables_binary[i])
+                (intercept, self.variable.pwl_variables_binary[i])
             )
         self.model_data.add_constraint(
             con.Constraint(
@@ -92,10 +94,10 @@ class OneDimExpression(exn.Expression):
                 (slope, self.variable.pwl_variables_continuous[i])
             )
             binary_variables_in_underestimating_constraint.append(
-                (self._f(bp) + min_deviation, self.variable.pwl_variables_binary[i])
+                (intercept + min_deviation, self.variable.pwl_variables_binary[i])
             )
             binary_variables_in_overestimating_constraint.append(
-                (self._f(bp) + max_deviation, self.variable.pwl_variables_binary[i])
+                (intercept + max_deviation, self.variable.pwl_variables_binary[i])
             )
         self.model_data.add_constraint(
             con.Constraint(
@@ -693,6 +695,7 @@ class AbsExpression(OneDimExpression):
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
         return []
+
 
 class TangensHExpression(OneDimExpression):
     """Hyperbolic tangent expression representing r = tanh(x).
