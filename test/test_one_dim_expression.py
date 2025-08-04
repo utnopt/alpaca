@@ -455,10 +455,8 @@ class TestOneDimExpression(unittest.TestCase):
                 var_values = {expr.representative_variable.name: r_true}
                 for i, pwl_var in enumerate(expr.variable.pwl_variables_binary):
                     is_active = i == segment_idx
-                    var_values[pwl_var.name] = (
-                        1.0 if is_active else 0.0
-                    )
-                    var_values[pwl_var.name] = (
+                    var_values[pwl_var.name] = 1.0 if is_active else 0.0
+                    var_values[expr.variable.pwl_variables_continuous[i].name] = (
                         x_val if is_active else 0.0
                     )
 
