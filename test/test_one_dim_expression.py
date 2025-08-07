@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=protected-access, duplicate-code
+# pylint: disable=protected-access, duplicate-code, too-many-locals
 """
 Comprehensive unit tests for OneDimExpression classes
 """
@@ -58,6 +58,13 @@ class TestOneDimExpression(unittest.TestCase):
         # Add occurring_in attribute if not present
         if not hasattr(self.var_x, "occurring_in"):
             self.var_x.occurring_in = []
+
+    def _evaluate_constraint(self, constraint, var_values):
+        """Helper to evaluate the left-hand side of a constraint."""
+        total = 0
+        for coeff, var_obj in constraint.variables:
+            total += coeff * var_values.get(var_obj.name, 0.0)
+        return total
 
     def test_square_expression_initialization(self):
         """Test SquareExpression initialization."""
@@ -135,6 +142,7 @@ class TestOneDimExpression(unittest.TestCase):
         # Create variable with positive bounds for ln
         var_ln = var.Variable("x_ln", lb=0.1, ub=10.0)
         var_ln.breakpoints = [0.1, 1.0, 5.0, 10.0]
+        var_ln.occurring_in = []  # Add occurring_in for test isolation
 
         ln_expr = ode.LnExpression("test_ln", self.model_data, var_ln, 1)
 
@@ -157,6 +165,7 @@ class TestOneDimExpression(unittest.TestCase):
         # Create variable with non-negative bounds
         var_sqrt = var.Variable("x_sqrt", lb=0.0, ub=16.0)
         var_sqrt.breakpoints = [0.0, 4.0, 9.0, 16.0]
+        var_sqrt.occurring_in = []  # Add occurring_in for test isolation
 
         sqrt_expr = ode.SquareRootExpression("test_sqrt", self.model_data, var_sqrt, 1)
 
@@ -215,6 +224,7 @@ class TestOneDimExpression(unittest.TestCase):
         # Create variable with positive bounds
         var_log = var.Variable("x_log", lb=0.1, ub=100.0)
         var_log.breakpoints = [0.1, 1.0, 10.0, 100.0]
+        var_log.occurring_in = []  # Add occurring_in for test isolation
 
         log_expr = ode.LogExpression("test_log", self.model_data, var_log, 1)
 
@@ -277,6 +287,7 @@ class TestOneDimExpression(unittest.TestCase):
         # Create variable with positive bounds
         var_pos = var.Variable("x_pos", lb=1.0, ub=5.0)
         var_pos.breakpoints = [1.0, 2.0, 3.0, 4.0, 5.0]
+        var_pos.occurring_in = []  # Add occurring_in for test isolation
 
         inv_expr = ode.InverseExpression("test_inv", self.model_data, var_pos, 1)
 
@@ -300,30 +311,163 @@ class TestOneDimExpression(unittest.TestCase):
         self.assertAlmostEqual(inv_neg.representative_variable.lb, -1 / 1.0)
         self.assertAlmostEqual(inv_neg.representative_variable.ub, -1 / 5.0)
 
-    def test_piecewise_linear_approximation(self):
-        """Test piecewise linear approximation application."""
+    def test_piecewise_linear_approximation_mc(self):
+        """Test piecewise linear approximation (multiple-choice)."""
         square_expr = ode.SquareExpression(
             "test_square", self.model_data, self.var_x, 1
         )
 
         # Call the approximation method
-        square_expr.apply_piecewise_linear_approximation()
+        square_expr.apply_piecewise_linear_relaxation(approximation=True)
 
-        # Verify constraints were added
-        # The mock_add_constraint handles the update, so we check if it was called
-        self.model_data.add_constraint.assert_called()
-
+        # Verify constraint was added
+        self.model_data.add_constraint.assert_called_once()
         self.assertIn("mc_test_square", self.model_data.constraints)
-
         constraint = self.model_data.constraints["mc_test_square"]
         self.assertEqual(constraint.con_type, "==")
+        self.assertEqual(len(self.model_data.constraints), 1)
 
-    def test_different_pwl_methods(self):
-        """Test behavior with different piecewise linear methods."""
-        # Test multiple-choice method
-        self.model_data.settings.pwl_method = "multiple-choice"
-        square_mc = ode.SquareExpression("test_mc", self.model_data, self.var_x, 1)
-        square_mc.apply_piecewise_linear_approximation()
+    def test_piecewise_linear_relaxation_mc(self):
+        """Test piecewise linear relaxation (multiple-choice)."""
+        square_expr = ode.SquareExpression(
+            "test_square", self.model_data, self.var_x, 1
+        )
+
+        # Call the relaxation method (approximation=False is default)
+        square_expr.apply_piecewise_linear_relaxation()
+
+        # Verify constraints were added
+        self.assertEqual(self.model_data.add_constraint.call_count, 2)
+        self.assertEqual(len(self.model_data.constraints), 2)
+
+        # Check underestimating constraint
+        self.assertIn("mc_under_test_square", self.model_data.constraints)
+        under_constraint = self.model_data.constraints["mc_under_test_square"]
+        self.assertEqual(under_constraint.con_type, "<=")
+
+        # Check overestimating constraint
+        self.assertIn("mc_over_test_square", self.model_data.constraints)
+        over_constraint = self.model_data.constraints["mc_over_test_square"]
+        self.assertEqual(over_constraint.con_type, ">=")
+
+    def test_piecewise_linear_approximation_mc_coefficients(self):
+        """Test coefficients of piecewise linear approximation (MC)."""
+        square_expr = ode.SquareExpression(
+            "test_square", self.model_data, self.var_x, 1
+        )
+        square_expr.apply_piecewise_linear_relaxation(approximation=True)
+
+        # Expected values for f(x)=x^2 on [1,5] with integer breakpoints
+        expected_slopes = [3.0, 5.0, 7.0, 9.0]
+        expected_intercepts = [-2.0, -6.0, -12.0, -20.0]
+
+        self.assertIn("mc_test_square", self.model_data.constraints)
+        approx_con = self.model_data.constraints["mc_test_square"]
+
+        # Create a map from variable to coefficient for easy lookup
+        var_map = {var.name: coeff for coeff, var in approx_con.variables}
+
+        # Check representative variable coefficient
+        self.assertEqual(var_map[square_expr.representative_variable.name], -1.0)
+
+        # Check coefficients for each segment
+        for i in range(4):
+            # Continuous variable (slope)
+            cont_var_name = self.var_x.pwl_variables_continuous[i].name
+            self.assertAlmostEqual(var_map[cont_var_name], expected_slopes[i])
+
+            # Binary variable (intercept)
+            bin_var_name = self.var_x.pwl_variables_binary[i].name
+            self.assertAlmostEqual(var_map[bin_var_name], expected_intercepts[i])
+
+    def test_piecewise_linear_relaxation_mc_coefficients(self):
+        """Test coefficients of piecewise linear relaxation (MC)."""
+        square_expr = ode.SquareExpression(
+            "test_square", self.model_data, self.var_x, 1
+        )
+        square_expr.apply_piecewise_linear_relaxation()
+
+        # Expected values for f(x)=x^2 on [1,5] with integer breakpoints
+        expected_slopes = [3.0, 5.0, 7.0, 9.0]
+        expected_intercepts = [-2.0, -6.0, -12.0, -20.0]
+        # For a convex function like x^2, max deviation is 0 and min is at the midpoint
+        expected_max_deviation = 0.0
+        expected_min_deviation = -0.25
+
+        # Get constraints.
+        # mc_under_<name> (LHS <= 0) is the under-estimator: r >= f_pwl
+        # mc_over_<name> (LHS >= 0) is the over-estimator: r <= f_pwl
+        self.assertIn("mc_under_test_square", self.model_data.constraints)
+        under_estimator_con = self.model_data.constraints["mc_under_test_square"]
+
+        self.assertIn("mc_over_test_square", self.model_data.constraints)
+        over_estimator_con = self.model_data.constraints["mc_over_test_square"]
+
+        # Create maps from variable to coefficient for easy lookup
+        under_map = {var.name: coeff for coeff, var in under_estimator_con.variables}
+        over_map = {var.name: coeff for coeff, var in over_estimator_con.variables}
+
+        # Check representative variable coefficient
+        rep_var_name = square_expr.representative_variable.name
+        self.assertEqual(under_map[rep_var_name], -1.0)
+        self.assertEqual(over_map[rep_var_name], -1.0)
+
+        # Check coefficients for each segment
+        for i in range(4):
+            cont_var_name = self.var_x.pwl_variables_continuous[i].name
+            bin_var_name = self.var_x.pwl_variables_binary[i].name
+
+            # Slopes should be the same in both constraints
+            self.assertAlmostEqual(under_map[cont_var_name], expected_slopes[i])
+            self.assertAlmostEqual(over_map[cont_var_name], expected_slopes[i])
+
+            # Check intercepts + deviations
+            # Under-estimator: intercept + min_deviation
+            expected_under_coeff = expected_intercepts[i] + expected_min_deviation
+            self.assertAlmostEqual(under_map[bin_var_name], expected_under_coeff)
+
+            # Over-estimator: intercept + max_deviation
+            expected_over_coeff = expected_intercepts[i] + expected_max_deviation
+            self.assertAlmostEqual(over_map[bin_var_name], expected_over_coeff)
+
+    def test_pwl_relaxation_correctness_square(self):
+        """Test that the PWL relaxation correctly bounds the square function."""
+        expr = ode.SquareExpression("test_square", self.model_data, self.var_x, 1)
+        expr.apply_piecewise_linear_relaxation()
+
+        under_con = self.model_data.constraints["mc_under_test_square"]
+        over_con = self.model_data.constraints["mc_over_test_square"]
+
+        test_points = [1.0, 1.5, 2.0, 2.5, 3.0, 3.8, 4.9, 5.0]
+
+        for x_val in test_points:
+            with self.subTest(x=x_val):
+                r_true = expr._f(x_val)
+
+                # Find which segment the point is in
+                segment_idx = -1
+                for i, bp in enumerate(expr.variable.breakpoints[:-1]):
+                    if bp <= x_val <= expr.variable.breakpoints[i + 1]:
+                        segment_idx = i
+                        break
+
+                # Set up variable values for this point
+                var_values = {expr.representative_variable.name: r_true}
+                for i, pwl_var in enumerate(expr.variable.pwl_variables_binary):
+                    is_active = i == segment_idx
+                    var_values[pwl_var.name] = 1.0 if is_active else 0.0
+                    var_values[expr.variable.pwl_variables_continuous[i].name] = (
+                        x_val if is_active else 0.0
+                    )
+
+                # Check if the true value satisfies the constraints
+                # Under-estimator: sum(...) <= r  -->  sum(...) - r <= 0
+                under_val = self._evaluate_constraint(under_con, var_values)
+                self.assertLessEqual(under_val, 1e-9)
+
+                # Over-estimator: sum(...) >= r  -->  sum(...) - r >= 0
+                over_val = self._evaluate_constraint(over_con, var_values)
+                self.assertGreaterEqual(over_val, -1e-9)
 
 
 if __name__ == "__main__":

@@ -118,6 +118,8 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             )
             var_type = v.get("type")
             variable.var_type = "C" if var_type is None else var_type
+            if variable.var_type != "C":
+                raise NotImplementedError(f"Variable type {var_type} not supported yet.")
 
     def _add_constraints_from_osil_data(self, osil_data: BeautifulSoup) -> None:
         try:
@@ -327,6 +329,8 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         for expression in self.expressions.multilinear_expressions.values():
             expression.apply_piecewise_constant_approximation()
         for expression in self.expressions.one_dim_expressions.values():
-            expression.apply_piecewise_linear_approximation()
+            expression.apply_piecewise_linear_relaxation(
+                approximation=self.settings.approximation
+            )
         for expression in self.expressions.linear_expressions.values():
             expression.add_constraint_from_linear_expression()
