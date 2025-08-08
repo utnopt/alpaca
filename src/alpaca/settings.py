@@ -48,7 +48,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
     def __init__(self, config_dict):
         self.solver_time_limit = int(config_dict.get("solver_time_limit", 7200))
         self.osil_file_name = str(config_dict.get("osil_file_name", "st_e41"))
-        self.number_of_breakpoints = int(config_dict.get("number_of_breakpoints", 20))
+        self.number_of_breakpoints = int(config_dict.get("number_of_breakpoints", 5))
         self.feature_mpip = int(config_dict.get("feature_mpip", 0))
         self.pwl_method = str(config_dict.get("pwl_method", "multiple-choice"))
         self.approximation = str(config_dict.get("approximation", "False")) == "True"
