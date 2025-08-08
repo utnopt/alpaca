@@ -26,6 +26,7 @@ class ModelGurobi:
         self._add_variables()
         self._add_constraints()
         self._add_objective()
+        self._set_parameters()
 
     def _add_variables(self):
         for variable in self.data.variables.values():
@@ -71,3 +72,7 @@ class ModelGurobi:
             self.data.variables["x_-1"].solver_variable,
             sense=gp.GRB.MINIMIZE,
         )
+
+    def _set_parameters(self):
+        """Set Gurobi parameters based on user settings."""
+        self.opt_model.setParam("TimeLimit", self.settings.solver_time_limit)

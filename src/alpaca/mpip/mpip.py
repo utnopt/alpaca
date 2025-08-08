@@ -5,6 +5,7 @@
 import itertools
 import bisect
 import pyscipopt as scip
+import gurobipy as gp
 
 import alpaca.settings as s
 
@@ -18,8 +19,8 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         self.implying_breakpoints: dict[str, list[float]] = {}
         self.implied_breakpoints: list[float] = []
         self.implied_id = ""
-        self.implying_variables: dict[str, list[scip.Variable]] = {}
-        self.implied_variables: list[scip.Variable] = []
+        self.implying_variables: dict[str, list[scip.Variable | gp.Var]] = {}
+        self.implied_variables: list[scip.Variable | gp.Var] = []
         self.relation = {}
         self.implying_function = scip.Expr()
         self.interval_lp = scip.Model()
@@ -38,7 +39,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         self,
         implied_id: str,
         breakpoints: list[float],
-        pwl_variables_binary: list[scip.Variable],
+        pwl_variables_binary: list[scip.Variable | gp.Var],
     ) -> None:
         """Add implied variable information."""
         self.implied_id = implied_id
@@ -52,7 +53,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         self,
         implying_id: str,
         breakpoints: list[float],
-        pwl_variables_binary: list[scip.Variable],
+        pwl_variables_binary: list[scip.Variable | gp.Var],
     ) -> None:
         """Add implying variable information."""
         self.implying_variables.update({implying_id: pwl_variables_binary})

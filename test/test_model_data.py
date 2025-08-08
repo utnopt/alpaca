@@ -9,7 +9,8 @@ import alpaca.settings as s
 from alpaca.external_solvers import model_scip as msc, model_gurobi as mgu
 import alpaca.model_data.model_data as mda
 import alpaca.solver.solver as slv
-from alpaca.mpip import mpiphandler as mph, separationhandler as mps
+from alpaca.mpip import mpiphandler as mph
+from alpaca.mpip.separation import separationhandler_scip as mps
 
 
 class TestModelData(unittest.TestCase):

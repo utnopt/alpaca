@@ -1,7 +1,7 @@
 {
 "solver_time_limit": 3600,
-  "osil_file_name": "camshape100",
-  "external_solver": "scip",
+  "osil_file_name": "syn05hfsg",
+  "external_solver": "gurobi",
   "number_of_breakpoints": 10,
   "feature_mpip": 0,
   "approximation": "False"
