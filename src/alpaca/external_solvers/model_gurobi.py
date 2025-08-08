@@ -13,7 +13,11 @@ class ModelGurobi:
     """Optimization model object."""
 
     def __init__(self, data: mda.ModelData, settings: UserSettings):
-        self.opt_model = gp.Model()
+        env = gp.Env(empty=True)
+        env.setParam('LogToConsole', 0)
+        env.start()
+        self.opt_model = gp.Model(env=env)
+        self.opt_model.setParam("OutputFlag", 0)
         self.data = data
         self.settings = settings
         self._build_optimization_model()
