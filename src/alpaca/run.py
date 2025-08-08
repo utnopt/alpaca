@@ -7,7 +7,11 @@ import traceback
 import alpaca.model_data.model_data as mda
 from alpaca.external_solvers import model_scip as msc, model_gurobi as mgu
 import alpaca.solver.solver as slv
-from alpaca.mpip import mpiphandler as mph, separationhandler as mps
+import alpaca.mpip.mpiphandler as mph
+from alpaca.mpip.separation import (
+    separationhandler_scip as ses,
+    separationhandler_gurobi as seg,
+)
 import alpaca.settings as s
 from alpaca.utils import inout as ut_io, datareading as ut_dr
 from alpaca.utils.logger import logger
@@ -46,14 +50,19 @@ def run_optimization():
                 model_data.expressions.bilinear_expressions,
                 model_data.expressions.multilinear_expressions,
             )
-            mpip_separation_handler = mps.SeparationHandler(
-                mpip_handler, external_solver.opt_model
-            )
+            if user_settings.external_solver == "scip":
+                mpip_separation_handler = ses.SeparationHandler(
+                    mpip_handler, external_solver.opt_model
+                )
+            else:
+                mpip_separation_handler = seg.SeparationHandler(
+                    mpip_handler, external_solver.opt_model
+                )
             solver.mpip_separation_handler = mpip_separation_handler
 
-        solver.solve_instance()
+        runtime = solver.solve_instance()
 
-        logger.info("Optimization finished successfully.")
+        logger.info("Optimization finished successfully. Runtime: %.2f seconds", runtime)
         return {"status": "success"}
     except Exception as ex:  # pylint: disable=broad-exception-caught
         logger.error("Error occurred while running optimization: %s", ex)

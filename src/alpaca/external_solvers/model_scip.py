@@ -27,6 +27,7 @@ class ModelScip:
         self._add_variables()
         self._add_constraints()
         self._add_objective()
+        self._set_parameters()
 
     def _add_variables(self):
         for variable in self.data.variables.values():
@@ -72,3 +73,7 @@ class ModelScip:
             self.data.variables["x_-1"].solver_variable,
             sense="minimize",
         )
+
+    def _set_parameters(self):
+        """Set parameters for the SCIP model."""
+        self.opt_model.setRealParam("limits/time", self.settings.solver_time_limit)

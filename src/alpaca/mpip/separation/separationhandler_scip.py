@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=duplicate-code
 """
 @authors: kuen,
 """
 import pyscipopt as scip
 
 import alpaca.settings as s
-from alpaca.mpip import mpiphandler as mph, separator as mps
+from alpaca.mpip import mpiphandler as mph
+from alpaca.mpip.separation import separator_scip as mps
 
 
 class SeparationHandler(scip.Eventhdlr):
