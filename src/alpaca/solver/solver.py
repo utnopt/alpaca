@@ -26,7 +26,10 @@ class Solver:
         logger.info("Solve instance..")
         self._attach_event_handlers()
         start_time = time.time()
-        self.external_solver.opt_model.optimize(self.gurobi_callback_function)
+        if self.settings.external_solver == "gurobi":
+            self.external_solver.opt_model.optimize(self.gurobi_callback_function)
+        else:
+            self.external_solver.opt_model.optimize()
         runtime = time.time() - start_time
         return runtime
 
