@@ -99,6 +99,28 @@ class Separator:
 
     def add_stair_constraints(self) -> None:
         """Add stair constraints to optimization model."""
+        if len(self.mpip.implying_breakpoints) != 2:
+            return
+        coeff_dict_z = {}
+        for (x_index, y_index), implied_indices in self.mpip.relation.items():
+            for z_index in implied_indices:
+                coeff_dict_z[z_index] = max(
+                    len(self.mpip.implied_breakpoints) - x_index - y_index,
+                    coeff_dict_z.get(z_index, 0),
+                )
+        self.opt_model.addConstr(
+            gp.quicksum(
+                (len(self.mpip.implied_breakpoints) - i) * implying_var
+                for implying_vars in self.mpip.implying_variables.values()
+                for i, implying_var in enumerate(implying_vars)
+            )
+            - gp.quicksum(
+                coeff * self.mpip.implied_variables[z_index]
+                for z_index, coeff in coeff_dict_z.items()
+            )
+            <= len(self.mpip.implied_breakpoints),
+            name=f"stair_{self.mpip.mpip_id}",
+        )
 
     def _generate_implying_combinations(
         self,

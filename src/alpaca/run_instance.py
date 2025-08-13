@@ -81,7 +81,9 @@ def run_single_optimization(osil_full_path):
         runtime = solver.solve_instance()
 
         # Log and print the result in a machine-readable format for the shell script
-        logger.info("Optimization finished successfully. Runtime: %.2f seconds", runtime)
+        logger.info(
+            "Optimization finished successfully. Runtime: %.2f seconds", runtime
+        )
         print(f"{osil_file_name},{runtime}")
         return {"status": "success", "runtime": runtime}
 
