@@ -95,8 +95,8 @@ class Variable:  # pylint: disable=too-many-instance-attributes
                 Variable(
                     f"{self.name}_c_{breakpoint_index}",
                     var_type="C",
-                    lb=self.lb,
-                    ub=self.ub,
+                    lb=min(0.0, self.lb),
+                    ub=max(0.0, self.ub),
                 )
             )
 

@@ -327,6 +327,8 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         for expression in self.expressions.multilinear_expressions.values():
             expression.apply_piecewise_constant_approximation()
         for expression in self.expressions.one_dim_expressions.values():
-            expression.apply_piecewise_linear_approximation()
+            expression.apply_piecewise_linear_relaxation(
+                approximation=self.settings.approximation
+            )
         for expression in self.expressions.linear_expressions.values():
             expression.add_constraint_from_linear_expression()

@@ -1,7 +1,8 @@
 {
 "solver_time_limit": 3600,
-  "osil_file_name": "st_glmp_kk92",
-  "external_solver": "scip",
-  "number_of_breakpoints": 100,
-  "feature_mpip": 1
+  "osil_file_name": "syn05hfsg",
+  "external_solver": "gurobi",
+  "number_of_breakpoints": 10,
+  "feature_mpip": 0,
+  "approximation": "False"
 }
