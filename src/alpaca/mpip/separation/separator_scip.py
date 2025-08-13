@@ -122,6 +122,9 @@ class Separator:
             name=f"corm_{self.mpip.mpip_id}_{implying_indices}".replace(" ", ""),
         )
 
+    def add_stair_constraints(self) -> None:
+        """Add stair constraints to optimization model."""
+
     def add_multiple_choice_constraints(self) -> None:
         """Add all multiple choice constraints to optimization model."""
         self._add_implying_mc_constraints()

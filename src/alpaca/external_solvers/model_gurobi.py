@@ -14,7 +14,7 @@ class ModelGurobi:
 
     def __init__(self, data: mda.ModelData, settings: UserSettings):
         env = gp.Env(empty=True)
-        env.setParam('LogToConsole', 0)
+        env.setParam("LogToConsole", 0)
         env.start()
         self.opt_model = gp.Model(env=env)
         self.opt_model.setParam("OutputFlag", 0)

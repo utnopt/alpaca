@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=duplicate-code
 """
 This script is a lightweight wrapper to run a single optimization instance.
 It takes a single .osil filename as a command-line argument.
@@ -11,7 +12,10 @@ import alpaca.model_data.model_data as mda
 from alpaca.external_solvers import model_scip as msc, model_gurobi as mgu
 import alpaca.solver.solver as slv
 import alpaca.mpip.mpiphandler as mph
-from alpaca.mpip.separation import separationhandler_scip as ses, separationhandler_gurobi as seg
+from alpaca.mpip.separation import (
+    separationhandler_scip as ses,
+    separationhandler_gurobi as seg,
+)
 import alpaca.settings as s
 from alpaca.utils import inout as ut_io, datareading as ut_dr
 from alpaca.utils.logger import logger
@@ -29,7 +33,7 @@ def run_single_optimization(osil_full_path):
 
         osil_file_name = os.path.splitext(osil_file_name_with_ext)[0]
         original_instances_path = s.StaticSettings.instances_path
-        s.StaticSettings.instances_path = osil_dir + '/'
+        s.StaticSettings.instances_path = osil_dir + "/"
 
         # Load user settings, but use a base config without a specified file
         config_dict = ut_dr.read_config_file()
@@ -77,13 +81,15 @@ def run_single_optimization(osil_full_path):
         runtime = solver.solve_instance()
 
         # Log and print the result in a machine-readable format for the shell script
-        logger.info(f"Optimization finished successfully. Runtime: {runtime}")
+        logger.info("Optimization finished successfully. Runtime: %.2f seconds", runtime)
         print(f"{osil_file_name},{runtime}")
         return {"status": "success", "runtime": runtime}
 
-    except Exception as ex:
+    except Exception as ex:  # pylint: disable=broad-exception-caught
         # Log and print an error message if the optimization fails
-        logger.error("Error occurred while running optimization for %s: %s", osil_file_name, ex)
+        logger.error(
+            "Error occurred while running optimization for %s: %s", osil_file_name, ex
+        )
         print(f"{osil_file_name},ERROR: {str(ex)}")
         return {"status": "error", "errorMessages": str(ex)}
     finally:

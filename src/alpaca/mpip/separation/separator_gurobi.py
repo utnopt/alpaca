@@ -97,6 +97,9 @@ class Separator:
                 implying_indices, implying_variables, implied_variables
             )
 
+    def add_stair_constraints(self) -> None:
+        """Add stair constraints to optimization model."""
+
     def _generate_implying_combinations(
         self,
     ) -> Iterator[tuple[tuple[int, ...], tuple[gp.Var, ...]]]:

@@ -24,9 +24,17 @@ class Solver:
     def solve_instance(self):
         """Solve instance."""
         logger.info("Solve instance..")
+        self._activate_mpip_features()
         self._attach_event_handlers()
         start_time = time.time()
-        self.external_solver.opt_model.optimize(self.gurobi_callback_function)
+        if self.settings.external_solver == "scip":
+            self.external_solver.opt_model.optimize(self.gurobi_callback_function)
+        elif self.settings.external_solver == "gurobi":
+            self.external_solver.opt_model.optimize(self.gurobi_callback_function)
+        else:
+            raise ValueError(
+                f"Unsupported external solver: {self.settings.external_solver}"
+            )
         runtime = time.time() - start_time
         return runtime
 
@@ -36,8 +44,14 @@ class Solver:
         elif self.settings.external_solver == "gurobi":
             self._attach_event_handlers_gurobi()
 
+    def _activate_mpip_features(self):
+        if self.settings.feature_mpip_mccormick:
+            self.mpip_separation_handler.add_mc_cormick_constraints()
+        if self.settings.feature_mpip_stair:
+            self.mpip_separation_handler.add_stair_constraints()
+
     def _attach_event_handlers_scip(self):
-        if self.mpip_separation_handler is not None:
+        if self.settings.feature_mpip_separation:
             self.external_solver.opt_model.includeEventhdlr(
                 self.mpip_separation_handler,
                 "mpip_event_handler",
@@ -45,7 +59,7 @@ class Solver:
             )
 
     def _attach_event_handlers_gurobi(self):
-        if self.mpip_separation_handler is not None:
+        if self.settings.feature_mpip_separation:
             # pylint: disable=protected-access
             self.external_solver.opt_model._separation_handler = (
                 self.mpip_separation_handler
