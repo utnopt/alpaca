@@ -64,11 +64,13 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             config_dict.get("feature/mpip/separation", 0)
         )
         self.feature_mpip_mccormick = int(config_dict.get("feature/mpip/mccormick", 0))
-        self.feature_mpip_stair = int(config_dict.get("feature/mpip/stair", 1))
+        self.feature_mpip_stair = int(config_dict.get("feature/mpip/stair", 0))
+        self.feature_mpip_stripe = int(config_dict.get("feature/mpip/stripe", 0))
         self.feature_mpip = (
             self.feature_mpip_separation
             or self.feature_mpip_mccormick
             or self.feature_mpip_stair
+            or self.feature_mpip_stripe
         )
 
     def save_to_json(self):

@@ -32,6 +32,11 @@ class SeparationHandler:
         for mpip in self.mpip_handler.mpip_dict.values():
             mpip.separator.add_mc_cormick_constraints()
 
+    def add_stripe_constraints(self) -> None:
+        """Add stripe constraints for all MPIPs."""
+        for mpip in self.mpip_handler.mpip_dict.values():
+            mpip.separator.add_stripe_constraints()
+
     def add_stair_constraints(self) -> None:
         """Add stair constraints for all MPIPs."""
         for mpip in self.mpip_handler.mpip_dict.values():

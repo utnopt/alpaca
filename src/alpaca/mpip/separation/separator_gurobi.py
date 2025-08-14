@@ -98,6 +98,39 @@ class Separator:  # pylint: disable=too-many-instance-attributes
                 implying_indices, implying_variables, implied_variables
             )
 
+    def add_stripe_constraints(self) -> None:
+        """Add stripe constraints to optimization model."""
+        for implying_vars_index, implying_vars in enumerate(
+            self.mpip.implying_variables.values()
+        ):
+            for implying_index, implying_var in enumerate(implying_vars):
+                implied_indices = sum(
+                    {
+                        implied_relation_indices
+                        for implying_indices, implied_relation_indices in self.mpip.relation.items()
+                        if implying_indices[implying_vars_index] == implying_index
+                    },
+                    (),
+                )
+                self.opt_model.addConstr(
+                    implying_var
+                    + gp.quicksum(
+                        gp.quicksum(other_implying_vars)
+                        for other_vars_index, other_implying_vars in enumerate(
+                            self.mpip.implying_variables.values()
+                        )
+                        if other_vars_index != implying_vars_index
+                    )
+                    - gp.quicksum(
+                        (
+                            self.mpip.implied_variables[implied_index]
+                            for implied_index in implied_indices
+                        )
+                    )
+                    <= len(self.mpip.implying_variables) - 1,
+                    name=f"stripe_{implying_vars_index}_{implying_index}_{self.mpip.mpip_id}",
+                )
+
     def add_stair_constraints(self) -> None:
         """Add stair constraints to optimization model."""
         if len(self.mpip.implying_breakpoints) != 2:
