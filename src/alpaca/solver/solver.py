@@ -28,7 +28,7 @@ class Solver:
         self._attach_event_handlers()
         start_time = time.time()
         if self.settings.external_solver == "scip":
-            self.external_solver.opt_model.optimize(self.gurobi_callback_function)
+            self.external_solver.opt_model.optimize()
         elif self.settings.external_solver == "gurobi":
             self.external_solver.opt_model.optimize(self.gurobi_callback_function)
         else:

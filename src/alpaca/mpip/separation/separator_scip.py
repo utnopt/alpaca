@@ -65,13 +65,14 @@ class SeparatedPoint:
             self.implied_values[i] += random.uniform(*self.perturbation_range)
 
 
-class Separator:
+class Separator:  # pylint: disable=too-many-instance-attributes
     """Multipartite Implication Polytope separation handler."""
 
     def __init__(self, mpip: mp.MPIP, opt_model: scip.Model) -> None:
         self.separation_model = scip.Model()
         self._setup_separation_model()
         self.mpip = mpip
+        self.relation_matrix_size = len(mpip.implied_variables)
         self.sep_implying_variables: dict[str, list[scip.Variable]] = {}
         self.sep_implied_variables: list[scip.Variable] = []
         self.point_to_be_separated = SeparatedPoint()
@@ -124,6 +125,54 @@ class Separator:
 
     def add_stair_constraints(self) -> None:
         """Add stair constraints to optimization model."""
+        if len(self.mpip.implying_breakpoints) != 2:
+            return
+        self._add_stair_constraints_from_top()
+        self._add_stair_constraints_from_bottom()
+
+    def _add_stair_constraints_from_top(self) -> None:
+        coeff_dict_z = {}
+        for (x_index, y_index), implied_indices in self.mpip.relation.items():
+            for z_index in implied_indices:
+                coeff_dict_z[z_index] = max(
+                    self.relation_matrix_size - x_index - y_index,
+                    coeff_dict_z.get(z_index, 0),
+                )
+        self.opt_model.addCons(
+            sum(
+                (self.relation_matrix_size - i) * implying_var
+                for implying_vars in self.mpip.implying_variables.values()
+                for i, implying_var in enumerate(implying_vars)
+            )
+            - sum(
+                coeff * self.mpip.implied_variables[z_index]
+                for z_index, coeff in coeff_dict_z.items()
+            )
+            <= self.relation_matrix_size,
+            name=f"stair_top_{self.mpip.mpip_id}",
+        )
+
+    def _add_stair_constraints_from_bottom(self) -> None:
+        coeff_dict_z = {}
+        for (x_index, y_index), implied_indices in self.mpip.relation.items():
+            for z_index in implied_indices:
+                coeff_dict_z[z_index] = max(
+                    x_index + y_index + 2 - self.relation_matrix_size,
+                    coeff_dict_z.get(z_index, 0),
+                )
+        self.opt_model.addCons(
+            sum(
+                (i + 1) * implying_var
+                for implying_vars in self.mpip.implying_variables.values()
+                for i, implying_var in enumerate(implying_vars)
+            )
+            - sum(
+                coeff * self.mpip.implied_variables[z_index]
+                for z_index, coeff in coeff_dict_z.items()
+            )
+            <= self.relation_matrix_size,
+            name=f"stair_bottom_{self.mpip.mpip_id}",
+        )
 
     def add_multiple_choice_constraints(self) -> None:
         """Add all multiple choice constraints to optimization model."""
