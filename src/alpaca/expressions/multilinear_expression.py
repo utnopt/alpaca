@@ -122,7 +122,6 @@ class MultilinearExpression(exn.Expression):
                     self.model_data,
                     self.variables[1:],
                     self.level + 1,
-                    representative_variable=self.representative_variable,
                 )
             )
             sub_bi_multilinear.reformulate_to_bilinear_expressions()
@@ -133,7 +132,6 @@ class MultilinearExpression(exn.Expression):
                     self.model_data,
                     (self.variables[1], self.variables[2]),
                     self.level + 1,
-                    representative_variable=self.representative_variable,
                 )
             )
         self.model_data.add_bilinear_expression(

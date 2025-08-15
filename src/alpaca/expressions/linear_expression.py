@@ -51,6 +51,8 @@ class LinearExpression(exn.Expression):
 
     def propagate_variable_bounds(self):
         """Propagate variables bounds."""
+        if self.representative_variable.name == "h_c782c377":
+            pass
         lb = self.constant + sum(
             min(coeff * variable.lb, coeff * variable.ub)
             for coeff, variable in self.variables

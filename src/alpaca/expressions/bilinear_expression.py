@@ -125,7 +125,7 @@ class BilinearExpression(exn.Expression):
         )
         sub_linear_expression.variables = [
             (1.0, self.first_var),
-            (1.0, self.second_var),
+            (-1.0, self.second_var),
         ]
         square_helper_var = self.model_data.add_one_dim_expression(
             ode.SquareExpression(

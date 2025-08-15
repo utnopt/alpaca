@@ -81,7 +81,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
 
     def _calculate_implied_relation_from_interval(self, lb: float, ub: float) -> tuple:
         if self.implied_breakpoints[0] == ub:
-            return (ub,)
+            return (len(self.implied_breakpoints) - 2,)
         if self.implied_breakpoints[0] > ub or self.implied_breakpoints[-1] < lb:
             return ()
         idx1 = max(0, bisect.bisect_left(self.implied_breakpoints, lb) - 1)
