@@ -62,7 +62,9 @@ def run_optimization():
 
         runtime = solver.solve_instance()
 
-        logger.info("Optimization finished successfully. Runtime: %.2f seconds", runtime)
+        logger.info(
+            "Optimization finished successfully. Runtime: %.2f seconds", runtime
+        )
         return {"status": "success"}
     except Exception as ex:  # pylint: disable=broad-exception-caught
         logger.error("Error occurred while running optimization: %s", ex)

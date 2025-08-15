@@ -40,5 +40,8 @@ class Expression:
     def propagate_variable_bounds(self):
         """Propagate variables bounds."""
 
+    def apply_piecewise_constant_approximation(self):
+        """Apply piecewise constant approximation to the expression."""
+
     def __repr__(self):
         return self.name

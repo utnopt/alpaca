@@ -44,12 +44,16 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
     def _find_mpip_instances_in_bilinear_expressions(self) -> None:
         """Extract mpip instances from bilinear expressions."""
         for bilinear_expression in self.bilinear_expressions.values():
-            self._add_mpip_instance_from_bilinear_expression(bilinear_expression)
+            if bilinear_expression.piecewise_constant_relation:
+                self._add_mpip_instance_from_bilinear_expression(bilinear_expression)
 
     def _find_mpip_instances_in_multilinear_expressions(self) -> None:
         """Extract mpip instances from multilinear expressions."""
         for multilinear_expression in self.multilinear_expressions.values():
-            self._add_mpip_instance_from_multilinear_expression(multilinear_expression)
+            if multilinear_expression.piecewise_constant_relation:
+                self._add_mpip_instance_from_multilinear_expression(
+                    multilinear_expression
+                )
 
     def _add_mpip_instance_from_bilinear_expression(
         self, bilinear_expression: ble.BilinearExpression

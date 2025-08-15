@@ -126,6 +126,9 @@ class OneDimExpression(exn.Expression):
     def _get_reference_points_multiple_choice(self) -> list[float]:
         return [self._f(bp) for bp in self.variable.breakpoints]
 
+    def apply_piecewise_constant_approximation(self):
+        """Apply piecewise constant approximation to the expression."""
+
     def __repr__(self) -> str:
         """Return string representation of the expression.
 

@@ -14,8 +14,10 @@ from alpaca.model_data import (
 from alpaca.expressions import (
     expression_container as eco,
     bilinear_expression as ble,
+    multilinear_expression as mle,
     one_dim_expression as ode,
     nonlinear_expression as nle,
+    linear_expression as lie,
 )
 
 
@@ -65,6 +67,84 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         self.variables[variable_name] = variable
         return variable
 
+    def add_bilinear_expression(
+        self, bilinear_expression: ble.BilinearExpression
+    ) -> ble.BilinearExpression:
+        """Add a bilinear expression to the model.
+
+        Args:
+            bilinear_expression: The bilinear expression to be added.
+        """
+        bilinear_expression_name = bilinear_expression.name
+        if bilinear_expression_name in self.expressions.bilinear_expressions:
+            return self.expressions.bilinear_expressions[bilinear_expression_name]
+        self.expressions.bilinear_expressions[bilinear_expression_name] = (
+            bilinear_expression
+        )
+        return bilinear_expression
+
+    def add_multilinear_expression(
+        self, multilinear_expression: mle.MultilinearExpression
+    ) -> mle.MultilinearExpression:
+        """Add a multilinear expression to the model.
+
+        Args:
+            multilinear_expression: The multilinear expression to be added.
+        """
+        multilinear_expression_name = multilinear_expression.name
+        if multilinear_expression_name in self.expressions.multilinear_expressions:
+            return self.expressions.multilinear_expressions[multilinear_expression_name]
+        self.expressions.multilinear_expressions[multilinear_expression_name] = (
+            multilinear_expression
+        )
+        return multilinear_expression
+
+    def add_one_dim_expression(
+        self, one_dim_expression: ode.OneDimExpression
+    ) -> ode.OneDimExpression:
+        """Add a one-dimensional expression to the model.
+
+        Args:
+            one_dim_expression: The one-dimensional expression to be added.
+        """
+        one_dim_expression_name = one_dim_expression.name
+        if one_dim_expression_name in self.expressions.one_dim_expressions:
+            return self.expressions.one_dim_expressions[one_dim_expression_name]
+        self.expressions.one_dim_expressions[one_dim_expression_name] = (
+            one_dim_expression
+        )
+        return one_dim_expression
+
+    def add_nonlinear_expression(
+        self, nonlinear_expression: nle.NonlinearExpression
+    ) -> nle.NonlinearExpression:
+        """Add a nonlinear expression to the model.
+
+        Args:
+            nonlinear_expression: The nonlinear expression to be added.
+        """
+        nonlinear_expression_name = nonlinear_expression.name
+        if nonlinear_expression_name in self.expressions.nonlinear_expressions:
+            return self.expressions.nonlinear_expressions[nonlinear_expression_name]
+        self.expressions.nonlinear_expressions[nonlinear_expression_name] = (
+            nonlinear_expression
+        )
+        return nonlinear_expression
+
+    def add_linear_expression(
+        self, linear_expression: lie.LinearExpression
+    ) -> lie.LinearExpression:
+        """Add a linear expression to the model.
+
+        Args:
+            linear_expression: The linear expression to be added.
+        """
+        linear_expression_name = linear_expression.name
+        if linear_expression_name in self.expressions.linear_expressions:
+            return self.expressions.linear_expressions[linear_expression_name]
+        self.expressions.linear_expressions[linear_expression_name] = linear_expression
+        return linear_expression
+
     def _build_model_from_osil_data(self) -> None:
         """Create a complete model from OSiL data file.
 
@@ -86,8 +166,11 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         )
         self._grow_nonlinear_expression_trees()
         self._fragment_expression_trees_to_low_dimensional_functions()
+        if self.settings.approximation_type == 1:
+            self._reformulate_multilinear_and_bilinear_expressions()
         self._propagate_bounds_expressions()
-        self._discretize_variables()
+        if self.settings.approximation_type >= 1:
+            self._discretize_variables()
         self._translate_expressions_to_constraints()
 
     def _read_osil_file(self) -> BeautifulSoup:
@@ -210,13 +293,9 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         self, var_index: str, constraint_index: str, coeff: float
     ):
         expr_hash = f"q_{var_index}"
-        if expr_hash in self.expressions.one_dim_expressions:
-            square_expression = self.expressions.one_dim_expressions[expr_hash]
-        else:
-            square_expression = ode.SquareExpression(
-                expr_hash, self, self.variables[f"x_{var_index}"], 0
-            )
-            self.expressions.one_dim_expressions[expr_hash] = square_expression
+        square_expression = self.add_one_dim_expression(
+            ode.SquareExpression(expr_hash, self, self.variables[f"x_{var_index}"], 0)
+        )
         self.constraints[f"c_{constraint_index}"].variables.append(
             (coeff, square_expression.representative_variable)
         )
@@ -229,10 +308,8 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         coeff: float,
     ):
         expr_hash = "b" + "_".join(sorted([first_var_index, second_var_index]))
-        if expr_hash in self.expressions.bilinear_expressions:
-            bilinear_expression = self.expressions.bilinear_expressions[expr_hash]
-        else:
-            bilinear_expression = ble.BilinearExpression(
+        bilinear_expression = self.add_bilinear_expression(
+            ble.BilinearExpression(
                 expr_hash,
                 self,
                 (
@@ -241,7 +318,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
                 ),
                 0,
             )
-            self.expressions.bilinear_expressions[expr_hash] = bilinear_expression
+        )
         self.constraints[f"c_{constraint_index}"].variables.append(
             (coeff, bilinear_expression.representative_variable)
         )
@@ -256,11 +333,9 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         for n in nonlinear_tags:
             coeff = 1.0 if n.get("coef") is None else float(n.get("coef"))
             expr_hash = udh.hash_nonlinearity(str(n.next))
-            if expr_hash in self.expressions.nonlinear_expressions:
-                nonlinear_expression = self.expressions.nonlinear_expressions[expr_hash]
-            else:
-                nonlinear_expression = nle.NonlinearExpression(expr_hash, n.next, self)
-                self.expressions.nonlinear_expressions[expr_hash] = nonlinear_expression
+            nonlinear_expression = self.add_nonlinear_expression(
+                nle.NonlinearExpression(expr_hash, n.next, self)
+            )
             self.constraints[f"c_{n.get('idx')}"].variables.append(
                 (coeff, nonlinear_expression.representative_variable)
             )
@@ -285,6 +360,12 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
                 1
             )
 
+    def _reformulate_multilinear_and_bilinear_expressions(self) -> None:
+        for expression in self.expressions.multilinear_expressions.values():
+            expression.reformulate_to_bilinear_expressions()
+        for expression in self.expressions.bilinear_expressions.values():
+            expression.reformulate_to_sum_of_squares()
+
     def _propagate_bounds_expressions(self):
         sorted_expressions = sorted(
             self.expressions.all_low_dim_expressions(),
@@ -307,9 +388,11 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         pwl_constraints = []
         for variable in self.variables.values():
             if variable.is_discretized:
-                variable.set_breakpoints(
+                variable.add_binary_pwl(
                     self.settings.number_of_breakpoints, self.settings.pwl_method
                 )
+                if self.settings.approximation_type == 1:
+                    variable.add_continuous_pwl(self.settings.pwl_method)
                 pwl_variables.extend(
                     variable.pwl_variables_binary + variable.pwl_variables_continuous
                 )
@@ -322,13 +405,23 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
     def _translate_expressions_to_constraints(
         self,
     ) -> None:
+        if self.settings.approximation_type == 1:
+            self._apply_piecewise_linear_approximation()
+        elif self.settings.approximation_type == 2:
+            self._apply_piecewise_constant_approximation()
+        for expression in self.expressions.linear_expressions.values():
+            expression.add_constraint_from_linear_expression()
+
+    def _apply_piecewise_linear_approximation(self) -> None:
+        for expression in self.expressions.one_dim_expressions.values():
+            expression.apply_piecewise_linear_relaxation(
+                approximation=self.settings.approximation
+            )
+
+    def _apply_piecewise_constant_approximation(self) -> None:
         for expression in self.expressions.bilinear_expressions.values():
             expression.apply_piecewise_constant_approximation()
         for expression in self.expressions.multilinear_expressions.values():
             expression.apply_piecewise_constant_approximation()
         for expression in self.expressions.one_dim_expressions.values():
-            expression.apply_piecewise_linear_relaxation(
-                approximation=self.settings.approximation
-            )
-        for expression in self.expressions.linear_expressions.values():
-            expression.add_constraint_from_linear_expression()
+            expression.apply_piecewise_constant_approximation()
