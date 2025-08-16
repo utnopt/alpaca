@@ -141,6 +141,12 @@ class MultilinearExpression(exn.Expression):
                 self.representative_variable.pwl_variables_binary[implied_index],
             )
             for implied_index in implied_indices
+        ] + [
+            (
+                1.0,
+                self.variables[var_idx].pwl_variables_binary[index_in_combination],
+            )
+            for var_idx, index_in_combination in enumerate(current_variable_indices)
         ]
 
         constraint = self.model_data.add_constraint(
