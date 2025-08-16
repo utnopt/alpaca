@@ -51,7 +51,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.number_of_breakpoints = int(config_dict.get("number_of_breakpoints", 5))
         self.feature_mpip = int(config_dict.get("feature_mpip", 0))
         self.pwl_method = str(config_dict.get("pwl_method", "multiple-choice"))
-        self.approximation = str(config_dict.get("approximation", "False")) == "True"
+        self.approximation = int(config_dict.get("approximation", 0))
         self.external_solver = str(config_dict.get("external_solver", "scip"))
         self.bound_propagation_rounds = int(
             config_dict.get("bound_propagation_rounds", 3)
@@ -62,6 +62,9 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             f"Result_{StaticSettings.project_name}/"
         )
         self.approximation_type = int(config_dict.get("approximation_type", 1))
+        self.reformulate_multilinear = int(
+            config_dict.get("reformulate_multilinear", 1)
+        )
 
     def save_to_json(self):
         """

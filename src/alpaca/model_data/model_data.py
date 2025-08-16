@@ -166,11 +166,10 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         )
         self._grow_nonlinear_expression_trees()
         self._fragment_expression_trees_to_low_dimensional_functions()
-        if self.settings.approximation_type == 1:
+        if self.settings.reformulate_multilinear:
             self._reformulate_multilinear_and_bilinear_expressions()
         self._propagate_bounds_expressions()
-        if self.settings.approximation_type >= 1:
-            self._discretize_variables()
+        self._discretize_variables()
         self._translate_expressions_to_constraints()
 
     def _read_osil_file(self) -> BeautifulSoup:
@@ -391,8 +390,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
                 variable.add_binary_pwl(
                     self.settings.number_of_breakpoints, self.settings.pwl_method
                 )
-                if self.settings.approximation_type == 1:
-                    variable.add_continuous_pwl(self.settings.pwl_method)
+                variable.add_continuous_pwl(self.settings.pwl_method)
                 pwl_variables.extend(
                     variable.pwl_variables_binary + variable.pwl_variables_continuous
                 )
@@ -405,9 +403,8 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
     def _translate_expressions_to_constraints(
         self,
     ) -> None:
-        if self.settings.approximation_type == 1:
-            self._apply_piecewise_linear_approximation()
-        elif self.settings.approximation_type == 2:
+        self._apply_piecewise_linear_approximation()
+        if not self.settings.reformulate_multilinear:
             self._apply_piecewise_constant_approximation()
         for expression in self.expressions.linear_expressions.values():
             expression.add_constraint_from_linear_expression()
@@ -420,8 +417,10 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
 
     def _apply_piecewise_constant_approximation(self) -> None:
         for expression in self.expressions.bilinear_expressions.values():
-            expression.apply_piecewise_constant_approximation()
+            expression.apply_piecewise_constant_relaxation(
+                approximation=self.settings.approximation
+            )
         for expression in self.expressions.multilinear_expressions.values():
-            expression.apply_piecewise_constant_approximation()
-        for expression in self.expressions.one_dim_expressions.values():
-            expression.apply_piecewise_constant_approximation()
+            expression.apply_piecewise_constant_relaxation(
+                approximation=self.settings.approximation
+            )
