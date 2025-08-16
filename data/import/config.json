@@ -4,6 +4,6 @@
   "external_solver": "gurobi",
   "number_of_breakpoints": 10,
   "feature_mpip": 0,
-  "approximation": "False",
-  "approximation_type": 1
+  "approximation": 0,
+  "reformulate_multilinear": 1
 }
