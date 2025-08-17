@@ -61,7 +61,6 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             + f"/data/export/{time.strftime('%Y-%m-%d_%H-%M-%S')}_"
             f"Result_{StaticSettings.project_name}/"
         )
-        self.approximation_type = int(config_dict.get("approximation_type", 1))
         self.reformulate_multilinear = int(
             config_dict.get("reformulate_multilinear", 1)
         )
