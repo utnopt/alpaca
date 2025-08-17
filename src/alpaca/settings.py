@@ -62,6 +62,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         )
         self.reformulate_multilinear = int(
             config_dict.get("reformulate_multilinear", 1)
+        )
         self.feature_mpip_separation = int(
             config_dict.get("feature/mpip/separation", 0)
         )
