@@ -1,12 +1,12 @@
 {
-"solver_time_limit": 3600,
-  "osil_file_name": "camshape800",
+"solver_time_limit": 7200,
+  "osil_file_name": "edgecross14-058",
   "external_solver": "gurobi",
-  "number_of_breakpoints": 10,
+  "number_of_breakpoints": 5,
   "feature/mpip/separation": 0,
   "feature/mpip/mccormick": 0,
   "feature/mpip/stair": 0,
-  "feature/mpip/stripe": 1,
+  "feature/mpip/stripe": 0,
   "approximation": 0,
   "reformulate_multilinear": 1
 }

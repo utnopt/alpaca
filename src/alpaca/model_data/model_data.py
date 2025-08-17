@@ -403,24 +403,25 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
     def _translate_expressions_to_constraints(
         self,
     ) -> None:
-        self._apply_piecewise_linear_approximation()
-        if not self.settings.reformulate_multilinear:
-            self._apply_piecewise_constant_approximation()
+        self._apply_piecewise_linear_relaxation()
+        self._apply_piecewise_constant_relaxation()
         for expression in self.expressions.linear_expressions.values():
             expression.add_constraint_from_linear_expression()
 
-    def _apply_piecewise_linear_approximation(self) -> None:
+    def _apply_piecewise_linear_relaxation(self) -> None:
         for expression in self.expressions.one_dim_expressions.values():
             expression.apply_piecewise_linear_relaxation(
                 approximation=self.settings.approximation
             )
 
-    def _apply_piecewise_constant_approximation(self) -> None:
+    def _apply_piecewise_constant_relaxation(self) -> None:
         for expression in self.expressions.bilinear_expressions.values():
             expression.apply_piecewise_constant_relaxation(
-                approximation=self.settings.approximation
+                approximation=self.settings.approximation,
+                reformulated=self.settings.reformulate_multilinear
             )
         for expression in self.expressions.multilinear_expressions.values():
             expression.apply_piecewise_constant_relaxation(
-                approximation=self.settings.approximation
+                approximation=self.settings.approximation,
+                reformulated=self.settings.reformulate_multilinear
             )

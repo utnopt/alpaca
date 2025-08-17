@@ -50,7 +50,8 @@ class MultilinearExpression(exn.Expression):
         for variable in self.variables:
             variable.add_nonlinearity_to_occurring_in("multilinear")
 
-    def apply_piecewise_constant_relaxation(self, approximation: bool = False):
+    def apply_piecewise_constant_relaxation(self, approximation: bool = False,
+                                            reformulated: int = 0):
         """
         Apply piecewise constant relaxation for multilinear expressions.
 
@@ -77,8 +78,8 @@ class MultilinearExpression(exn.Expression):
                 implied_indices
             )
 
-            # Create and add the corresponding constraint to the model
-            self._add_piecewise_constraint(current_variable_indices, implied_indices)
+            if not reformulated:
+                self._add_piecewise_constraint(current_variable_indices, implied_indices)
 
     def _calculate_implied_indices(
         self,

@@ -50,7 +50,8 @@ class BilinearExpression(exn.Expression):
         self.second_var.add_nonlinearity_to_occurring_in("bilinear")
         self.piecewise_constant_relation = {}
 
-    def apply_piecewise_constant_relaxation(self, approximation: bool = False):
+    def apply_piecewise_constant_relaxation(self, approximation: bool = False,
+                                            reformulated: int = 0):
         """Apply piecewise constant relaxation for bilinear expressions."""
         first_segment_midpoints = self._compute_segment_midpoints(
             self.first_var.breakpoints
@@ -69,7 +70,8 @@ class BilinearExpression(exn.Expression):
                     implied_indices = self._compute_exact_product_indices(i, j)
 
                 self._store_bilinear_relation(i, j, implied_indices)
-                self._add_bilinear_constraint(i, j, implied_indices)
+                if not reformulated:
+                    self._add_bilinear_constraint(i, j, implied_indices)
 
     @staticmethod
     def _compute_segment_midpoints(breakpoints):
