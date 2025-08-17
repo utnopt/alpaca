@@ -65,13 +65,14 @@ class SeparatedPoint:
             self.implied_values[i] += random.uniform(*self.perturbation_range)
 
 
-class Separator:
+class Separator:  # pylint: disable=too-many-instance-attributes
     """Multipartite Implication Polytope separation handler."""
 
     def __init__(self, mpip: mp.MPIP, opt_model: gp.Model) -> None:
         self.separation_model = gp.Model()
         self._setup_separation_model()
         self.mpip = mpip
+        self.relation_matrix_size = len(mpip.implied_variables)
         self.sep_implying_variables: dict[str, list[gp.Var]] = {}
         self.sep_implied_variables: list[gp.Var] = []
         self.point_to_be_separated = SeparatedPoint()
@@ -96,6 +97,90 @@ class Separator:
             self._add_mccormick_constraint(
                 implying_indices, implying_variables, implied_variables
             )
+
+    def add_stripe_constraints(self) -> None:
+        """Add stripe constraints to optimization model."""
+        for implying_vars_index, implying_vars in enumerate(
+            self.mpip.implying_variables.values()
+        ):
+            for implying_index, implying_var in enumerate(implying_vars):
+                implied_indices = sum(
+                    {
+                        implied_relation_indices
+                        for implying_indices, implied_relation_indices in self.mpip.relation.items()
+                        if implying_indices[implying_vars_index] == implying_index
+                    },
+                    (),
+                )
+                self.opt_model.addConstr(
+                    implying_var
+                    + gp.quicksum(
+                        gp.quicksum(other_implying_vars)
+                        for other_vars_index, other_implying_vars in enumerate(
+                            self.mpip.implying_variables.values()
+                        )
+                        if other_vars_index != implying_vars_index
+                    )
+                    - gp.quicksum(
+                        (
+                            self.mpip.implied_variables[implied_index]
+                            for implied_index in implied_indices
+                        )
+                    )
+                    <= len(self.mpip.implying_variables) - 1,
+                    name=f"stripe_{implying_vars_index}_{implying_index}_{self.mpip.mpip_id}",
+                )
+
+    def add_stair_constraints(self) -> None:
+        """Add stair constraints to optimization model."""
+        if len(self.mpip.implying_breakpoints) != 2:
+            return
+        self._add_stair_constraints_from_top()
+        self._add_stair_constraints_from_bottom()
+
+    def _add_stair_constraints_from_top(self) -> None:
+        coeff_dict_z = {}
+        for (x_index, y_index), implied_indices in self.mpip.relation.items():
+            for z_index in implied_indices:
+                coeff_dict_z[z_index] = max(
+                    self.relation_matrix_size - x_index - y_index,
+                    coeff_dict_z.get(z_index, 0),
+                )
+        self.opt_model.addConstr(
+            gp.quicksum(
+                (self.relation_matrix_size - i) * implying_var
+                for implying_vars in self.mpip.implying_variables.values()
+                for i, implying_var in enumerate(implying_vars)
+            )
+            - gp.quicksum(
+                coeff * self.mpip.implied_variables[z_index]
+                for z_index, coeff in coeff_dict_z.items()
+            )
+            <= self.relation_matrix_size,
+            name=f"stair_top_{self.mpip.mpip_id}",
+        )
+
+    def _add_stair_constraints_from_bottom(self) -> None:
+        coeff_dict_z = {}
+        for (x_index, y_index), implied_indices in self.mpip.relation.items():
+            for z_index in implied_indices:
+                coeff_dict_z[z_index] = max(
+                    x_index + y_index + 2 - self.relation_matrix_size,
+                    coeff_dict_z.get(z_index, 0),
+                )
+        self.opt_model.addConstr(
+            gp.quicksum(
+                (i + 1) * implying_var
+                for implying_vars in self.mpip.implying_variables.values()
+                for i, implying_var in enumerate(implying_vars)
+            )
+            - gp.quicksum(
+                coeff * self.mpip.implied_variables[z_index]
+                for z_index, coeff in coeff_dict_z.items()
+            )
+            <= self.relation_matrix_size,
+            name=f"stair_bottom_{self.mpip.mpip_id}",
+        )
 
     def _generate_implying_combinations(
         self,

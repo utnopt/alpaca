@@ -49,7 +49,6 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.solver_time_limit = int(config_dict.get("solver_time_limit", 7200))
         self.osil_file_name = str(config_dict.get("osil_file_name", "st_e41"))
         self.number_of_breakpoints = int(config_dict.get("number_of_breakpoints", 5))
-        self.feature_mpip = int(config_dict.get("feature_mpip", 0))
         self.pwl_method = str(config_dict.get("pwl_method", "multiple-choice"))
         self.approximation = int(config_dict.get("approximation", 0))
         self.external_solver = str(config_dict.get("external_solver", "scip"))
@@ -61,9 +60,19 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             + f"/data/export/{time.strftime('%Y-%m-%d_%H-%M-%S')}_"
             f"Result_{StaticSettings.project_name}/"
         )
-        self.approximation_type = int(config_dict.get("approximation_type", 1))
         self.reformulate_multilinear = int(
             config_dict.get("reformulate_multilinear", 1)
+        self.feature_mpip_separation = int(
+            config_dict.get("feature/mpip/separation", 0)
+        )
+        self.feature_mpip_mccormick = int(config_dict.get("feature/mpip/mccormick", 0))
+        self.feature_mpip_stair = int(config_dict.get("feature/mpip/stair", 0))
+        self.feature_mpip_stripe = int(config_dict.get("feature/mpip/stripe", 0))
+        self.feature_mpip = (
+            self.feature_mpip_separation
+            or self.feature_mpip_mccormick
+            or self.feature_mpip_stair
+            or self.feature_mpip_stripe
         )
 
     def save_to_json(self):
