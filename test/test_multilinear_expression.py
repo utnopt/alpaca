@@ -4,7 +4,7 @@
 Unit tests for MultilinearExpression class
 """
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import itertools
 from operator import mul
 from functools import reduce
@@ -154,43 +154,37 @@ class TestMultilinearExpression(unittest.TestCase):
             "test_mle_4", self.model_data, variables, 1
         )
 
-        # Mock the creation of sub-expressions
-        mock_sub_me = mle.MultilinearExpression(
-            "mb_test_mle_4_sub",
-            self.model_data,
-            [self.var_y, self.var_z, self.var_w],
-            2,
-        )
-        mock_sub_me.reformulate_to_bilinear_expressions = (
-            MagicMock()
-        )  # Mock the recursive call
-        mock_main_be = ble.BilinearExpression(
-            "mb_test_mle_4",
-            self.model_data,
-            (self.var_x, mock_sub_me.representative_variable),
-            1,
-        )
+        # Mock the bilinear expression creation
+        self.model_data.add_bilinear_expression = MagicMock()
 
-        self.model_data.add_multilinear_expression = MagicMock(return_value=mock_sub_me)
-        self.model_data.add_bilinear_expression = MagicMock(return_value=mock_main_be)
+        with patch(
+                "alpaca.expressions.multilinear_expression.MultilinearExpression",
+                autospec=True
+        ) as mock_mle_class:
+            # Configure the mock instance that will be returned by the patched class
+            mock_sub_instance = mock_mle_class.return_value
+            mock_sub_instance.representative_variable = var.Variable("sub_rep_var")
 
-        multilinear_expr.reformulate_to_bilinear_expressions()
+            # Call the method to test. The patch is active only within this 'with' block.
+            multilinear_expr.reformulate_to_bilinear_expressions()
 
-        # Check that a sub-multilinear expression was created for (y*z*w)
-        self.model_data.add_multilinear_expression.assert_called_once()
-        call_me = self.model_data.add_multilinear_expression.call_args[0][0]
-        self.assertEqual(call_me.name, "mb_test_mle_4_sub")
-        self.assertEqual(call_me.variables, [self.var_y, self.var_z, self.var_w])
+            # Check that a sub-multilinear expression was instantiated for (y*z*w)
+            mock_mle_class.assert_called_once_with(
+                "mb_test_mle_4_sub",
+                self.model_data,
+                [self.var_y, self.var_z, self.var_w],
+                2,
+            )
 
-        # Check that the recursive call was made on the sub-expression
-        mock_sub_me.reformulate_to_bilinear_expressions.assert_called_once()
+            # Check that the recursive call was made on the sub-expression
+            mock_sub_instance.reformulate_to_bilinear_expressions.assert_called_once()
 
-        # Check that the final bilinear expression was created (x * sub_representative)
-        self.model_data.add_bilinear_expression.assert_called_once()
-        call_be = self.model_data.add_bilinear_expression.call_args[0][0]
-        self.assertEqual(call_be.name, "mb_test_mle_4")
-        self.assertEqual(call_be.first_var, self.var_x)
-        self.assertEqual(call_be.second_var, mock_sub_me.representative_variable)
+            # Check that the final bilinear expression was created
+            self.model_data.add_bilinear_expression.assert_called_once()
+            call_be = self.model_data.add_bilinear_expression.call_args.args[0]
+            self.assertEqual(call_be.name, "mb_test_mle_4")
+            self.assertEqual(call_be.first_var, self.var_x)
+            self.assertEqual(call_be.second_var, mock_sub_instance.representative_variable)
 
     def test_apply_piecewise_constant_relaxation_with_approximation(
         self,
