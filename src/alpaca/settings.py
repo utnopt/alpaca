@@ -50,7 +50,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.osil_file_name = str(config_dict.get("osil_file_name", "st_e41"))
         self.number_of_breakpoints = int(config_dict.get("number_of_breakpoints", 5))
         self.pwl_method = str(config_dict.get("pwl_method", "multiple-choice"))
-        self.approximation = str(config_dict.get("approximation", "False")) == "True"
+        self.approximation = int(config_dict.get("approximation", 0))
         self.external_solver = str(config_dict.get("external_solver", "scip"))
         self.bound_propagation_rounds = int(
             config_dict.get("bound_propagation_rounds", 3)
@@ -59,6 +59,9 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             StaticSettings.base_path
             + f"/data/export/{time.strftime('%Y-%m-%d_%H-%M-%S')}_"
             f"Result_{StaticSettings.project_name}/"
+        )
+        self.reformulate_multilinear = int(
+            config_dict.get("reformulate_multilinear", 1)
         )
         self.feature_mpip_separation = int(
             config_dict.get("feature/mpip/separation", 0)

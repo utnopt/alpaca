@@ -2,10 +2,11 @@
 "solver_time_limit": 3600,
   "osil_file_name": "camshape800",
   "external_solver": "gurobi",
-  "number_of_breakpoints": 25,
+  "number_of_breakpoints": 10,
   "feature/mpip/separation": 0,
   "feature/mpip/mccormick": 0,
   "feature/mpip/stair": 0,
   "feature/mpip/stripe": 1,
-  "approximation": "False"
+  "approximation": 0,
+  "reformulate_multilinear": 1
 }

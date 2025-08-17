@@ -5,7 +5,11 @@
 import bisect
 
 from alpaca.model_data import variable as var, constraint as con
-import alpaca.expressions.expression as exn
+from alpaca.expressions import (
+    expression as exn,
+    linear_expression as lie,
+    one_dim_expression as ode,
+)
 
 
 class BilinearExpression(exn.Expression):
@@ -46,54 +50,152 @@ class BilinearExpression(exn.Expression):
         self.second_var.add_nonlinearity_to_occurring_in("bilinear")
         self.piecewise_constant_relation = {}
 
-    def apply_piecewise_constant_approximation(self):
-        """Apply piecewise constant approximation."""
-        mid_values_first = [
-            (self.first_var.breakpoints[i + 1] + breakpoint_first) / 2
-            for i, breakpoint_first in enumerate(self.first_var.breakpoints[:-1])
-        ]
-        mid_values_second = [
-            (self.second_var.breakpoints[i + 1] + breakpoint_second) / 2
-            for i, breakpoint_second in enumerate(self.second_var.breakpoints[:-1])
-        ]
-        for i, mid_value_first in enumerate(mid_values_first):
-            for j, mid_value_second in enumerate(mid_values_second):
-                implied_value = mid_value_first * mid_value_second
-                implied_index = min(
-                    bisect.bisect_left(
-                        self.representative_variable.breakpoints, implied_value
+    def apply_piecewise_constant_relaxation(self, approximation: bool = False):
+        """Apply piecewise constant relaxation for bilinear expressions."""
+        first_segment_midpoints = self._compute_segment_midpoints(
+            self.first_var.breakpoints
+        )
+        second_segment_midpoints = self._compute_segment_midpoints(
+            self.second_var.breakpoints
+        )
+
+        for i, first_mid in enumerate(first_segment_midpoints):
+            for j, second_mid in enumerate(second_segment_midpoints):
+                if approximation:
+                    implied_indices = self._compute_approximate_product_indices(
+                        first_mid, second_mid
                     )
-                    - 1,
-                    len(self.representative_variable.breakpoints) - 2,
-                )
-                self.piecewise_constant_relation[(i, j)] = (implied_index,)
-                self.model_data.add_constraint(
-                    con.Constraint(
-                        f"mc_{self.name}_{i}_{j}",
-                        con_type="<=",
-                        variables=[
-                            (
-                                -1.0,
-                                self.representative_variable.pwl_variables_binary[
-                                    implied_index
-                                ],
-                            ),
-                            (1.0, self.first_var.pwl_variables_binary[i]),
-                            (1.0, self.second_var.pwl_variables_binary[j]),
-                        ],
-                        rhs=1.0,
-                    )
-                )
+                else:
+                    implied_indices = self._compute_exact_product_indices(i, j)
+
+                self._store_bilinear_relation(i, j, implied_indices)
+                self._add_bilinear_constraint(i, j, implied_indices)
+
+    @staticmethod
+    def _compute_segment_midpoints(breakpoints):
+        return [(breakpoints[i + 1] + bp) / 2 for i, bp in enumerate(breakpoints[:-1])]
+
+    def _compute_approximate_product_indices(self, first_mid, second_mid):
+        product_value = first_mid * second_mid
+        product_index = self._get_implied_index_from_implied_value(product_value)
+        return (product_index,)
+
+    def _compute_exact_product_indices(self, first_seg_index, second_seg_index):
+        lb_first = self.first_var.breakpoints[first_seg_index]
+        ub_first = self.first_var.breakpoints[first_seg_index + 1]
+        lb_second = self.second_var.breakpoints[second_seg_index]
+        ub_second = self.second_var.breakpoints[second_seg_index + 1]
+        min_product, max_product = self._get_implied_lb_and_ub(
+            lb_first, ub_first, lb_second, ub_second
+        )
+        min_index = self._get_implied_index_from_implied_value(min_product)
+        max_index = self._get_implied_index_from_implied_value(max_product)
+        return tuple(range(min_index, max_index + 1))
+
+    def _store_bilinear_relation(
+        self, first_seg_index, second_seg_index, product_indices
+    ):
+        self.piecewise_constant_relation[(first_seg_index, second_seg_index)] = (
+            product_indices
+        )
+
+    def _add_bilinear_constraint(
+        self, first_seg_index, second_seg_index, product_indices
+    ):
+        constraint_vars = [
+            (-1.0, self.representative_variable.pwl_variables_binary[idx])
+            for idx in product_indices
+        ]
+        constraint_vars += [
+            (1.0, self.first_var.pwl_variables_binary[first_seg_index]),
+            (1.0, self.second_var.pwl_variables_binary[second_seg_index]),
+        ]
+
+        constraint = con.Constraint(
+            name=f"bilinear_rel_{self.name}_{first_seg_index}_{second_seg_index}",
+            con_type="<=",
+            variables=constraint_vars,
+            rhs=1.0,
+        )
+        self.model_data.add_constraint(constraint)
+
+    def _get_implied_index_from_implied_value(self, implied_value: float) -> int:
+        return min(
+            bisect.bisect_left(self.representative_variable.breakpoints, implied_value)
+            - 1,
+            len(self.representative_variable.breakpoints) - 2,
+        )
+
+    def reformulate_to_sum_of_squares(self):
+        """Reformulate bilinear expression to sum of squares.
+        xy = 0.5 (x² + y² − p²), p = x - y."""
+        master_linear_expression = self.model_data.add_linear_expression(
+            lie.LinearExpression(
+                f"le_{self.name}_master",
+                self.model_data,
+                self.level,
+                representative_variable=self.representative_variable,
+            )
+        )
+        square_first_var = self.model_data.add_one_dim_expression(
+            ode.SquareExpression(
+                f"fvs_{self.name}",
+                self.model_data,
+                self.first_var,
+                self.level + 1,
+            )
+        )
+        square_second_var = self.model_data.add_one_dim_expression(
+            ode.SquareExpression(
+                f"svs_{self.name}",
+                self.model_data,
+                self.second_var,
+                self.level + 1,
+            )
+        )
+        sub_linear_expression = self.model_data.add_linear_expression(
+            lie.LinearExpression(
+                f"le_{self.name}_sub",
+                self.model_data,
+                self.level + 2,
+            )
+        )
+        sub_linear_expression.variables = [
+            (1.0, self.first_var),
+            (-1.0, self.second_var),
+        ]
+        square_helper_var = self.model_data.add_one_dim_expression(
+            ode.SquareExpression(
+                f"hvs_{self.name}",
+                self.model_data,
+                sub_linear_expression.representative_variable,
+                self.level + 1,
+            )
+        )
+        master_linear_expression.variables = [
+            (0.5, square_first_var.representative_variable),
+            (0.5, square_second_var.representative_variable),
+            (-0.5, square_helper_var.representative_variable),
+        ]
 
     def propagate_variable_bounds(self):
         """Propagate variable bounds for bilinear expression."""
-        p1 = self.first_var.lb * self.second_var.lb
-        p2 = self.first_var.lb * self.second_var.ub
-        p3 = self.first_var.ub * self.second_var.lb
-        p4 = self.first_var.ub * self.second_var.ub
+        implied_lb, implied_ub = self._get_implied_lb_and_ub(
+            self.first_var.lb, self.first_var.ub, self.second_var.lb, self.second_var.ub
+        )
         self.representative_variable.lb = max(
-            self.representative_variable.lb, min(p1, p2, p3, p4)
+            self.representative_variable.lb, implied_lb
         )
         self.representative_variable.ub = min(
-            self.representative_variable.ub, max(p1, p2, p3, p4)
+            self.representative_variable.ub, implied_ub
         )
+
+    @staticmethod
+    def _get_implied_lb_and_ub(
+        first_lb: float, first_ub: float, second_lb: float, second_ub: float
+    ) -> tuple[float, float]:
+        p1 = first_lb * second_lb
+        p2 = first_lb * second_ub
+        p3 = first_ub * second_lb
+        p4 = first_ub * second_ub
+        return min(p1, p2, p3, p4), max(p1, p2, p3, p4)
