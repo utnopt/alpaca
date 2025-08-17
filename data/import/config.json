@@ -1,5 +1,5 @@
 {
-"solver_time_limit": 7200,
+"solver_time_limit": 3600,
   "osil_file_name": "edgecross14-058",
   "external_solver": "gurobi",
   "number_of_breakpoints": 5,
