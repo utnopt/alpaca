@@ -11,7 +11,7 @@ from alpaca.settings import StaticSettings, UserSettings
 from alpaca.utils.logger import logger
 
 
-def config_console_logger(log_level=logging.DEBUG):
+def config_console_logger(log_level=logging.CRITICAL):
     """
     function that configures a logger:
     ->for the console
