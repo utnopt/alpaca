@@ -189,13 +189,11 @@ class MultilinearExpression(exn.Expression):
     def reformulate_to_bilinear_expressions(self):
         """Reformulate multilinear expression to bilinear expressions."""
         if len(self.variables) > 3:
-            sub_bi_multilinear = self.model_data.add_multilinear_expression(
-                MultilinearExpression(
-                    f"mb_{self.name}_sub",
-                    self.model_data,
-                    self.variables[1:],
-                    self.level + 1,
-                )
+            sub_bi_multilinear = MultilinearExpression(
+                f"mb_{self.name}_sub",
+                self.model_data,
+                self.variables[1:],
+                self.level + 1,
             )
             sub_bi_multilinear.reformulate_to_bilinear_expressions()
         else:
