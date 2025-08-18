@@ -84,7 +84,9 @@ def run_single_optimization(osil_full_path):
         logger.info(
             "Optimization finished successfully. Runtime: %.2f seconds", runtime
         )
-        print(f"{osil_file_name},{runtime},{round(solver.external_solver.opt_model.MIPGap, 4)}")
+        print(
+            f"{osil_file_name},{runtime},{round(solver.external_solver.opt_model.MIPGap, 4)}"
+        )
         return {"status": "success", "runtime": runtime}
 
     except Exception as ex:  # pylint: disable=broad-exception-caught

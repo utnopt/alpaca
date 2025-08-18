@@ -7,7 +7,6 @@ import bisect
 from alpaca.model_data import variable as var, constraint as con
 from alpaca.expressions import (
     expression as exn,
-    linear_expression as lie,
     one_dim_expression as ode,
 )
 
@@ -50,8 +49,9 @@ class BilinearExpression(exn.Expression):
         self.second_var.add_nonlinearity_to_occurring_in("bilinear")
         self.piecewise_constant_relation = {}
 
-    def apply_piecewise_constant_relaxation(self, approximation: bool = False,
-                                            reformulated: int = 0):
+    def apply_piecewise_constant_relaxation(
+        self, approximation: bool = False, reformulated: int = 0
+    ):
         """Apply piecewise constant relaxation for bilinear expressions."""
         first_segment_midpoints = self._compute_segment_midpoints(
             self.first_var.breakpoints
@@ -132,47 +132,35 @@ class BilinearExpression(exn.Expression):
         """Reformulate bilinear expression to sum of squares.
         xy = 0.5 (x² + y² − p²), p = x - y."""
         master_linear_expression = self.model_data.add_linear_expression(
-            lie.LinearExpression(
-                f"le_{self.name}_master",
-                self.model_data,
-                self.level,
-                representative_variable=self.representative_variable,
-            )
+            f"le_{self.name}_master",
+            self.level,
+            representative_variable=self.representative_variable,
         )
         square_first_var = self.model_data.add_one_dim_expression(
-            ode.SquareExpression(
-                f"fvs_{self.name}",
-                self.model_data,
-                self.first_var,
-                self.level + 1,
-            )
+            ode.SquareExpression,
+            f"fvs_{self.name}",
+            self.first_var,
+            self.level + 1,
         )
         square_second_var = self.model_data.add_one_dim_expression(
-            ode.SquareExpression(
-                f"svs_{self.name}",
-                self.model_data,
-                self.second_var,
-                self.level + 1,
-            )
+            ode.SquareExpression,
+            f"svs_{self.name}",
+            self.second_var,
+            self.level + 1,
         )
         sub_linear_expression = self.model_data.add_linear_expression(
-            lie.LinearExpression(
-                f"le_{self.name}_sub",
-                self.model_data,
-                self.level + 2,
-            )
+            f"le_{self.name}_sub",
+            self.level + 2,
         )
         sub_linear_expression.variables = [
             (1.0, self.first_var),
             (-1.0, self.second_var),
         ]
         square_helper_var = self.model_data.add_one_dim_expression(
-            ode.SquareExpression(
-                f"hvs_{self.name}",
-                self.model_data,
-                sub_linear_expression.representative_variable,
-                self.level + 1,
-            )
+            ode.SquareExpression,
+            f"hvs_{self.name}",
+            sub_linear_expression.representative_variable,
+            self.level + 1,
         )
         master_linear_expression.variables = [
             (0.5, square_first_var.representative_variable),

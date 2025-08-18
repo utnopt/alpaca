@@ -46,6 +46,9 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
 
         Args:
             constraint: The constraint to be added.
+
+        Returns:
+            The added constraint object.
         """
         constraint_name = constraint.name
         assert (
@@ -59,6 +62,9 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
 
         Args:
             variable: The variable to be added.
+
+        Returns:
+            The added variable object.
         """
         variable_name = variable.name
         assert (
@@ -68,89 +74,151 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         return variable
 
     def add_bilinear_expression(
-        self, bilinear_expression: ble.BilinearExpression
+        self,
+        name: str,
+        variables: tuple[var.Variable, var.Variable],
+        level: int,
+        representative_variable: var.Variable | None = None,
     ) -> ble.BilinearExpression:
-        """Add a bilinear expression to the model.
+        """Add a bilinear expression to the model, or return it if it already exists.
 
         Args:
-            bilinear_expression: The bilinear expression to be added.
+            name: The unique name or hash for the expression.
+            variables: A tuple of two variable objects involved in the expression.
+            level: The nesting level of the expression in the model hierarchy.
+            representative_variable: An optional variable that represents this expression.
+
+        Returns:
+            The newly created or existing BilinearExpression object.
         """
-        bilinear_expression_name = bilinear_expression.name
-        if bilinear_expression_name in self.expressions.bilinear_expressions:
-            return self.expressions.bilinear_expressions[bilinear_expression_name]
-        self.expressions.bilinear_expressions[bilinear_expression_name] = (
-            bilinear_expression
+        if name in self.expressions.bilinear_expressions:
+            return self.expressions.bilinear_expressions[name]
+        bilinear_expression = ble.BilinearExpression(
+            name,
+            self,
+            variables,
+            level,
+            representative_variable=representative_variable,
         )
+        self.expressions.bilinear_expressions[name] = bilinear_expression
         return bilinear_expression
 
     def add_multilinear_expression(
-        self, multilinear_expression: mle.MultilinearExpression
+        self,
+        name: str,
+        variables: list[var.Variable],
+        level: int,
+        representative_variable: var.Variable | None = None,
     ) -> mle.MultilinearExpression:
-        """Add a multilinear expression to the model.
+        """Add a multilinear expression to the model, or return it if it already exists.
 
         Args:
-            multilinear_expression: The multilinear expression to be added.
+            name: The unique name or hash for the expression.
+            variables: A list of variable objects involved in the expression.
+            level: The nesting level of the expression in the model hierarchy.
+            representative_variable: An optional variable that represents this expression.
+
+        Returns:
+            The newly created or existing MultilinearExpression object.
         """
-        multilinear_expression_name = multilinear_expression.name
-        if multilinear_expression_name in self.expressions.multilinear_expressions:
-            return self.expressions.multilinear_expressions[multilinear_expression_name]
-        self.expressions.multilinear_expressions[multilinear_expression_name] = (
-            multilinear_expression
+        if name in self.expressions.multilinear_expressions:
+            return self.expressions.multilinear_expressions[name]
+        multilinear_expression = mle.MultilinearExpression(
+            name,
+            self,
+            variables,
+            level,
+            representative_variable=representative_variable,
         )
+        self.expressions.multilinear_expressions[name] = multilinear_expression
         return multilinear_expression
 
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def add_one_dim_expression(
-        self, one_dim_expression: ode.OneDimExpression
+        self,
+        expression_class,
+        name: str,
+        variable: var.Variable,
+        level: int,
+        representative_variable: var.Variable | None = None,
     ) -> ode.OneDimExpression:
-        """Add a one-dimensional expression to the model.
+        """Add a one-dimensional expression to the model, or return it if it already exists.
 
         Args:
-            one_dim_expression: The one-dimensional expression to be added.
+            expression_class: The specific class of the one-dimensional expression.
+            name: The unique name or hash for the expression.
+            variable: The variable object involved in the expression.
+            level: The nesting level of the expression in the model hierarchy.
+            representative_variable: An optional variable that represents this expression.
+
+        Returns:
+            The newly created or existing OneDimExpression object.
         """
-        one_dim_expression_name = one_dim_expression.name
-        if one_dim_expression_name in self.expressions.one_dim_expressions:
-            return self.expressions.one_dim_expressions[one_dim_expression_name]
-        self.expressions.one_dim_expressions[one_dim_expression_name] = (
-            one_dim_expression
+        if name in self.expressions.one_dim_expressions:
+            return self.expressions.one_dim_expressions[name]
+        one_dim_expression = expression_class(
+            name,
+            self,
+            variable,
+            level,
+            representative_variable=representative_variable,
         )
+        self.expressions.one_dim_expressions[name] = one_dim_expression
         return one_dim_expression
 
     def add_nonlinear_expression(
-        self, nonlinear_expression: nle.NonlinearExpression
+        self,
+        name: str,
+        expression_tag,
     ) -> nle.NonlinearExpression:
-        """Add a nonlinear expression to the model.
+        """Add a nonlinear expression to the model, or return it if it already exists.
 
         Args:
-            nonlinear_expression: The nonlinear expression to be added.
+            name: The unique name or hash for the expression.
+            expression_tag: The BeautifulSoup XML tag representing the nonlinear expression.
+
+        Returns:
+            The newly created or existing NonlinearExpression object.
         """
-        nonlinear_expression_name = nonlinear_expression.name
-        if nonlinear_expression_name in self.expressions.nonlinear_expressions:
-            return self.expressions.nonlinear_expressions[nonlinear_expression_name]
-        self.expressions.nonlinear_expressions[nonlinear_expression_name] = (
-            nonlinear_expression
-        )
-        return nonlinear_expression
+        if name in self.expressions.nonlinear_expressions:
+            return self.expressions.nonlinear_expressions[name]
+        nl_expression = nle.NonlinearExpression(name, expression_tag, self)
+        self.expressions.nonlinear_expressions[name] = nl_expression
+        return nl_expression
 
     def add_linear_expression(
-        self, linear_expression: lie.LinearExpression
+        self,
+        name: str,
+        level: int,
+        representative_variable: var.Variable | None = None,
     ) -> lie.LinearExpression:
-        """Add a linear expression to the model.
+        """Add a linear expression to the model, or return it if it already exists.
 
         Args:
-            linear_expression: The linear expression to be added.
+            name: The unique name or hash for the expression.
+            level: The nesting level of the expression in the model hierarchy.
+            representative_variable: An optional variable that represents this expression.
+
+        Returns:
+            The newly created or existing LinearExpression object.
         """
-        linear_expression_name = linear_expression.name
-        if linear_expression_name in self.expressions.linear_expressions:
-            return self.expressions.linear_expressions[linear_expression_name]
-        self.expressions.linear_expressions[linear_expression_name] = linear_expression
+        if name in self.expressions.linear_expressions:
+            return self.expressions.linear_expressions[name]
+        linear_expression = lie.LinearExpression(
+            name,
+            self,
+            level,
+            representative_variable=representative_variable,
+        )
+        self.expressions.linear_expressions[name] = linear_expression
         return linear_expression
 
     def _build_model_from_osil_data(self) -> None:
-        """Create a complete model from OSiL data file.
+        """Create a complete model from an OSiL data file.
 
-        Reads the OSiL file specified in settings, builds variables, constraints,
-        and different types of expressions, and applies piecewise linear approximations
-        to nonlinear functions.
+        This method orchestrates the entire process of reading an OSiL file,
+        building variables, constraints, and expressions, propagating bounds,
+        and preparing the model for optimization.
         """
         logger.info("Reading data..")
         osil_data = self._read_osil_file()
@@ -173,6 +241,11 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         self._translate_expressions_to_constraints()
 
     def _read_osil_file(self) -> BeautifulSoup:
+        """Reads the OSiL file and returns its parsed XML content.
+
+        Returns:
+            A BeautifulSoup object representing the parsed OSiL XML data.
+        """
         with open(
             StaticSettings.instances_path + self.settings.osil_file_name + ".osil",
             "r",
@@ -183,6 +256,11 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         return data
 
     def _add_variables_from_osil_data(self, osil_data: BeautifulSoup) -> None:
+        """Parses and adds variables from the OSiL data.
+
+        Args:
+            osil_data: The parsed OSiL XML data.
+        """
         var_tags = osil_data.find("variables").find_all("var")
         for v in var_tags:
             variable = self.add_variable(var.Variable(f"x_{len(self.variables) - 1}"))
@@ -202,6 +280,11 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             variable.var_type = "C" if var_type is None else var_type
 
     def _add_constraints_from_osil_data(self, osil_data: BeautifulSoup) -> None:
+        """Parses and adds constraints from the OSiL data.
+
+        Args:
+            osil_data: The parsed OSiL XML data.
+        """
         try:
             cons_tags = osil_data.find("constraints").find_all("con")
         except AttributeError:
@@ -216,6 +299,11 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             constraint.rhs = float(ub) if lb is None else float(lb)
 
     def _add_objective_from_osil_data(self, osil_data: BeautifulSoup) -> None:
+        """Parses the objective function from OSiL and adds it as a constraint.
+
+        Args:
+            osil_data: The parsed OSiL XML data.
+        """
         objective = osil_data.find("objectives").find_all("obj")[0]
         constraint = con.Constraint(f"c_{-1}", con_type="<=")
         self.add_constraint(constraint)
@@ -228,6 +316,15 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
 
     @staticmethod
     def _expand_osil_elements(parent_element: BeautifulSoup, dtype=float) -> list:
+        """Expands compressed OSiL element tags into a full list of values.
+
+        Args:
+            parent_element: The BeautifulSoup tag containing <el> tags.
+            dtype: The data type to cast the values to (e.g., float, int).
+
+        Returns:
+            A list of expanded values.
+        """
         el_tags = parent_element.find_all("el")
         if el_tags is None:
             return []
@@ -243,6 +340,11 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         return expanded
 
     def _add_linear_expressions_from_osil_data(self, osil_data: BeautifulSoup) -> None:
+        """Parses linear constraint coefficients and adds them to constraints.
+
+        Args:
+            osil_data: The parsed OSiL XML data.
+        """
         lin_con = osil_data.find("linearConstraintCoefficients")
         if lin_con is None:
             return
@@ -270,6 +372,11 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
     def _add_quadratic_expressions_from_osil_data(
         self, osil_data: BeautifulSoup
     ) -> None:
+        """Parses quadratic terms and adds them as expressions to constraints.
+
+        Args:
+            osil_data: The parsed OSiL XML data.
+        """
         try:
             quad_tags = osil_data.find("quadraticCoefficients").find_all("qTerm")
         except AttributeError:
@@ -291,9 +398,16 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
     def _add_square_expression_to_constraint(
         self, var_index: str, constraint_index: str, coeff: float
     ):
+        """Creates and adds a square expression to a specified constraint.
+
+        Args:
+            var_index: The index of the variable being squared.
+            constraint_index: The index of the constraint to add the expression to.
+            coeff: The coefficient of the square term.
+        """
         expr_hash = f"q_{var_index}"
         square_expression = self.add_one_dim_expression(
-            ode.SquareExpression(expr_hash, self, self.variables[f"x_{var_index}"], 0)
+            ode.SquareExpression, expr_hash, self.variables[f"x_{var_index}"], 0
         )
         self.constraints[f"c_{constraint_index}"].variables.append(
             (coeff, square_expression.representative_variable)
@@ -306,17 +420,22 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         constraint_index: str,
         coeff: float,
     ):
+        """Creates and adds a bilinear expression to a specified constraint.
+
+        Args:
+            first_var_index: The index of the first variable.
+            second_var_index: The index of the second variable.
+            constraint_index: The index of the constraint to add the expression to.
+            coeff: The coefficient of the bilinear term.
+        """
         expr_hash = "b" + "_".join(sorted([first_var_index, second_var_index]))
         bilinear_expression = self.add_bilinear_expression(
-            ble.BilinearExpression(
-                expr_hash,
-                self,
-                (
-                    self.variables[f"x_{first_var_index}"],
-                    self.variables[f"x_{second_var_index}"],
-                ),
-                0,
-            )
+            expr_hash,
+            (
+                self.variables[f"x_{first_var_index}"],
+                self.variables[f"x_{second_var_index}"],
+            ),
+            0,
         )
         self.constraints[f"c_{constraint_index}"].variables.append(
             (coeff, bilinear_expression.representative_variable)
@@ -325,6 +444,11 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
     def _add_nonlinear_expressions_from_osil_data(
         self, osil_data: BeautifulSoup
     ) -> None:
+        """Parses nonlinear expressions from OSiL and adds them to constraints.
+
+        Args:
+            osil_data: The parsed OSiL XML data.
+        """
         try:
             nonlinear_tags = osil_data.find("nonlinearExpressions").find_all("nl")
         except AttributeError:
@@ -332,40 +456,40 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         for n in nonlinear_tags:
             coeff = 1.0 if n.get("coef") is None else float(n.get("coef"))
             expr_hash = udh.hash_nonlinearity(str(n.next))
-            nonlinear_expression = self.add_nonlinear_expression(
-                nle.NonlinearExpression(expr_hash, n.next, self)
-            )
+            nl_expression = self.add_nonlinear_expression(expr_hash, n.next)
             self.constraints[f"c_{n.get('idx')}"].variables.append(
-                (coeff, nonlinear_expression.representative_variable)
+                (coeff, nl_expression.representative_variable)
             )
 
     def _grow_nonlinear_expression_trees(self) -> None:
+        """Builds expression trees for all top-level nonlinear expressions."""
         for (
             nonlinear_expression_key
         ) in self.expressions.first_level_nonlinear_expression_keys:
-            nonlinear_expression = self.expressions.nonlinear_expressions[
+            nl_expression = self.expressions.nonlinear_expressions[
                 nonlinear_expression_key
             ]
-            nonlinear_expression.grow_expression_tree()
+            nl_expression.grow_expression_tree()
 
     def _fragment_expression_trees_to_low_dimensional_functions(self) -> None:
+        """Decomposes complex expression trees into simpler, low-dimensional functions."""
         for (
             nonlinear_expression_key
         ) in self.expressions.first_level_nonlinear_expression_keys:
-            nonlinear_expression = self.expressions.nonlinear_expressions[
+            nl_expression = self.expressions.nonlinear_expressions[
                 nonlinear_expression_key
             ]
-            nonlinear_expression.fragment_expression_tree_to_low_dimensional_functions(
-                1
-            )
+            nl_expression.fragment_expression_tree_to_low_dimensional_functions(1)
 
     def _reformulate_multilinear_and_bilinear_expressions(self) -> None:
+        """Reformulates multilinear and bilinear expressions based on settings."""
         for expression in self.expressions.multilinear_expressions.values():
             expression.reformulate_to_bilinear_expressions()
         for expression in self.expressions.bilinear_expressions.values():
             expression.reformulate_to_sum_of_squares()
 
     def _propagate_bounds_expressions(self):
+        """Performs bound propagation on all expressions for a set number of rounds."""
         sorted_expressions = sorted(
             self.expressions.all_low_dim_expressions(),
             key=lambda e: -e.level,
@@ -375,6 +499,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
                 expression.propagate_variable_bounds()
 
     def _propagate_bounds_linear_constraints(self):
+        """Performs bound propagation on linear equality constraints."""
         for _ in range(self.settings.bound_propagation_rounds):
             for constraint in self.constraints.values():
                 if constraint.con_type == "==":
@@ -383,6 +508,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
     def _discretize_variables(
         self,
     ) -> None:
+        """Creates piecewise linear approximations for variables marked for discretization."""
         pwl_variables = []
         pwl_constraints = []
         for variable in self.variables.values():
@@ -403,25 +529,28 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
     def _translate_expressions_to_constraints(
         self,
     ) -> None:
+        """Converts expression objects into their equivalent constraint representations."""
         self._apply_piecewise_linear_relaxation()
         self._apply_piecewise_constant_relaxation()
         for expression in self.expressions.linear_expressions.values():
             expression.add_constraint_from_linear_expression()
 
     def _apply_piecewise_linear_relaxation(self) -> None:
+        """Applies piecewise linear relaxation to all one-dimensional expressions."""
         for expression in self.expressions.one_dim_expressions.values():
             expression.apply_piecewise_linear_relaxation(
                 approximation=self.settings.approximation
             )
 
     def _apply_piecewise_constant_relaxation(self) -> None:
+        """Applies piecewise constant relaxation to bilinear and multilinear expressions."""
         for expression in self.expressions.bilinear_expressions.values():
             expression.apply_piecewise_constant_relaxation(
                 approximation=self.settings.approximation,
-                reformulated=self.settings.reformulate_multilinear
+                reformulated=self.settings.reformulate_multilinear,
             )
         for expression in self.expressions.multilinear_expressions.values():
             expression.apply_piecewise_constant_relaxation(
                 approximation=self.settings.approximation,
-                reformulated=self.settings.reformulate_multilinear
+                reformulated=self.settings.reformulate_multilinear,
             )

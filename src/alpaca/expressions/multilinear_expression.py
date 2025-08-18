@@ -6,7 +6,7 @@ import itertools
 import bisect
 
 from alpaca.model_data import variable as var, constraint as con
-from alpaca.expressions import expression as exn, bilinear_expression as ble
+from alpaca.expressions import expression as exn
 
 
 class MultilinearExpression(exn.Expression):
@@ -50,8 +50,9 @@ class MultilinearExpression(exn.Expression):
         for variable in self.variables:
             variable.add_nonlinearity_to_occurring_in("multilinear")
 
-    def apply_piecewise_constant_relaxation(self, approximation: bool = False,
-                                            reformulated: int = 0):
+    def apply_piecewise_constant_relaxation(
+        self, approximation: bool = False, reformulated: int = 0
+    ):
         """
         Apply piecewise constant relaxation for multilinear expressions.
 
@@ -79,7 +80,9 @@ class MultilinearExpression(exn.Expression):
             )
 
             if not reformulated:
-                self._add_piecewise_constraint(current_variable_indices, implied_indices)
+                self._add_piecewise_constraint(
+                    current_variable_indices, implied_indices
+                )
 
     def _calculate_implied_indices(
         self,
@@ -112,12 +115,8 @@ class MultilinearExpression(exn.Expression):
             for i, index in enumerate(current_variable_indices)
         ]
         implied_value_lb, implied_value_ub = self._get_implied_lb_and_ub(lb_ub_list)
-        implied_index_lb = self._get_implied_index_from_implied_value(
-            implied_value_lb
-        )
-        implied_index_ub = self._get_implied_index_from_implied_value(
-            implied_value_ub
-        )
+        implied_index_lb = self._get_implied_index_from_implied_value(implied_value_lb)
+        implied_index_ub = self._get_implied_index_from_implied_value(implied_value_ub)
         return tuple(range(implied_index_lb, implied_index_ub + 1))
 
     def _add_piecewise_constraint(
@@ -191,29 +190,23 @@ class MultilinearExpression(exn.Expression):
         """Reformulate multilinear expression to bilinear expressions."""
         if len(self.variables) > 3:
             sub_bi_multilinear = MultilinearExpression(
-                    f"mb_{self.name}_sub",
-                    self.model_data,
-                    self.variables[1:],
-                    self.level + 1,
-                )
+                f"mb_{self.name}_sub",
+                self.model_data,
+                self.variables[1:],
+                self.level + 1,
+            )
             sub_bi_multilinear.reformulate_to_bilinear_expressions()
         else:
             sub_bi_multilinear = self.model_data.add_bilinear_expression(
-                ble.BilinearExpression(
-                    f"mb_{self.name}_sub",
-                    self.model_data,
-                    (self.variables[1], self.variables[2]),
-                    self.level + 1,
-                )
+                f"mb_{self.name}_sub",
+                (self.variables[1], self.variables[2]),
+                self.level + 1,
             )
         self.model_data.add_bilinear_expression(
-            ble.BilinearExpression(
-                f"mb_{self.name}",
-                self.model_data,
-                (self.variables[0], sub_bi_multilinear.representative_variable),
-                self.level,
-                representative_variable=self.representative_variable,
-            )
+            f"mb_{self.name}",
+            (self.variables[0], sub_bi_multilinear.representative_variable),
+            self.level,
+            representative_variable=self.representative_variable,
         )
 
     def propagate_variable_bounds(self):
