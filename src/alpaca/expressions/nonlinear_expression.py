@@ -9,7 +9,6 @@ from alpaca.model_data import variable as var
 from alpaca.expressions import (
     one_dim_expression as ode,
 )
-from alpaca.utils.logger import logger
 import alpaca.settings as s
 
 
@@ -115,7 +114,8 @@ class NonlinearExpression:
                 ode.TangensHExpression, level
             )
         elif self.expression_type == "min":
-            next_level = logger.warning("Expression type min not supported yet!")
+            raise NotImplementedError("Expression type min not supported yet! ")
+            # next_level = logger.warning("Expression type min not supported yet!")
         elif self.expression_type == "inverse":
             next_level = self._fragment_one_dim_expression(ode.InverseExpression, level)
         elif self.expression_type == "power":
@@ -128,7 +128,8 @@ class NonlinearExpression:
                     ode.SquareRootExpression, level
                 )
             else:
-                next_level = logger.warning("Expression type power not supported yet!")
+                raise NotImplementedError("Expression type power not supported yet! ")
+                # next_level = logger.warning("Expression type power not supported yet!")
         elif self.expression_type == "xabsx":
             next_level = self._fragment_one_dim_expression(ode.AbsExpression, level)
         elif self.expression_type == "negate":

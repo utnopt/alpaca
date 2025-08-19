@@ -67,6 +67,10 @@ def run_single_optimization(osil_full_path):
                 model_data.expressions.bilinear_expressions,
                 model_data.expressions.multilinear_expressions,
             )
+            if not mpip_handler.mpip_dict:
+                raise ValueError(
+                    "No Multipartite Implication Polytope instances found in the model."
+                )
             if user_settings.external_solver == "scip":
                 mpip_separation_handler = ses.SeparationHandler(
                     mpip_handler, external_solver.opt_model
@@ -79,6 +83,9 @@ def run_single_optimization(osil_full_path):
 
         # Solve the instance and capture the runtime
         runtime = solver.solve_instance()
+
+        if solver.external_solver.opt_model.MIPGap < 1e-5:
+            raise ValueError("Instance is too easy.")
 
         # Log and print the result in a machine-readable format for the shell script
         logger.info(

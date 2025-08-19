@@ -138,7 +138,7 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         mpip.implying_function = self._nonlinear_expression_to_scip_expression(
             nonlinear_expression, mpip
         )
-        if mpip.feasible:
+        if mpip.feasible and len(mpip.implying_variables) >= 2:
             self.mpip_dict[mpip_id] = mpip
             mpip.build_mpip()
 

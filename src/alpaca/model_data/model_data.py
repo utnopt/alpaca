@@ -239,6 +239,18 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         if self.settings.reformulate_multilinear:
             self._reformulate_multilinear_and_bilinear_expressions()
         self._propagate_bounds_expressions()
+        if any(
+            (
+                variable.lb == -StaticSettings.infinity
+                or variable.ub == StaticSettings.infinity
+            )
+            and variable.name != "x_-1"
+            for variable in self.variables.values()
+        ):
+            raise ValueError(
+                "Model contains variables with infinite bounds. "
+                "Please set finite bounds for all variables."
+            )
         self._discretize_variables()
         self._translate_expressions_to_constraints()
 
