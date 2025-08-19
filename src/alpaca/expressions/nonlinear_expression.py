@@ -119,7 +119,16 @@ class NonlinearExpression:
         elif self.expression_type == "inverse":
             next_level = self._fragment_one_dim_expression(ode.InverseExpression, level)
         elif self.expression_type == "power":
-            next_level = logger.warning("Expression type power not supported yet!")
+            if self.child_expressions[1] == 2.0:
+                next_level = self._fragment_one_dim_expression(
+                    ode.SquareExpression, level
+                )
+            elif self.child_expressions[1] == 0.5:
+                next_level = self._fragment_one_dim_expression(
+                    ode.SquareRootExpression, level
+                )
+            else:
+                next_level = logger.warning("Expression type power not supported yet!")
         elif self.expression_type == "xabsx":
             next_level = self._fragment_one_dim_expression(ode.AbsExpression, level)
         elif self.expression_type == "negate":

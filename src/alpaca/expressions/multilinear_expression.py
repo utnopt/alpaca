@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=duplicate-code
 """
 @authors: kuen,
 """
@@ -30,6 +31,7 @@ class MultilinearExpression(exn.Expression):
         variables: list[var.Variable],
         level: int,
         representative_variable: var.Variable | None = None,
+        reformulate: bool = True,
     ):
         # pylint: disable=too-many-arguments
         # pylint: disable=too-many-positional-arguments
@@ -45,7 +47,8 @@ class MultilinearExpression(exn.Expression):
         super().__init__(name, model_data, level, representative_variable)
         self.variables = variables
         self.model_data = model_data
-        self.representative_variable.add_nonlinearity_to_occurring_in("multilinear")
+        if not reformulate:
+            self.representative_variable.add_nonlinearity_to_occurring_in("multilinear")
         self.piecewise_constant_relation = {}
         for variable in self.variables:
             variable.add_nonlinearity_to_occurring_in("multilinear")
@@ -60,6 +63,8 @@ class MultilinearExpression(exn.Expression):
         and applies constraints based on either an approximation or a strict
         lower/upper bound calculation.
         """
+        if not self.representative_variable.is_discretized:
+            return
         all_variables_mid_values_with_indices = (
             self._get_all_variables_mid_values_with_indices()
         )
@@ -181,8 +186,13 @@ class MultilinearExpression(exn.Expression):
 
     def _get_implied_index_from_implied_value(self, implied_value: float) -> int:
         return min(
-            bisect.bisect_left(self.representative_variable.breakpoints, implied_value)
-            - 1,
+            max(
+                0,
+                bisect.bisect_left(
+                    self.representative_variable.breakpoints, implied_value
+                )
+                - 1,
+            ),
             len(self.representative_variable.breakpoints) - 2,
         )
 

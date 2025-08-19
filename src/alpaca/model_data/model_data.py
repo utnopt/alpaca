@@ -99,6 +99,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             variables,
             level,
             representative_variable=representative_variable,
+            reformulate=self.settings.reformulate_multilinear,
         )
         self.expressions.bilinear_expressions[name] = bilinear_expression
         return bilinear_expression
@@ -129,6 +130,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             variables,
             level,
             representative_variable=representative_variable,
+            reformulate=self.settings.reformulate_multilinear,
         )
         self.expressions.multilinear_expressions[name] = multilinear_expression
         return multilinear_expression

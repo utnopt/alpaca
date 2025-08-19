@@ -29,6 +29,7 @@ class BilinearExpression(exn.Expression):
         variables: tuple[var.Variable, var.Variable],
         level: int,
         representative_variable: var.Variable | None = None,
+        reformulate: bool = True,
     ):
         # pylint: disable=too-many-arguments
         # pylint: disable=too-many-positional-arguments
@@ -44,7 +45,8 @@ class BilinearExpression(exn.Expression):
         super().__init__(name, model_data, level, representative_variable)
         self.first_var, self.second_var = variables
         self.model_data = model_data
-        self.representative_variable.add_nonlinearity_to_occurring_in("bilinear")
+        if not reformulate:
+            self.representative_variable.add_nonlinearity_to_occurring_in("bilinear")
         self.first_var.add_nonlinearity_to_occurring_in("bilinear")
         self.second_var.add_nonlinearity_to_occurring_in("bilinear")
         self.piecewise_constant_relation = {}
@@ -53,6 +55,8 @@ class BilinearExpression(exn.Expression):
         self, approximation: bool = False, reformulated: int = 0
     ):
         """Apply piecewise constant relaxation for bilinear expressions."""
+        if not self.representative_variable.is_discretized:
+            return
         first_segment_midpoints = self._compute_segment_midpoints(
             self.first_var.breakpoints
         )
@@ -123,8 +127,13 @@ class BilinearExpression(exn.Expression):
 
     def _get_implied_index_from_implied_value(self, implied_value: float) -> int:
         return min(
-            bisect.bisect_left(self.representative_variable.breakpoints, implied_value)
-            - 1,
+            max(
+                0,
+                bisect.bisect_left(
+                    self.representative_variable.breakpoints, implied_value
+                )
+                - 1,
+            ),
             len(self.representative_variable.breakpoints) - 2,
         )
 

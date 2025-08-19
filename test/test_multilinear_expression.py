@@ -64,7 +64,7 @@ class TestMultilinearExpression(unittest.TestCase):
         """Test initialization of MultilinearExpression."""
         variables = [self.var_x, self.var_y, self.var_z]
         multilinear_expr = mle.MultilinearExpression(
-            "test_multilinear", self.model_data, variables, 1
+            "test_multilinear", self.model_data, variables, 1, reformulate=False
         )
 
         # Check basic attributes
@@ -95,7 +95,7 @@ class TestMultilinearExpression(unittest.TestCase):
         """Test bound propagation with three variables."""
         variables = [self.var_x, self.var_y, self.var_z]
         multilinear_expr = mle.MultilinearExpression(
-            "test_three_vars", self.model_data, variables, 1
+            "test_three_vars", self.model_data, variables, 1, reformulate=False
         )
 
         multilinear_expr.propagate_variable_bounds()
@@ -113,7 +113,7 @@ class TestMultilinearExpression(unittest.TestCase):
         """Test reformulation for 3 variables (base case)."""
         variables = [self.var_x, self.var_y, self.var_z]
         multilinear_expr = mle.MultilinearExpression(
-            "test_mle_3", self.model_data, variables, 1
+            "test_mle_3", self.model_data, variables, 1, reformulate=False
         )
 
         # Mock the creation of bilinear expressions
@@ -207,7 +207,7 @@ class TestMultilinearExpression(unittest.TestCase):
         ]
 
         multilinear_expr = mle.MultilinearExpression(
-            "test_mle_approx", self.model_data, variables, 1, rep_var
+            "test_mle_approx", self.model_data, variables, 1, rep_var, reformulate=False
         )
         self.model_data.constraints = {}
 

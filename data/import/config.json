@@ -1,12 +1,12 @@
 {
 "solver_time_limit": 3600,
-  "osil_file_name": "edgecross14-058",
+  "osil_file_name": "ex7_2_2",
   "external_solver": "gurobi",
-  "number_of_breakpoints": 5,
+  "number_of_breakpoints": 10,
   "feature/mpip/separation": 0,
-  "feature/mpip/mccormick": 0,
+  "feature/mpip/mccormick": 1,
   "feature/mpip/stair": 0,
-  "feature/mpip/stripe": 0,
+  "feature/mpip/stripe": 1,
   "approximation": 0,
   "reformulate_multilinear": 1
 }

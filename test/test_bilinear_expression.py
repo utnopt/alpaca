@@ -18,7 +18,10 @@ class TestBilinearExpression(unittest.TestCase):
 
     def setUp(self):
         """Set up test environment."""
-        self.config_dict = {"osil_file_name": "alkyl"}
+        self.config_dict = {
+            "osil_file_name": "alkyl",
+            "reformulate_multilinear": False,
+        }
         self.user_settings = s.UserSettings(self.config_dict)
 
         # Create mock model_data with proper mock setup
@@ -53,7 +56,11 @@ class TestBilinearExpression(unittest.TestCase):
     def test_initialization(self):
         """Test initialization of BilinearExpression."""
         bilinear_expr = ble.BilinearExpression(
-            "test_bilinear", self.model_data, (self.var_x, self.var_y), 1
+            "test_bilinear",
+            self.model_data,
+            (self.var_x, self.var_y),
+            1,
+            reformulate=False,
         )
 
         # Check basic attributes
@@ -80,7 +87,11 @@ class TestBilinearExpression(unittest.TestCase):
     def test_bound_propagation_positive_variables(self):
         """Test bound propagation with positive variable bounds."""
         bilinear_expr = ble.BilinearExpression(
-            "test_bilinear", self.model_data, (self.var_x, self.var_y), 1
+            "test_bilinear",
+            self.model_data,
+            (self.var_x, self.var_y),
+            1,
+            reformulate=False,
         )
 
         # Call bound propagation
@@ -111,7 +122,7 @@ class TestBilinearExpression(unittest.TestCase):
         self.model_data.variables["b"] = var_b
 
         bilinear_expr = ble.BilinearExpression(
-            "test_mixed", self.model_data, (var_a, var_b), 1
+            "test_mixed", self.model_data, (var_a, var_b), 1, reformulate=False
         )
 
         bilinear_expr.propagate_variable_bounds()
@@ -139,7 +150,7 @@ class TestBilinearExpression(unittest.TestCase):
         self.model_data.variables["b"] = var_b
 
         bilinear_expr = ble.BilinearExpression(
-            "test_zero", self.model_data, (var_a, var_b), 1
+            "test_zero", self.model_data, (var_a, var_b), 1, reformulate=False
         )
 
         bilinear_expr.propagate_variable_bounds()
@@ -178,7 +189,12 @@ class TestBilinearExpression(unittest.TestCase):
         ]
 
         bilinear_expr = ble.BilinearExpression(
-            "test_bilinear_pwl", self.model_data, (self.var_x, self.var_y), 1, rep_var
+            "test_bilinear_pwl",
+            self.model_data,
+            (self.var_x, self.var_y),
+            1,
+            rep_var,
+            reformulate=False,
         )
         self.model_data.constraints = {}
 
@@ -227,6 +243,7 @@ class TestBilinearExpression(unittest.TestCase):
             (self.var_x, self.var_y),
             1,
             rep_var,
+            reformulate=False,
         )
         self.model_data.constraints = {}
 
