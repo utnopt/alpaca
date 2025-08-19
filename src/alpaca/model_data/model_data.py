@@ -245,6 +245,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
                 or variable.ub == StaticSettings.infinity
             )
             and variable.name != "x_-1"
+            and variable.is_discretized
             for variable in self.variables.values()
         ):
             raise ValueError(
