@@ -100,20 +100,34 @@ class Separator:  # pylint: disable=too-many-instance-attributes
 
     def add_stripe_constraints(self) -> None:
         """Add stripe constraints to optimization model."""
+        slice_dict = {
+            implying_vars_index: {}
+            for implying_vars_index in range(len(self.mpip.implying_variables))
+        }
         for implying_vars_index, implying_vars in enumerate(
             self.mpip.implying_variables.values()
         ):
-            for implying_index, implying_var in enumerate(implying_vars):
-                implied_indices = sum(
-                    {
-                        implied_relation_indices
-                        for implying_indices, implied_relation_indices in self.mpip.relation.items()
-                        if implying_indices[implying_vars_index] == implying_index
-                    },
-                    (),
+            for implying_index in range(len(implying_vars)):
+                slice_dict[implying_vars_index][(implying_index,)] = set(
+                    sum(
+                        {
+                            implied_relation_is
+                            for implying_is, implied_relation_is in self.mpip.relation.items()
+                            if implying_is[implying_vars_index] == implying_index
+                        },
+                        (),
+                    )
                 )
+        improved_slice_dict = self._improve_slice_dict(slice_dict)
+        for implying_vars_index, slice_dict_values in improved_slice_dict.items():
+            for implying_indices, implied_indices in slice_dict_values.items():
                 self.opt_model.addConstr(
-                    implying_var
+                    gp.quicksum(
+                        list(self.mpip.implying_variables.values())[
+                            implying_vars_index
+                        ][implying_index]
+                        for implying_index in implying_indices
+                    )
                     + gp.quicksum(
                         gp.quicksum(other_implying_vars)
                         for other_vars_index, other_implying_vars in enumerate(
@@ -128,8 +142,44 @@ class Separator:  # pylint: disable=too-many-instance-attributes
                         )
                     )
                     <= len(self.mpip.implying_variables) - 1,
-                    name=f"stripe_{implying_vars_index}_{implying_index}_{self.mpip.mpip_id}",
+                    name=f"stripe_{implying_vars_index}_"
+                    f"{'_'.join([str(implying_index) for implying_index in implying_indices])}_"
+                    f"{self.mpip.mpip_id}",
                 )
+
+    def _improve_slice_dict(
+        self, slice_dict: dict[int, dict[tuple[int, ...], set[int]]]
+    ) -> dict[int, dict[tuple[int, ...], set[int]]]:
+        for implying_vars_index, slice_dict_values in slice_dict.items():
+            slice_dict[implying_vars_index] = self._improve_slice_dict_for_specific_row(
+                slice_dict_values
+            )
+        return slice_dict
+
+    def _improve_slice_dict_for_specific_row(
+        self, slice_dict_values: dict[tuple[int, ...], set[int]]
+    ) -> dict[tuple[int, ...], set[int]]:
+        improved_slice_dict_values = {}
+        slice_dict_values = {
+            implying_indices: implied_indices
+            for implying_indices, implied_indices in slice_dict_values.items()
+            if len(implied_indices) < len(self.sep_implied_variables)
+        }
+        for implying_indices, implied_indices in slice_dict_values.items():
+            new_implying_combination = tuple(
+                sorted(
+                    set().union(
+                        *[
+                            set(other_is)
+                            for other_is, other_is in slice_dict_values.items()
+                            if other_is.issubset(implied_indices)
+                        ]
+                    )
+                )
+            )
+            improved_slice_dict_values[new_implying_combination] = implied_indices
+
+        return improved_slice_dict_values
 
     def add_stair_constraints(self) -> None:
         """Add stair constraints to optimization model."""
