@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=duplicate-code
+# pylint: disable=duplicate-code, too-many-locals
 """
 This script is a lightweight wrapper to run a single optimization instance.
-It takes a single .osil filename as a command-line argument.
+It takes a .osil file and several configuration settings as command-line arguments.
 """
 import sys
 import os
+import argparse
 
 # Import necessary modules from your existing project structure
 import alpaca.model_data.model_data as mda
@@ -21,26 +22,35 @@ from alpaca.utils import inout as ut_io, datareading as ut_dr
 from alpaca.utils.logger import logger
 
 
-def run_single_optimization(osil_full_path):
+def run_single_optimization(args):
     """
-    Function to execute a single optimization run for a given .osil file.
-    It returns the filename and runtime in a parsable string.
+    Function to execute a single optimization run for a given .osil file
+    and specific settings.
+    It returns the results in a parsable CSV string.
     """
+    osil_full_path = args.file
+    osil_file_name = "unknown"
+    original_instances_path = s.StaticSettings.instances_path
+
     try:
         # Get the directory and filename from the full path
         osil_dir = os.path.dirname(osil_full_path)
         osil_file_name_with_ext = os.path.basename(osil_full_path)
-
         osil_file_name = os.path.splitext(osil_file_name_with_ext)[0]
-        original_instances_path = s.StaticSettings.instances_path
+
+        # Temporarily set the instance path to the directory of the current file
         s.StaticSettings.instances_path = osil_dir + "/"
 
-        # Load user settings, but use a base config without a specified file
+        # Load base user settings from the default config file
         config_dict = ut_dr.read_config_file()
         user_settings = s.UserSettings(config_dict)
 
-        # Override the osil_file_name with the instance file provided
+        # --- Override settings based on command-line arguments ---
         user_settings.osil_file_name = osil_file_name
+        user_settings.number_of_breakpoints = args.breakpoints
+        user_settings.feature_mpip = int(args.mpip_stripe)
+        user_settings.feature_mpip_stripe = int(args.mpip_stripe)
+        # --- End of overrides ---
 
         ut_io.config_console_logger()
         ut_io.config_file_logger(user_settings)
@@ -68,46 +78,71 @@ def run_single_optimization(osil_full_path):
                 model_data.expressions.multilinear_expressions,
             )
             if not mpip_handler.mpip_dict:
-                raise ValueError(
-                    "No Multipartite Implication Polytope instances found in the model."
-                )
-            if user_settings.external_solver == "scip":
-                mpip_separation_handler = ses.SeparationHandler(
-                    mpip_handler, external_solver.opt_model
+                logger.warning(
+                    "MPIP feature enabled, but no MPIP instances found in the model."
                 )
             else:
-                mpip_separation_handler = seg.SeparationHandler(
-                    mpip_handler, external_solver.opt_model
-                )
-            solver.mpip_separation_handler = mpip_separation_handler
+                if user_settings.external_solver == "scip":
+                    mpip_separation_handler = ses.SeparationHandler(
+                        mpip_handler, external_solver.opt_model
+                    )
+                else:
+                    mpip_separation_handler = seg.SeparationHandler(
+                        mpip_handler, external_solver.opt_model
+                    )
+                solver.mpip_separation_handler = mpip_separation_handler
 
         # Solve the instance and capture the runtime
         runtime = solver.solve_instance()
+        gap = round(solver.external_solver.opt_model.MIPGap, 4)
 
-        # Log and print the result in a machine-readable format for the shell script
+        # Log and print the result in the specified CSV format for the shell script
         logger.info(
             "Optimization finished successfully. Runtime: %.2f seconds", runtime
         )
-        print(
-            f"{osil_file_name},{runtime},{round(solver.external_solver.opt_model.MIPGap, 4)}"
-        )
-        return {"status": "success", "runtime": runtime}
+        # Format: number_of_breakpoints,test_case,osil_file_name,runtime,gap
+        print(f"{args.breakpoints},{args.test_case},{osil_file_name},{runtime},{gap}")
 
     except Exception as ex:  # pylint: disable=broad-exception-caught
         # Log and print an error message if the optimization fails
         logger.error(
             "Error occurred while running optimization for %s: %s", osil_file_name, ex
         )
-        print(f"{osil_file_name},ERROR: {str(ex)}")
-        return {"status": "error", "errorMessages": str(ex)}
+        print(f"{args.breakpoints},{args.test_case},{osil_file_name},ERROR,{str(ex)}")
+
     finally:
-        # Restore the original instances path, so it doesn't affect other runs
+        # Restore the original instances path to avoid side effects
         s.StaticSettings.instances_path = original_instances_path
 
 
 if __name__ == "__main__":
+    # Set up argument parser for command-line execution
+    parser = argparse.ArgumentParser(
+        description="Run a single optimization instance with specific settings."
+    )
+    parser.add_argument(
+        "--file", type=str, required=True, help="Full path to the .osil file."
+    )
+    parser.add_argument(
+        "--breakpoints", type=int, required=True, help="Number of breakpoints to use."
+    )
+    parser.add_argument(
+        "--test_case",
+        type=str,
+        required=True,
+        help="Name of the test case (e.g., MPIP, Standard).",
+    )
+    parser.add_argument(
+        "--mpip_stripe",
+        type=int,
+        required=True,
+        choices=[0, 1],
+        help="Enable/disable feature_mpip_stripe (1 or 0).",
+    )
+
+    # If arguments are provided, run the optimization
     if len(sys.argv) > 1:
-        of_path = sys.argv[1]
-        run_single_optimization(of_path)
+        parsed_args = parser.parse_args()
+        run_single_optimization(parsed_args)
     else:
-        logger.error("Error: No .osil filename provided as a command-line argument.")
+        parser.print_help()

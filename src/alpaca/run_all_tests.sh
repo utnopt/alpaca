@@ -3,9 +3,10 @@
 # Ignore SIGHUP to prevent termination when the shell closes
 trap '' HUP
 
-# This script finds all .osil test files and runs them in parallel
-# using the 'run_instance.py' script with continuous job submission.
-# It assigns 2 cores per job, running up to 14 jobs simultaneously on 28 cores.
+# This script finds all .osil test files across multiple directories,
+# runs them with different settings in parallel, and collects the results.
+
+# --- Configuration ---
 
 # Get the directory of the script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
@@ -14,27 +15,53 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 PROJECT_ROOT=$(dirname "$(dirname "$SCRIPT_DIR")")
 
 # Paths to the test instances and export directory
-TEST_PATH="$PROJECT_ROOT/data/import/test_instances"
+IMPORT_PATH="$PROJECT_ROOT/data/import"
 EXPORT_PATH="$PROJECT_ROOT/data/export"
 
-# Create export directory if it doesn't exist
-mkdir -p "$EXPORT_PATH"
-
-# Create a timestamped results file
-TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
-RESULTS_FILE="$EXPORT_PATH/results_${TIMESTAMP}.csv"
-echo "osil_file_name,runtime,gap" > "$RESULTS_FILE"
-
-# Find all .osil files and store their full paths in an array
-mapfile -t files < <(find "$TEST_PATH" -name "*.osil")
-NUM_FILES=${#files[@]}
-
-# Define core configuration
+# Core configuration for parallel execution
 NUM_CORES=28
 CORES_PER_JOB=4
 MAX_PARALLEL_JOBS=$((NUM_CORES / CORES_PER_JOB))
 
-# Create core sets (14 slots of 2 contiguous cores each)
+# --- Setup ---
+
+# Create export directory if it doesn't exist
+mkdir -p "$EXPORT_PATH"
+
+# Create a timestamped results file and write the header
+TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+RESULTS_FILE="$EXPORT_PATH/results_${TIMESTAMP}.csv"
+echo "number_of_breakpoints,test_case,osil_file_name,runtime,gap" > "$RESULTS_FILE"
+
+# --- Job Definition ---
+
+# Find all test instance directories (e.g., test_instances_5, test_instances_10)
+# and prepare the list of jobs to be executed.
+declare -a jobs
+for dir in "$IMPORT_PATH"/test_instances_*; do
+    # Extract the number of breakpoints from the directory name
+    num_breakpoints=$(basename "$dir" | grep -o '[0-9]*$')
+    if [ -z "$num_breakpoints" ]; then
+        echo "Warning: Could not determine number of breakpoints from directory name: $dir"
+        continue
+    fi
+
+    # Find all .osil files in the directory
+    while IFS= read -r file; do
+        # For each file, create two jobs: one with MPIP on, one with it off.
+        jobs+=("$file $num_breakpoints MPIP 1")
+        jobs+=("$file $num_breakpoints Standard 0")
+    done < <(find "$dir" -name "*.osil")
+done
+
+NUM_JOBS=${#jobs[@]}
+echo "Found $NUM_JOBS total jobs to run across all test configurations."
+echo "Running up to $MAX_PARALLEL_JOBS jobs in parallel, using $CORES_PER_JOB cores each."
+echo "Results will be saved to $RESULTS_FILE"
+
+# --- Parallel Execution Engine ---
+
+# Create core sets for taskset
 core_sets=()
 for i in $(seq 0 $((MAX_PARALLEL_JOBS - 1))); do
     start=$((i * CORES_PER_JOB))
@@ -42,63 +69,59 @@ for i in $(seq 0 $((MAX_PARALLEL_JOBS - 1))); do
     core_sets+=("$start-$end")
 done
 
-echo "Found $NUM_FILES test instances."
-echo "Running up to $MAX_PARALLEL_JOBS jobs in parallel, using $CORES_PER_JOB cores each."
-echo "Results will be saved to $RESULTS_FILE"
-
-# Create a named pipe for job control
+# Create a named pipe for job control (semaphore)
 PIPE=$(mktemp -u)
 mkfifo "$PIPE"
 exec 3<>"$PIPE"
 rm -f "$PIPE"
 
-# Initialize the semaphore with core set indices
+# Initialize the semaphore with available job slots
 for i in $(seq 0 $((MAX_PARALLEL_JOBS - 1))); do
     echo "$i" >&3
 done
 
-# Function to run a job
+# Function to run a single job
 run_job() {
     local file="$1"
-    local core_set="$2"
-    local slot="$3"
-    
-    # Run the Python script with taskset
+    local breakpoints="$2"
+    local test_case="$3"
+    local stripe_flag="$4"
+    local core_set="$5"
+    local slot="$6"
+
+    # Execute the Python script with all required arguments
+    # The output is directly appended to the results file
     PYTHONPATH="$PROJECT_ROOT/src" taskset -c "$core_set" \
-    python3 "$SCRIPT_DIR/run_instance.py" "$file" >> "$RESULTS_FILE" 2>&1
-    
-    # Return the slot to the semaphore
+    python3 "$SCRIPT_DIR/run_instance.py" \
+        --file "$file" \
+        --breakpoints "$breakpoints" \
+        --test_case "$test_case" \
+        --mpip_stripe "$stripe_flag" >> "$RESULTS_FILE" 2>&1
+
+    # Return the slot to the semaphore, making it available for the next job
     echo "$slot" >&3
 }
 
-# Counter for files processed
-processed=0
+# --- Job Dispatching ---
 
-# Start initial batch of jobs
-for ((i = 0; i < NUM_FILES && i < MAX_PARALLEL_JOBS; i++)); do
-    file="${files[$i]}"
-    read -u 3 -r slot
-    core_set="${core_sets[$slot]}"
-    echo "Starting job for $(basename "$file") on cores $core_set (slot $slot)"
-    run_job "$file" "$core_set" "$slot" &
-    ((processed++))
-done
+# Process all jobs using the semaphore for parallel control
+for job_params in "${jobs[@]}"; do
+    # Wait for an available slot from the semaphore
+    read -r -u 3 slot
 
-# Start remaining jobs as slots become available
-for ((i = processed; i < NUM_FILES; i++)); do
-    file="${files[$i]}"
-    # Wait for an available slot
-    read -u 3 -r slot
+    # Assign a core set to the job
     core_set="${core_sets[$slot]}"
-    echo "Starting job for $(basename "$file") on cores $core_set (slot $slot)"
-    run_job "$file" "$core_set" "$slot" &
-    ((processed++))
+
+    # Start the job in the background
+    # The job_params are split into individual arguments for run_job
+    echo "Starting job for $(basename $job_params) on cores $core_set (slot $slot)"
+    run_job $job_params "$core_set" "$slot" &
 done
 
 # Wait for all background jobs to complete
 wait
 
-# Close file descriptor
+# Close the file descriptor for the pipe
 exec 3>&-
 
 echo "All optimization runs completed. Results saved to $RESULTS_FILE"
