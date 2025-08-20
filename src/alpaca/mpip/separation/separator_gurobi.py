@@ -171,8 +171,8 @@ class Separator:  # pylint: disable=too-many-instance-attributes
                     set().union(
                         *[
                             set(other_is)
-                            for other_is, other_is in slice_dict_values.items()
-                            if other_is.issubset(implied_indices)
+                            for other_is, other_implied_is in slice_dict_values.items()
+                            if other_implied_is.issubset(implied_indices)
                         ]
                     )
                 )
