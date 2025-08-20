@@ -139,24 +139,42 @@ class BilinearExpression(exn.Expression):
 
     def reformulate_to_sum_of_squares(self):
         """Reformulate bilinear expression to sum of squares.
-        xy = 0.5 (x² + y² − p²), p = x - y."""
+        xy = 0.5 * (x² + y² - p²), where p = x - y.
+        If a variable is binary (B), its square is equal to the variable itself.
+        """
         master_linear_expression = self.model_data.add_linear_expression(
             f"le_{self.name}_master",
             self.level,
             representative_variable=self.representative_variable,
         )
-        square_first_var = self.model_data.add_one_dim_expression(
-            ode.SquareExpression,
-            f"fvs_{self.name}",
-            self.first_var,
-            self.level + 1,
-        )
-        square_second_var = self.model_data.add_one_dim_expression(
-            ode.SquareExpression,
-            f"svs_{self.name}",
-            self.second_var,
-            self.level + 1,
-        )
+
+        # If the first variable is binary, x^2 = x.
+        # Otherwise, create a new expression for the squared term.
+        if self.first_var.var_type == "B":
+            first_var_squared_rep = self.first_var
+        else:
+            square_first_var = self.model_data.add_one_dim_expression(
+                ode.SquareExpression,
+                f"fvs_{self.name}",
+                self.first_var,
+                self.level + 1,
+            )
+            first_var_squared_rep = square_first_var.representative_variable
+
+        # If the second variable is binary, y^2 = y.
+        # Otherwise, create a new expression for the squared term.
+        if self.second_var.var_type == "B":
+            second_var_squared_rep = self.second_var
+        else:
+            square_second_var = self.model_data.add_one_dim_expression(
+                ode.SquareExpression,
+                f"svs_{self.name}",
+                self.second_var,
+                self.level + 1,
+            )
+            second_var_squared_rep = square_second_var.representative_variable
+
+        # Create a helper variable p = x - y. This is always needed.
         sub_linear_expression = self.model_data.add_linear_expression(
             f"le_{self.name}_sub",
             self.level + 2,
@@ -165,15 +183,19 @@ class BilinearExpression(exn.Expression):
             (1.0, self.first_var),
             (-1.0, self.second_var),
         ]
+
+        # The helper variable p is not necessarily binary, so we always square it.
         square_helper_var = self.model_data.add_one_dim_expression(
             ode.SquareExpression,
             f"hvs_{self.name}",
             sub_linear_expression.representative_variable,
             self.level + 1,
         )
+
+        # The master expression becomes: z = 0.5 * (x^2_rep + y^2_rep - p^2)
         master_linear_expression.variables = [
-            (0.5, square_first_var.representative_variable),
-            (0.5, square_second_var.representative_variable),
+            (0.5, first_var_squared_rep),
+            (0.5, second_var_squared_rep),
             (-0.5, square_helper_var.representative_variable),
         ]
 

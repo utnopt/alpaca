@@ -14,6 +14,7 @@ from alpaca.model_data import (
 from alpaca.expressions import (
     expression_container as eco,
     bilinear_expression as ble,
+    bilinear_binary_expression as bbe,
     multilinear_expression as mle,
     one_dim_expression as ode,
     nonlinear_expression as nle,
@@ -79,7 +80,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         variables: tuple[var.Variable, var.Variable],
         level: int,
         representative_variable: var.Variable | None = None,
-    ) -> ble.BilinearExpression:
+    ) -> ble.BilinearExpression | bbe.BilinearBinaryExpression:
         """Add a bilinear expression to the model, or return it if it already exists.
 
         Args:
@@ -93,6 +94,17 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         """
         if name in self.expressions.bilinear_expressions:
             return self.expressions.bilinear_expressions[name]
+        if name in self.expressions.bilinear_binary_expressions:
+            return self.expressions.bilinear_binary_expressions[name]
+        if variables[0].var_type == "B" and variables[1].var_type == "B":
+            bilinear_expression = bbe.BilinearBinaryExpression(
+                name,
+                self,
+                variables,
+                representative_variable=representative_variable,
+            )
+            self.expressions.bilinear_binary_expressions[name] = bilinear_expression
+            return bilinear_expression
         bilinear_expression = ble.BilinearExpression(
             name,
             self,
@@ -248,7 +260,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             and variable.is_discretized
             for variable in self.variables.values()
         ):
-            raise ValueError(
+            logger.warning(
                 "Model contains variables with infinite bounds. "
                 "Please set finite bounds for all variables."
             )
@@ -527,7 +539,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         pwl_variables = []
         pwl_constraints = []
         for variable in self.variables.values():
-            if variable.is_discretized:
+            if variable.is_discretized and variable.var_type != "B":
                 variable.add_binary_pwl(
                     self.settings.number_of_breakpoints, self.settings.pwl_method
                 )

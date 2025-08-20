@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from alpaca.expressions import (
     linear_expression as lie,
     bilinear_expression as ble,
+    bilinear_binary_expression as bbe,
     multilinear_expression as mle,
     one_dim_expression as ode,
     nonlinear_expression as nle,
@@ -24,6 +25,9 @@ class ExpressionContainer:
     one_dim_expressions: dict[str, ode.OneDimExpression] = field(default_factory=dict)
     linear_expressions: dict[str, lie.LinearExpression] = field(default_factory=dict)
     bilinear_expressions: dict[str, ble.BilinearExpression] = field(
+        default_factory=dict
+    )
+    bilinear_binary_expressions: dict[str, bbe.BilinearBinaryExpression] = field(
         default_factory=dict
     )
     multilinear_expressions: dict[str, mle.MultilinearExpression] = field(
