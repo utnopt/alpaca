@@ -84,9 +84,6 @@ def run_single_optimization(osil_full_path):
         # Solve the instance and capture the runtime
         runtime = solver.solve_instance()
 
-        if solver.external_solver.opt_model.MIPGap < 1e-5:
-            raise ValueError("Instance is too easy.")
-
         # Log and print the result in a machine-readable format for the shell script
         logger.info(
             "Optimization finished successfully. Runtime: %.2f seconds", runtime

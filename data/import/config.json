@@ -1,11 +1,11 @@
 {
-"solver_time_limit": 20,
-  "osil_file_name": "gear3",
+"solver_time_limit": 3600,
+  "osil_file_name": "chem",
   "external_solver": "gurobi",
-  "number_of_breakpoints": 20,
+  "number_of_breakpoints": 5,
   "feature/mpip/separation": 0,
   "feature/mpip/mccormick": 0,
-  "feature/mpip/stair": 1,
+  "feature/mpip/stair": 0,
   "feature/mpip/stripe": 0,
   "approximation": 0,
   "reformulate_multilinear": 1
