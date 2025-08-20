@@ -1,5 +1,5 @@
 {
-"solver_time_limit": 3600,
+"solver_time_limit": 7200,
   "osil_file_name": "chem",
   "external_solver": "gurobi",
   "number_of_breakpoints": 10,
