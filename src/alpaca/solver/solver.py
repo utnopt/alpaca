@@ -54,10 +54,12 @@ class Solver:
 
     def _attach_event_handlers_scip(self):
         if self.settings.feature_mpip_separation:
-            self.external_solver.opt_model.includeEventhdlr(
+            self.external_solver.opt_model.includeSepa(
                 self.mpip_separation_handler,
-                "mpip_event_handler",
-                "Event handler that separates mpip cuts",
+                "python_mpip",
+                "generates mpip_cuts",
+                priority=1000,
+                freq=1,
             )
 
     def _attach_event_handlers_gurobi(self):

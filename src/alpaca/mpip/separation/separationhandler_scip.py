@@ -4,13 +4,14 @@
 @authors: kuen,
 """
 import pyscipopt as scip
+from pyscipopt import SCIP_RESULT
 
 import alpaca.settings as s
 from alpaca.mpip import mpiphandler as mph
 from alpaca.mpip.separation import separator_scip as mps
 
 
-class SeparationHandler(scip.Eventhdlr):
+class SeparationHandler(scip.Sepa):
     """Handler for multiple MPIP separation routines."""
 
     def __init__(
@@ -45,7 +46,7 @@ class SeparationHandler(scip.Eventhdlr):
         for mpip in self.mpip_handler.mpip_dict.values():
             mpip.separator.add_stair_constraints()
 
-    def separate_solution(self) -> int:
+    def separate_solution(self) -> dict:
         """Perform separation for current solution."""
         self.iteration += 1
         self.cut_pool = []
@@ -54,31 +55,38 @@ class SeparationHandler(scip.Eventhdlr):
             mpip.separator.separate_solution()
             if mpip.separator.cut.rhs:  # Non-zero rhs indicates valid cut
                 self.cut_pool.append(mpip.separator.cut)
-
         if self.cut_pool:
-            self._add_cuts_to_model()
+            return self._add_cuts_to_model()
+        return {"result": SCIP_RESULT.DIDNOTFIND}
 
-        return self.nr_added_cuts
-
-    def _add_cuts_to_model(self) -> None:
+    def _add_cuts_to_model(self) -> dict:
         """Add cuts meeting violation threshold to model."""
         max_violation = max(cut.violation for cut in self.cut_pool)
         min_violation = s.StaticSettings.max_violation_relation * max_violation
         self.nr_added_cuts = 0
-
+        result = SCIP_RESULT.DIDNOTFIND
         for cut in self.cut_pool:
             if cut.violation >= min_violation:
-                self.opt_model.addCons(cut.lhs <= cut.rhs)
+                cut_to_separate = self.opt_model.createEmptyRowSepa(
+                    self,
+                    f"mpip{self.nr_added_cuts}_x{self.iteration}",
+                    lhs=None,
+                    rhs=cut.rhs,
+                )
+                for coeff, var in cut.lhs:
+                    self.opt_model.addVarToRow(cut_to_separate, var, coeff)
+                self.opt_model.cacheRowExtensions(cut_to_separate)
                 self.nr_added_cuts += 1
+                self.opt_model.flushRowExtensions(cut_to_separate)
+                infeasible = self.opt_model.addCut(cut_to_separate, forcecut=True)
+                if infeasible:
+                    result = SCIP_RESULT.CUTOFF
+                else:
+                    result = SCIP_RESULT.SEPARATED
+                self.opt_model.releaseRow(cut_to_separate)
+        return {"result": result}
 
-    def eventinit(self):
-        """Catch callback event."""
-        self.opt_model.catchEvent(scip.SCIP_EVENTTYPE.LPSOLVED, self)
-
-    def eventexit(self):
-        """Stop callback event."""
-        self.opt_model.dropEvent(scip.SCIP_EVENTTYPE.LPSOLVED, self)
-
-    def eventexec(self, _):
+    def sepaexeclp(self):
         """Run callback event."""
-        self.separate_solution()
+        self.opt_model = self.model
+        return self.separate_solution()
