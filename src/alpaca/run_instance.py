@@ -50,6 +50,7 @@ def run_single_optimization(args):
         user_settings.number_of_breakpoints = args.breakpoints
         user_settings.feature_mpip = int(args.mpip_stripe)
         user_settings.feature_mpip_stripe = int(args.mpip_stripe)
+        user_settings.feature_mpip_separation = int(args.mpip_stripe)
         # --- End of overrides ---
 
         ut_io.config_console_logger()
@@ -95,13 +96,18 @@ def run_single_optimization(args):
         # Solve the instance and capture the runtime
         runtime = solver.solve_instance()
         gap = round(solver.external_solver.opt_model.MIPGap, 4)
+        nr_nodes = solver.external_solver.opt_model.getNNodes()
+        nr_cuts = solver.external_solver.opt_model.getNCutsApplied()
 
         # Log and print the result in the specified CSV format for the shell script
         logger.info(
             "Optimization finished successfully. Runtime: %.2f seconds", runtime
         )
         # Format: number_of_breakpoints,test_case,osil_file_name,runtime,gap
-        print(f"{args.breakpoints},{args.test_case},{osil_file_name},{runtime},{gap}")
+        print(
+            f"{args.breakpoints},{args.test_case},{osil_file_name},"
+            f"{runtime},{gap},{nr_nodes},{nr_cuts}"
+        )
 
     except Exception as ex:  # pylint: disable=broad-exception-caught
         # Log and print an error message if the optimization fails

@@ -31,7 +31,7 @@ mkdir -p "$EXPORT_PATH"
 # Create a timestamped results file and write the header
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 RESULTS_FILE="$EXPORT_PATH/results_${TIMESTAMP}.csv"
-echo "number_of_breakpoints,test_case,osil_file_name,runtime,gap" > "$RESULTS_FILE"
+echo "number_of_breakpoints,test_case,osil_file_name,runtime,gap,nodes,cuts" > "$RESULTS_FILE"
 
 # --- Job Definition ---
 

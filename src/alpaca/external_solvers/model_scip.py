@@ -77,3 +77,5 @@ class ModelScip:
     def _set_parameters(self):
         """Set parameters for the SCIP model."""
         self.opt_model.setRealParam("limits/time", self.settings.solver_time_limit)
+        self.opt_model.setParam("parallel/maxnthreads", 4)
+        self.opt_model.hideOutput(True)

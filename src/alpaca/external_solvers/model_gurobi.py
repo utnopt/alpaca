@@ -14,10 +14,10 @@ class ModelGurobi:
 
     def __init__(self, data: mda.ModelData, settings: UserSettings):
         env = gp.Env(empty=True)
-        env.setParam("LogToConsole", 1)
+        env.setParam("LogToConsole", 0)
         env.start()
         self.opt_model = gp.Model(env=env)
-        self.opt_model.setParam("OutputFlag", 1)
+        self.opt_model.setParam("OutputFlag", 0)
         self.data = data
         self.settings = settings
         self._build_optimization_model()
@@ -80,3 +80,4 @@ class ModelGurobi:
     def _set_parameters(self):
         """Set Gurobi parameters based on user settings."""
         self.opt_model.setParam("TimeLimit", self.settings.solver_time_limit)
+        self.opt_model.setParam("Threads", 4)
