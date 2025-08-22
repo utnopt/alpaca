@@ -99,7 +99,7 @@ def run_single_optimization(args):
             "randomization/randomseedshift", seed_value
         )
         runtime = solver.solve_instance()
-        gap = round(solver.external_solver.opt_model.MIPGap, 4)
+        gap = round(solver.external_solver.opt_model.getGap(), 4)
         nr_nodes = solver.external_solver.opt_model.getNNodes()
         nr_cuts = (
             0
