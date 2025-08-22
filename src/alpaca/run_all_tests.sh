@@ -4,7 +4,8 @@
 trap '' HUP
 
 # This script finds all .osil test files across multiple directories,
-# runs them with different settings in parallel, and collects the results.
+# runs them with different settings and random seeds in parallel,
+# and collects the results.
 
 # --- Configuration ---
 
@@ -31,7 +32,8 @@ mkdir -p "$EXPORT_PATH"
 # Create a timestamped results file and write the header
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 RESULTS_FILE="$EXPORT_PATH/results_${TIMESTAMP}.csv"
-echo "number_of_breakpoints,test_case,osil_file_name,runtime,gap,nodes,cuts" > "$RESULTS_FILE"
+# Added 'seed_value' to the CSV header
+echo "number_of_breakpoints,test_case,osil_file_name,runtime,gap,nodes,cuts,seed_value" > "$RESULTS_FILE"
 
 # --- Job Definition ---
 
@@ -48,14 +50,16 @@ for dir in "$IMPORT_PATH"/test_instances_*; do
 
     # Find all .osil files in the directory
     while IFS= read -r file; do
-        # For each file, create two jobs: one with MPIP on, one with it off.
-        jobs+=("$file $num_breakpoints MPIP 1")
-        jobs+=("$file $num_breakpoints Standard 0")
+        # For each file and each test case, create 5 jobs with different seeds.
+        for seed in $(seq 1 5); do
+            jobs+=("$file $num_breakpoints MPIP 1 $seed")
+            jobs+=("$file $num_breakpoints Standard 0 $seed")
+        done
     done < <(find "$dir" -name "*.osil")
 done
 
 NUM_JOBS=${#jobs[@]}
-echo "Found $NUM_JOBS total jobs to run across all test configurations."
+echo "Found $NUM_JOBS total jobs to run across all test configurations and seeds."
 echo "Running up to $MAX_PARALLEL_JOBS jobs in parallel, using $CORES_PER_JOB cores each."
 echo "Results will be saved to $RESULTS_FILE"
 
@@ -86,17 +90,19 @@ run_job() {
     local breakpoints="$2"
     local test_case="$3"
     local stripe_flag="$4"
-    local core_set="$5"
-    local slot="$6"
+    local seed_value="$5" # Added seed_value parameter
+    local core_set="$6"
+    local slot="$7"
 
-    # Execute the Python script with all required arguments
+    # Execute the Python script with all required arguments, including the seed value
     # The output is directly appended to the results file
     PYTHONPATH="$PROJECT_ROOT/src" taskset -c "$core_set" \
     python3 "$SCRIPT_DIR/run_instance.py" \
         --file "$file" \
         --breakpoints "$breakpoints" \
         --test_case "$test_case" \
-        --mpip_stripe "$stripe_flag" >> "$RESULTS_FILE" 2>&1
+        --mpip_stripe "$stripe_flag" \
+        --seed_value "$seed_value" >> "$RESULTS_FILE" 2>&1 # Pass seed_value to the script
 
     # Return the slot to the semaphore, making it available for the next job
     echo "$slot" >&3

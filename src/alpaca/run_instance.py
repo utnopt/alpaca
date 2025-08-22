@@ -49,8 +49,8 @@ def run_single_optimization(args):
         user_settings.osil_file_name = osil_file_name
         user_settings.number_of_breakpoints = args.breakpoints
         user_settings.feature_mpip = int(args.mpip_stripe)
-        user_settings.feature_mpip_stripe = int(args.mpip_stripe)
         user_settings.feature_mpip_separation = int(args.mpip_stripe)
+        seed_value = int(args.seed_value)
         # --- End of overrides ---
 
         ut_io.config_console_logger()
@@ -67,6 +67,7 @@ def run_single_optimization(args):
 
         # Initialize the solver
         solver = slv.Solver(external_solver, user_settings)
+        mpip_handler = None
 
         # Handle MPIP features if enabled
         if user_settings.feature_mpip:
@@ -94,10 +95,19 @@ def run_single_optimization(args):
                 solver.mpip_separation_handler = mpip_separation_handler
 
         # Solve the instance and capture the runtime
+        solver.external_solver.opt_model.setIntParam(
+            "randomization/randomseedshift", seed_value
+        )
         runtime = solver.solve_instance()
         gap = round(solver.external_solver.opt_model.MIPGap, 4)
         nr_nodes = solver.external_solver.opt_model.getNNodes()
-        nr_cuts = solver.external_solver.opt_model.getNCutsApplied()
+        nr_cuts = (
+            0
+            if not user_settings.feature_mpip
+            else sum(
+                mpip.separator.nr_of_cuts for mpip in mpip_handler.mpip_dict.values()
+            )
+        )
 
         # Log and print the result in the specified CSV format for the shell script
         logger.info(
@@ -106,7 +116,7 @@ def run_single_optimization(args):
         # Format: number_of_breakpoints,test_case,osil_file_name,runtime,gap
         print(
             f"{args.breakpoints},{args.test_case},{osil_file_name},"
-            f"{runtime},{gap},{nr_nodes},{nr_cuts}"
+            f"{runtime},{gap},{nr_nodes},{nr_cuts},{seed_value}"
         )
 
     except Exception as ex:  # pylint: disable=broad-exception-caught
@@ -144,6 +154,12 @@ if __name__ == "__main__":
         required=True,
         choices=[0, 1],
         help="Enable/disable feature_mpip_stripe (1 or 0).",
+    )
+    parser.add_argument(
+        "--seed_value",
+        type=int,
+        required=True,
+        help="Seed value.",
     )
 
     # If arguments are provided, run the optimization

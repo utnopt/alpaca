@@ -4,8 +4,6 @@
 @authors: kuen,
 """
 from typing import Iterator
-import copy
-import dataclasses
 import itertools
 import random
 import pyscipopt as scip
@@ -14,33 +12,13 @@ import alpaca.settings as s
 import alpaca.mpip.mpip as mp
 
 
-@dataclasses.dataclass
-class MPIPCut:
-    """Separated callback cut for MPIP separation."""
-
-    lhs: list[tuple] | None = None
-    rhs: int = 0
-    violation: float = 0.0
-
-    def __repr__(self):
-        """String representation of the cut."""
-        lhs_str = (
-            " + ".join(f"{coeff}*{var}" for coeff, var in self.lhs)
-            if self.lhs
-            else "None"
-        )
-        return f"MPIPCut(lhs={lhs_str}, rhs={self.rhs}, violation={self.violation})"
-
-
 class SeparatedPoint:
     """Non-integer point to be separated with perturbation capabilities."""
 
     def __init__(self) -> None:
         random.seed(0)
         self.implying_values: dict[str, list[float]] = {}
-        self.original_implying_values: dict[str, list[float]] = {}
         self.implied_values: list[float] = []
-        self.original_implied_values: list[float] = []
         self.perturbation_range = (
             s.StaticSettings.feasibility_tolerance / 100,
             10 * s.StaticSettings.feasibility_tolerance,
@@ -61,9 +39,6 @@ class SeparatedPoint:
 
     def perturb(self) -> None:
         """Apply random perturbation to variable values."""
-        self.original_implying_values = copy.deepcopy(self.implying_values)
-        self.original_implied_values = copy.deepcopy(self.implied_values)
-
         # Perturb implying values
         for values in self.implying_values.values():
             for i, _ in enumerate(values):
@@ -77,16 +52,19 @@ class SeparatedPoint:
 class Separator:  # pylint: disable=too-many-instance-attributes
     """Multipartite Implication Polytope separation handler."""
 
-    def __init__(self, mpip: mp.MPIP, opt_model: scip.Model) -> None:
+    def __init__(
+        self, separation_handler, mpip: mp.MPIP, opt_model: scip.Model
+    ) -> None:
         self.separation_model = scip.Model()
         self._setup_separation_model()
+        self.separation_handler = separation_handler
         self.mpip = mpip
         self.relation_matrix_size = len(mpip.implied_variables)
         self.sep_implying_variables: dict[str, list[scip.Variable]] = {}
         self.sep_implied_variables: list[scip.Variable] = []
         self.point_to_be_separated = SeparatedPoint()
         self.opt_model = opt_model
-        self.cut = MPIPCut()
+        self.nr_of_cuts = 0
 
     def _setup_separation_model(self) -> None:
         """Configure separation model settings."""
@@ -330,11 +308,11 @@ class Separator:  # pylint: disable=too-many-instance-attributes
             indices, variables = zip(*combination)
             yield indices, variables
 
-    def separate_point(self) -> None:
+    def separate_point(self) -> bool:
         """Perform separation of current point."""
         self._update_separation_objective()
         self.separation_model.optimize()
-        self._generate_cut()
+        return self._generate_cut()
 
     def _update_separation_objective(self) -> None:
         """Update separation model objective with current point values."""
@@ -351,45 +329,39 @@ class Separator:  # pylint: disable=too-many-instance-attributes
             new_objective -= val * self.sep_implied_variables[idx]
         self.separation_model.chgReoptObjective(new_objective, "maximize")
 
-    def _generate_cut(self) -> None:
+    def _generate_cut(self) -> bool:
         """Generate cut based on separation solution."""
-        # Calculate violation
-        implying_sum = sum(
-            self.separation_model.getVal(var)
-            * self.point_to_be_separated.original_implying_values[implying_index][idx]
-            for implying_index, variables in self.sep_implying_variables.items()
-            for idx, var in enumerate(variables)
+        cut_to_separate = self.opt_model.createEmptyRowSepa(
+            self.separation_handler,
+            f"mpip{self.mpip.mpip_id}_x{self.nr_of_cuts}",
+            lhs=None,
+            rhs=len(self.sep_implying_variables) - 1,
         )
-
-        implied_sum = sum(
-            self.separation_model.getVal(var)
-            * self.point_to_be_separated.original_implied_values[idx]
-            for idx, var in enumerate(self.sep_implied_variables)
-        )
-
-        violation = implying_sum - implied_sum - len(self.sep_implying_variables) + 1
-        self.cut.violation = violation
-
-        # Create cut if violation is significant
-        if violation > s.StaticSettings.min_cut_violation:
-            self.cut.lhs = [
-                (
+        for implying_index, implying_variables in self.mpip.implying_variables.items():
+            for idx, var in enumerate(implying_variables):
+                self.opt_model.addVarToRow(
+                    cut_to_separate,
+                    var,
                     self.separation_model.getVal(
                         self.sep_implying_variables[implying_index][idx]
                     ),
-                    var,
                 )
-                for implying_index, implying_variables in self.mpip.implying_variables.items()
-                for idx, var in enumerate(implying_variables)
-            ] + [
-                (-self.separation_model.getVal(self.sep_implied_variables[idx]), var)
-                for idx, var in enumerate(self.mpip.implied_variables)
-            ]
-            self.cut.rhs = len(self.sep_implying_variables) - 1
-        else:
-            self.cut.rhs = 0
+        for idx, var in enumerate(self.mpip.implied_variables):
+            self.opt_model.addVarToRow(
+                cut_to_separate,
+                var,
+                -self.separation_model.getVal(self.sep_implied_variables[idx]),
+            )
+        self.opt_model.cacheRowExtensions(cut_to_separate)
+        if self.opt_model.isCutEfficacious(cut_to_separate):
+            self.nr_of_cuts += 1
+            self.opt_model.flushRowExtensions(cut_to_separate)
+            self.opt_model.addCut(cut_to_separate, forcecut=False)
+            self.opt_model.releaseRow(cut_to_separate)
+            return True
+        return False
 
-    def separate_solution(self) -> None:
+    def separate_solution(self) -> bool:
         """Extract solution point and initiate separation."""
         self.point_to_be_separated.implying_values = {
             implying_index: [self.opt_model.getVal(var) for var in variables]
@@ -399,7 +371,6 @@ class Separator:  # pylint: disable=too-many-instance-attributes
             self.opt_model.getVal(var) for var in self.mpip.implied_variables
         ]
         if self.point_to_be_separated.is_integer():
-            self.cut.rhs = 0
-        else:
-            self.point_to_be_separated.perturb()
-            self.separate_point()
+            return False
+        self.point_to_be_separated.perturb()
+        return self.separate_point()
