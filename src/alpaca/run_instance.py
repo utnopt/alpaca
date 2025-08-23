@@ -22,7 +22,7 @@ from alpaca.utils import inout as ut_io, datareading as ut_dr
 from alpaca.utils.logger import logger
 
 
-def run_single_optimization(args):
+def run_single_optimization(args):  # pylint: disable=too-many-statements
     """
     Function to execute a single optimization run for a given .osil file
     and specific settings.
@@ -59,41 +59,42 @@ def run_single_optimization(args):
 
         # Instantiate model data and the external solver
         model_data = mda.ModelData(user_settings)
+
+        mpip_handler = mph.MPIPHandler(model_data)
+
+        model_data.discretize_variables()
+        model_data.translate_expressions_to_constraints()
+
+        gurobi_pre_solver = mgu.ModelGurobi(model_data, user_settings)
+        gurobi_pre_solver.add_solution_to_mip_start()
+
         external_solver = (
             msc.ModelScip(model_data, user_settings)
             if user_settings.external_solver == "scip"
             else mgu.ModelGurobi(model_data, user_settings)
         )
 
-        # Initialize the solver
-        solver = slv.Solver(external_solver, user_settings)
-        mpip_handler = None
+        external_solver.add_mip_start()
 
-        # Handle MPIP features if enabled
+        solver = slv.Solver(external_solver, user_settings)
+
         if user_settings.feature_mpip:
-            mpip_handler = mph.MPIPHandler(
-                [
-                    model_data.expressions.nonlinear_expressions[expr_key]
-                    for expr_key in model_data.expressions.first_level_nonlinear_expression_keys
-                ],
-                model_data.expressions.bilinear_expressions,
-                model_data.expressions.multilinear_expressions,
-            )
-            if not mpip_handler.mpip_dict:
-                logger.warning(
-                    "MPIP feature enabled, but no MPIP instances found in the model."
+            mpip_handler.build_mpip_instances()
+            if user_settings.external_solver == "scip":
+                mpip_separation_handler = ses.SeparationHandler(
+                    mpip_handler, external_solver.opt_model
                 )
             else:
-                if user_settings.external_solver == "scip":
-                    mpip_separation_handler = ses.SeparationHandler(
-                        mpip_handler, external_solver.opt_model
-                    )
-                else:
-                    mpip_separation_handler = seg.SeparationHandler(
-                        mpip_handler, external_solver.opt_model
-                    )
-                solver.mpip_separation_handler = mpip_separation_handler
-
+                mpip_separation_handler = seg.SeparationHandler(
+                    mpip_handler, external_solver.opt_model
+                )
+            solver.mpip_separation_handler = mpip_separation_handler
+        if user_settings.external_solver == "gurobi":
+            solver.external_solver.opt_model.setParam("Seed", 42)
+        else:
+            solver.external_solver.opt_model.setIntParam(
+                "randomization/randomseedshift", 42
+            )
         # Solve the instance and capture the runtime
         solver.external_solver.opt_model.setIntParam(
             "randomization/randomseedshift", seed_value

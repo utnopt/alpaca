@@ -5,20 +5,23 @@
 """
 from typing import Iterator
 import itertools
-import random
+import numpy as np
 import pyscipopt as scip
 
 import alpaca.settings as s
 import alpaca.mpip.mpip as mp
+import alpaca.model_data.variable as var
 
 
 class SeparatedPoint:
     """Non-integer point to be separated with perturbation capabilities."""
 
     def __init__(self) -> None:
-        random.seed(0)
-        self.implying_values: dict[str, list[float]] = {}
-        self.implied_values: list[float] = []
+        np.random.seed(0)
+        self.implying_values: dict[str, np.ndarray] = {}
+        self.implied_values: np.ndarray = np.array([])
+        self.implying_values_randomized: dict[str, np.ndarray] = {}
+        self.implied_values_randomized: np.ndarray = np.array([])
         self.perturbation_range = (
             s.StaticSettings.feasibility_tolerance / 100,
             10 * s.StaticSettings.feasibility_tolerance,
@@ -40,13 +43,25 @@ class SeparatedPoint:
     def perturb(self) -> None:
         """Apply random perturbation to variable values."""
         # Perturb implying values
-        for values in self.implying_values.values():
-            for i, _ in enumerate(values):
-                values[i] += random.uniform(*self.perturbation_range)
+        for key, values in self.implying_values.items():
+            self.implying_values_randomized[key] = np.add(
+                np.random.uniform(
+                    s.StaticSettings.feasibility_tolerance / 100,
+                    10 * s.StaticSettings.feasibility_tolerance,
+                    len(values),
+                ),
+                values,
+            )
 
         # Perturb implied values
-        for i, _ in enumerate(self.implied_values):
-            self.implied_values[i] += random.uniform(*self.perturbation_range)
+        self.implied_values_randomized = np.add(
+            np.random.uniform(
+                s.StaticSettings.feasibility_tolerance / 100,
+                10 * s.StaticSettings.feasibility_tolerance,
+                len(self.implied_values),
+            ),
+            self.implied_values,
+        )
 
 
 class Separator:  # pylint: disable=too-many-instance-attributes
@@ -59,7 +74,7 @@ class Separator:  # pylint: disable=too-many-instance-attributes
         self._setup_separation_model()
         self.separation_handler = separation_handler
         self.mpip = mpip
-        self.relation_matrix_size = len(mpip.implied_variables)
+        self.relation_matrix_size = len(mpip.implied_variable.breakpoints) - 1
         self.sep_implying_variables: dict[str, list[scip.Variable]] = {}
         self.sep_implied_variables: list[scip.Variable] = []
         self.point_to_be_separated = SeparatedPoint()
@@ -80,7 +95,7 @@ class Separator:  # pylint: disable=too-many-instance-attributes
             implying_variables,
         ) in self._generate_implying_combinations():
             implied_variables = tuple(
-                self.mpip.implied_variables[implied_index]
+                self.mpip.implied_variable.pwl_variables_binary[implied_index]
                 for implied_index in self.mpip.relation[implying_indices]
             )
             self._add_mccormick_constraint(
@@ -89,10 +104,13 @@ class Separator:  # pylint: disable=too-many-instance-attributes
 
     def _generate_implying_combinations(
         self,
-    ) -> Iterator[tuple[tuple[int, ...], tuple[scip.Variable, ...]]]:
+    ) -> Iterator[tuple[tuple[int, ...], tuple[var.Variable, ...]]]:
         """Generate all combinations of implying variables."""
         for combination in itertools.product(
-            *[enumerate(d) for d in self.mpip.implying_variables.values()]
+            *[
+                enumerate(variable.pwl_variables_binary)
+                for variable in self.mpip.implying_variables.values()
+            ]
         ):
             indices, variables = zip(*combination)
             yield indices, variables
@@ -100,12 +118,13 @@ class Separator:  # pylint: disable=too-many-instance-attributes
     def _add_mccormick_constraint(
         self,
         implying_indices: tuple[int, ...],
-        implying_variables: tuple[scip.Variable, ...],
-        implied_variables: tuple[scip.Variable, ...],
+        implying_variables: tuple[var.Variable, ...],
+        implied_variables: tuple[var.Variable, ...],
     ) -> None:
         """Create individual McCormick constraint."""
         self.opt_model.addCons(
-            -sum(implying_variables) + sum(implied_variables)
+            -sum(variable.solver_variable for variable in implying_variables)
+            + sum(variable.solver_variable for variable in implied_variables)
             >= -len(self.mpip.implying_variables) + 1,
             name=f"corm_{self.mpip.mpip_id}_{implying_indices}".replace(" ", ""),
         )
@@ -116,10 +135,10 @@ class Separator:  # pylint: disable=too-many-instance-attributes
             implying_vars_index: {}
             for implying_vars_index in range(len(self.mpip.implying_variables))
         }
-        for implying_vars_index, implying_vars in enumerate(
+        for implying_vars_index, implying_var in enumerate(
             self.mpip.implying_variables.values()
         ):
-            for implying_index in range(len(implying_vars)):
+            for implying_index in range(len(implying_var.pwl_variables_binary)):
                 slice_dict[implying_vars_index][(implying_index,)] = set(
                     sum(
                         {
@@ -131,25 +150,32 @@ class Separator:  # pylint: disable=too-many-instance-attributes
                     )
                 )
         improved_slice_dict = self._improve_slice_dict(slice_dict)
+        added_cuts = 0
         for implying_vars_index, slice_dict_values in improved_slice_dict.items():
             for implying_indices, implied_indices in slice_dict_values.items():
+                added_cuts += 1
                 self.opt_model.addCons(
                     sum(
-                        list(self.mpip.implying_variables.values())[
-                            implying_vars_index
-                        ][implying_index]
+                        list(self.mpip.implying_variables.values())[implying_vars_index]
+                        .pwl_variables_binary[implying_index]
+                        .solver_variable
                         for implying_index in implying_indices
                     )
                     + sum(
-                        sum(other_implying_vars)
-                        for other_vars_index, other_implying_vars in enumerate(
+                        sum(
+                            variable.solver_variable
+                            for variable in other_implying_var.pwl_variables_binary
+                        )
+                        for other_vars_index, other_implying_var in enumerate(
                             self.mpip.implying_variables.values()
                         )
                         if other_vars_index != implying_vars_index
                     )
                     - sum(
                         (
-                            self.mpip.implied_variables[implied_index]
+                            self.mpip.implied_variable.pwl_variables_binary[
+                                implied_index
+                            ].solver_variable
                             for implied_index in implied_indices
                         )
                     )
@@ -193,57 +219,6 @@ class Separator:  # pylint: disable=too-many-instance-attributes
 
         return improved_slice_dict_values
 
-    def add_stair_constraints(self) -> None:
-        """Add stair constraints to optimization model."""
-        if len(self.mpip.implying_breakpoints) != 2:
-            return
-        self._add_stair_constraints_from_top()
-        self._add_stair_constraints_from_bottom()
-
-    def _add_stair_constraints_from_top(self) -> None:
-        coeff_dict_z = {}
-        for (x_index, y_index), implied_indices in self.mpip.relation.items():
-            for z_index in implied_indices:
-                coeff_dict_z[z_index] = max(
-                    self.relation_matrix_size - x_index - y_index,
-                    coeff_dict_z.get(z_index, 0),
-                )
-        self.opt_model.addCons(
-            sum(
-                (self.relation_matrix_size - i) * implying_var
-                for implying_vars in self.mpip.implying_variables.values()
-                for i, implying_var in enumerate(implying_vars)
-            )
-            - sum(
-                coeff * self.mpip.implied_variables[z_index]
-                for z_index, coeff in coeff_dict_z.items()
-            )
-            <= self.relation_matrix_size,
-            name=f"stair_top_{self.mpip.mpip_id}",
-        )
-
-    def _add_stair_constraints_from_bottom(self) -> None:
-        coeff_dict_z = {}
-        for (x_index, y_index), implied_indices in self.mpip.relation.items():
-            for z_index in implied_indices:
-                coeff_dict_z[z_index] = max(
-                    x_index + y_index + 2 - self.relation_matrix_size,
-                    coeff_dict_z.get(z_index, 0),
-                )
-        self.opt_model.addCons(
-            sum(
-                (i + 1) * implying_var
-                for implying_vars in self.mpip.implying_variables.values()
-                for i, implying_var in enumerate(implying_vars)
-            )
-            - sum(
-                coeff * self.mpip.implied_variables[z_index]
-                for z_index, coeff in coeff_dict_z.items()
-            )
-            <= self.relation_matrix_size,
-            name=f"stair_bottom_{self.mpip.mpip_id}",
-        )
-
     def add_multiple_choice_constraints(self) -> None:
         """Add all multiple choice constraints to optimization model."""
         self._add_implying_mc_constraints()
@@ -251,16 +226,24 @@ class Separator:  # pylint: disable=too-many-instance-attributes
 
     def _add_implying_mc_constraints(self) -> None:
         """Add multiple choice constraints for implying variables."""
-        for implying_index, implying_variables in self.mpip.implying_variables.items():
+        for implying_index, implying_variable in self.mpip.implying_variables.items():
             self.opt_model.addCons(
-                sum(implying_variables) == 1,
+                sum(
+                    variable.solver_variable
+                    for variable in implying_variable.pwl_variables_binary
+                )
+                == 1,
                 name=f"mc_implying_{implying_index}_{self.mpip.mpip_id}",
             )
 
     def _add_implied_mc_constraint(self) -> None:
         """Add multiple choice constraint for implied variables."""
         self.opt_model.addCons(
-            sum(self.mpip.implied_variables) == 1,
+            sum(
+                variable.solver_variable
+                for variable in self.mpip.implied_variable.pwl_variables_binary
+            )
+            == 1,
             name=f"mc_implied_{self.mpip.mpip_id}",
         )
 
@@ -271,18 +254,18 @@ class Separator:  # pylint: disable=too-many-instance-attributes
 
     def _add_separation_variables(self) -> None:
         """Create variables for separation model."""
-        for implying_index, implying_variables in self.mpip.implying_variables.items():
+        for implying_index, implying_variable in self.mpip.implying_variables.items():
             sep_implying_variables = []
-            for i in range(len(implying_variables)):
-                var = self.separation_model.addVar(
+            for i in range(len(implying_variable.pwl_variables_binary)):
+                variable = self.separation_model.addVar(
                     f"sep_implying_{implying_index}_{i}", ub=1, obj=1
                 )
-                sep_implying_variables.append(var)
+                sep_implying_variables.append(variable)
             self.sep_implying_variables[implying_index] = sep_implying_variables
 
         self.sep_implied_variables = [
             self.separation_model.addVar(f"sep_implied_{i}", ub=1, obj=-1)
-            for i in range(len(self.mpip.implied_variables))
+            for i in range(len(self.mpip.implied_variable.pwl_variables_binary))
         ]
 
     def _add_separation_constraints(self) -> None:
@@ -321,11 +304,11 @@ class Separator:  # pylint: disable=too-many-instance-attributes
         for (
             implying_index,
             implying_values,
-        ) in self.point_to_be_separated.implying_values.items():
+        ) in self.point_to_be_separated.implying_values_randomized.items():
             for idx, val in enumerate(implying_values):
                 new_objective += val * self.sep_implying_variables[implying_index][idx]
 
-        for idx, val in enumerate(self.point_to_be_separated.implied_values):
+        for idx, val in enumerate(self.point_to_be_separated.implied_values_randomized):
             new_objective -= val * self.sep_implied_variables[idx]
         self.separation_model.chgReoptObjective(new_objective, "maximize")
 
@@ -336,27 +319,38 @@ class Separator:  # pylint: disable=too-many-instance-attributes
             f"mpip{self.mpip.mpip_id}_x{self.nr_of_cuts}",
             lhs=None,
             rhs=len(self.sep_implying_variables) - 1,
+            local=False,
         )
-        for implying_index, implying_variables in self.mpip.implying_variables.items():
-            for idx, var in enumerate(implying_variables):
+        violation = -len(self.sep_implying_variables) + 1
+        for implying_index, implying_variable in self.mpip.implying_variables.items():
+            for idx, variable in enumerate(implying_variable.pwl_variables_binary):
+                solution_value = self.separation_model.getVal(
+                    self.sep_implying_variables[implying_index][idx]
+                )
                 self.opt_model.addVarToRow(
                     cut_to_separate,
-                    var,
-                    self.separation_model.getVal(
-                        self.sep_implying_variables[implying_index][idx]
-                    ),
+                    variable.solver_variable,
+                    solution_value,
                 )
-        for idx, var in enumerate(self.mpip.implied_variables):
+                violation += (
+                    solution_value
+                    * self.point_to_be_separated.implying_values[implying_index][idx]
+                )
+        for idx, variable in enumerate(self.mpip.implied_variable.pwl_variables_binary):
+            solution_value = self.separation_model.getVal(
+                self.sep_implied_variables[idx]
+            )
             self.opt_model.addVarToRow(
                 cut_to_separate,
-                var,
-                -self.separation_model.getVal(self.sep_implied_variables[idx]),
+                variable.solver_variable,
+                -solution_value,
             )
+            violation -= solution_value * self.point_to_be_separated.implied_values[idx]
         self.opt_model.cacheRowExtensions(cut_to_separate)
-        if self.opt_model.isCutEfficacious(cut_to_separate):
+        if violation > s.StaticSettings.min_cut_violation:
             self.nr_of_cuts += 1
             self.opt_model.flushRowExtensions(cut_to_separate)
-            self.opt_model.addCut(cut_to_separate, forcecut=False)
+            self.opt_model.addCut(cut_to_separate, forcecut=True)
             self.opt_model.releaseRow(cut_to_separate)
             return True
         return False
@@ -364,12 +358,20 @@ class Separator:  # pylint: disable=too-many-instance-attributes
     def separate_solution(self) -> bool:
         """Extract solution point and initiate separation."""
         self.point_to_be_separated.implying_values = {
-            implying_index: [self.opt_model.getVal(var) for var in variables]
-            for implying_index, variables in self.mpip.implying_variables.items()
+            implying_index: np.array(
+                [
+                    self.opt_model.getVal(v.solver_variable)
+                    for v in variable.pwl_variables_binary
+                ]
+            )
+            for implying_index, variable in self.mpip.implying_variables.items()
         }
-        self.point_to_be_separated.implied_values = [
-            self.opt_model.getVal(var) for var in self.mpip.implied_variables
-        ]
+        self.point_to_be_separated.implied_values = np.array(
+            [
+                self.opt_model.getVal(v.solver_variable)
+                for v in self.mpip.implied_variable.pwl_variables_binary
+            ]
+        )
         if self.point_to_be_separated.is_integer():
             return False
         self.point_to_be_separated.perturb()

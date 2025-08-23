@@ -51,6 +51,9 @@ class Variable:  # pylint: disable=too-many-instance-attributes
         self.pwl_variables_binary = []
         self.pwl_variables_continuous = []
         self.pwl_constraints = []
+        self.is_mpip_implied = False
+        self.is_mpip_implying = False
+        self.mip_start = 0.0
 
     def add_nonlinearity_to_occurring_in(self, nonlinearity_type: str) -> None:
         """Save in which types of nonlinearities the variable occurs.
@@ -79,7 +82,6 @@ class Variable:  # pylint: disable=too-many-instance-attributes
         """Link continuous variables to the breakpoints.
 
         Args:
-            number_of_breakpoints: Number of discretization points created.
             pwl_method: PWL method to use.
         """
         if pwl_method == "multiple-choice":

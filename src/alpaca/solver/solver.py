@@ -47,8 +47,6 @@ class Solver:
     def _activate_mpip_features(self):
         if self.settings.feature_mpip_mccormick:
             self.mpip_separation_handler.add_mc_cormick_constraints()
-        if self.settings.feature_mpip_stair:
-            self.mpip_separation_handler.add_stair_constraints()
         if self.settings.feature_mpip_stripe:
             self.mpip_separation_handler.add_stripe_constraints()
 

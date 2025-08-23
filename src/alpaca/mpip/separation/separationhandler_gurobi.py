@@ -37,11 +37,6 @@ class SeparationHandler:
         for mpip in self.mpip_handler.mpip_dict.values():
             mpip.separator.add_stripe_constraints()
 
-    def add_stair_constraints(self) -> None:
-        """Add stair constraints for all MPIPs."""
-        for mpip in self.mpip_handler.mpip_dict.values():
-            mpip.separator.add_stair_constraints()
-
     def separate_solution(self) -> int:
         """Perform separation for current solution."""
         self.iteration += 1
@@ -65,6 +60,7 @@ class SeparationHandler:
 
         for cut in self.cut_pool:
             if cut.violation >= min_violation:
+                print(cut.lhs)
                 self.opt_model.cbCut(cut.lhs <= cut.rhs)
                 self.nr_added_cuts += 1
 

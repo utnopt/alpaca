@@ -264,8 +264,6 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
                 "Model contains variables with infinite bounds. "
                 "Please set finite bounds for all variables."
             )
-        self._discretize_variables()
-        self._translate_expressions_to_constraints()
 
     def _read_osil_file(self) -> BeautifulSoup:
         """Reads the OSiL file and returns its parsed XML content.
@@ -532,7 +530,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
                 if constraint.con_type == "==":
                     constraint.propagate_variable_bounds()
 
-    def _discretize_variables(
+    def discretize_variables(
         self,
     ) -> None:
         """Creates piecewise linear approximations for variables marked for discretization."""
@@ -540,8 +538,24 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         pwl_constraints = []
         for variable in self.variables.values():
             if variable.is_discretized and variable.var_type != "B":
+                breakpoints_sparsity_factor = (
+                    1
+                    if variable.is_mpip_implied == variable.is_mpip_implying
+                    else (
+                        1 + StaticSettings.mpip_sparsity
+                        if variable.is_mpip_implying
+                        else 1 - StaticSettings.mpip_sparsity
+                    )
+                )
                 variable.add_binary_pwl(
-                    self.settings.number_of_breakpoints, self.settings.pwl_method
+                    max(
+                        2,
+                        round(
+                            breakpoints_sparsity_factor
+                            * self.settings.number_of_breakpoints
+                        ),
+                    ),
+                    self.settings.pwl_method,
                 )
                 variable.add_continuous_pwl(self.settings.pwl_method)
                 pwl_variables.extend(
@@ -553,7 +567,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         for constraint in pwl_constraints:
             self.add_constraint(constraint)
 
-    def _translate_expressions_to_constraints(
+    def translate_expressions_to_constraints(
         self,
     ) -> None:
         """Converts expression objects into their equivalent constraint representations."""

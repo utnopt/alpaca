@@ -1,9 +1,9 @@
 {
 "solver_time_limit": 7200,
-  "osil_file_name": "ex6_2_8",
+  "osil_file_name": "ex7_2_1",
   "external_solver": "scip",
   "number_of_breakpoints": 10,
-  "feature/mpip/separation": 0,
+  "feature/mpip/separation": 1,
   "feature/mpip/mccormick": 0,
   "feature/mpip/stair": 0,
   "feature/mpip/stripe": 0,

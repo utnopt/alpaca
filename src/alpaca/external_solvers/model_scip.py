@@ -19,6 +19,15 @@ class ModelScip:
         self.settings = settings
         self._build_optimization_model()
 
+    def add_mip_start(self):
+        """Add MIP start to model."""
+        start_solution = self.opt_model.createSol()
+        for variable in self.data.variables.values():
+            self.opt_model.setSolVal(
+                start_solution, variable.solver_variable, variable.mip_start
+            )
+        self.opt_model.addSol(start_solution)
+
     def _build_optimization_model(self):
         """
         Buildup optimization model.
@@ -78,4 +87,10 @@ class ModelScip:
         """Set parameters for the SCIP model."""
         self.opt_model.setRealParam("limits/time", self.settings.solver_time_limit)
         self.opt_model.setParam("parallel/maxnthreads", 4)
+        self.opt_model.setParam("numerics/feastol", 1e-05)
+        all_params = self.opt_model.getParams()
+        for param in all_params:
+            if param.startswith("heuristics/") and param.endswith("/freq"):
+                self.opt_model.setParam(param, -1)
+        # self.opt_model.setParam("separating/maxroundsroot", 10)
         self.opt_model.hideOutput(True)

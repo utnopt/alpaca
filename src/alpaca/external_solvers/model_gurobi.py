@@ -14,10 +14,10 @@ class ModelGurobi:
 
     def __init__(self, data: mda.ModelData, settings: UserSettings):
         env = gp.Env(empty=True)
-        env.setParam("LogToConsole", 0)
+        env.setParam("LogToConsole", 1)
         env.start()
         self.opt_model = gp.Model(env=env)
-        self.opt_model.setParam("OutputFlag", 0)
+        self.opt_model.setParam("OutputFlag", 1)
         self.data = data
         self.settings = settings
         self._build_optimization_model()
@@ -31,6 +31,17 @@ class ModelGurobi:
         self._add_constraints()
         self._add_objective()
         self._set_parameters()
+
+    def add_solution_to_mip_start(self):
+        """Add current solution to MIP start."""
+        self.opt_model.optimize()
+        for variable in self.data.variables.values():
+            variable.mip_start = variable.solver_variable.x
+
+    def add_mip_start(self):
+        """Add MIP start to model."""
+        for variable in self.data.variables.values():
+            variable.solver_variable.start = variable.mip_start
 
     def _add_variables(self):
         for variable in self.data.variables.values():
