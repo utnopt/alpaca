@@ -14,10 +14,10 @@ class ModelGurobi:
 
     def __init__(self, data: mda.ModelData, settings: UserSettings):
         env = gp.Env(empty=True)
-        env.setParam("LogToConsole", 1)
+        env.setParam("LogToConsole", 0)
         env.start()
         self.opt_model = gp.Model(env=env)
-        self.opt_model.setParam("OutputFlag", 1)
+        self.opt_model.setParam("OutputFlag", 0)
         self.data = data
         self.settings = settings
         self._build_optimization_model()
