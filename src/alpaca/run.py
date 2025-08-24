@@ -70,10 +70,8 @@ def run_optimization():
             )
         runtime = solver.solve_instance()
 
-        print("\n" + "=" * 30)
-        print("SOLVER STATISTICS")
-        print("=" * 30)
-        solver.external_solver.opt_model.printStatistics()
+        if user_settings.external_solver == "scip":
+            solver.external_solver.opt_model.printStatistics()
 
         logger.info(
             "Optimization finished successfully. Runtime: %.2f seconds", runtime
