@@ -22,10 +22,6 @@ class SeparatedPoint:
         self.implied_values: np.ndarray = np.array([])
         self.implying_values_randomized: dict[str, np.ndarray] = {}
         self.implied_values_randomized: np.ndarray = np.array([])
-        self.perturbation_range = (
-            s.StaticSettings.feasibility_tolerance / 100,
-            10 * s.StaticSettings.feasibility_tolerance,
-        )
 
     def is_integer(self) -> bool:
         """Check if all variables are integer within tolerance."""
@@ -47,7 +43,7 @@ class SeparatedPoint:
             self.implying_values_randomized[key] = np.add(
                 np.random.uniform(
                     s.StaticSettings.feasibility_tolerance / 100,
-                    10 * s.StaticSettings.feasibility_tolerance,
+                    s.StaticSettings.feasibility_tolerance,
                     len(values),
                 ),
                 values,
@@ -57,7 +53,7 @@ class SeparatedPoint:
         self.implied_values_randomized = np.add(
             np.random.uniform(
                 s.StaticSettings.feasibility_tolerance / 100,
-                10 * s.StaticSettings.feasibility_tolerance,
+                s.StaticSettings.feasibility_tolerance,
                 len(self.implied_values),
             ),
             self.implied_values,

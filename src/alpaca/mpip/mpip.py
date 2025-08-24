@@ -5,6 +5,7 @@
 import itertools
 import bisect
 import pyscipopt as scip
+import numpy as np
 
 import alpaca.settings as s
 import alpaca.model_data.variable as var
@@ -29,8 +30,38 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
 
     def build_mpip(self) -> None:
         """Build MPIP structure."""
-        self._add_implying_function_to_interval_lp()
         self._calculate_relation_function()
+
+    def build_implied_values_list(self, num_grid_points=100) -> None:
+        """Build list of implied values for domain of implying variables.
+        """
+        implying_domains = [
+            np.linspace(variable.lb, variable.ub, num_grid_points)
+            for variable in self.implying_variables.values()
+        ]
+
+        # Create a grid of all possible combinations of values from the domains
+        value_grid = itertools.product(*implying_domains)
+
+        # Get the SCIP variables in the correct order to match the domains
+        scip_vars = [
+            self.interval_lp_implying_vars[name] for name in self.implying_variables
+        ]
+        # Iterate over each point (combination of values) in the grid
+        for point in value_grid:
+            # Fix the implying variables to the values in the current grid point
+            for variable, val in zip(scip_vars, point):
+                self.interval_lp.chgVarLb(variable, val)
+                self.interval_lp.chgVarUb(variable, val)
+
+            # Solve the trivial problem to calculate the value of the implied variable
+            self.interval_lp.setObjective(self.interval_lp_implied_var, "minimize")
+            self.interval_lp.optimize()
+
+            if self.interval_lp.getStatus() == "optimal":
+                evaluated_value = self.interval_lp.getObjVal()
+                self.implied_variable.implied_values_list.append(evaluated_value)
+            self.interval_lp.freeTransform()
 
     def add_implied_id(
         self,
@@ -85,9 +116,6 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
             len(self.implied_variable.breakpoints) - 2,
         )
         return tuple(range(idx1, idx2 + 1))
-
-    def _add_implying_function_to_interval_lp(self) -> None:
-        self.interval_lp.addCons(self.interval_lp_implied_var == self.implying_function)
 
     def _implied_interval_scip(
         self, intervals: dict[str, tuple[float, float]]

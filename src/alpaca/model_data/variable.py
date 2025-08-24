@@ -54,6 +54,7 @@ class Variable:  # pylint: disable=too-many-instance-attributes
         self.is_mpip_implied = False
         self.is_mpip_implying = False
         self.mip_start = 0.0
+        self.implied_values_list: list[float] = []
 
     def add_nonlinearity_to_occurring_in(self, nonlinearity_type: str) -> None:
         """Save in which types of nonlinearities the variable occurs.
@@ -74,9 +75,43 @@ class Variable:  # pylint: disable=too-many-instance-attributes
             number_of_breakpoints: Number of discretization points to create.
             pwl_method: PWL method to use.
         """
-        self.breakpoints = np.linspace(self.lb, self.ub, number_of_breakpoints)
+        self.breakpoints = self._get_breakpoints(number_of_breakpoints)
         if pwl_method == "multiple-choice":
             self._add_binaries_multiple_choice()
+
+    def _get_breakpoints(self, nr_of_breakpoints: int) -> list[float]:
+        if (
+            self.is_mpip_implying
+            or not self.is_mpip_implied
+            or not self.implied_values_list
+        ):
+            return np.linspace(self.lb, self.ub, nr_of_breakpoints).tolist()
+
+        if nr_of_breakpoints <= 2:
+            return np.linspace(self.lb, self.ub, nr_of_breakpoints).tolist()
+
+        implied_values = np.asarray(self.implied_values_list)
+        num_points = implied_values.shape[0]
+
+        # Determine the indices of the intermediate breakpoints
+        num_intervals = nr_of_breakpoints - 1
+        points_indices = np.arange(1, nr_of_breakpoints - 1)
+        indices = np.round(points_indices * (num_points - 1) / num_intervals).astype(
+            int
+        )
+
+        # Find the values at the specified indices without a full sort
+        # np.partition is an O(N) operation on average
+        partitioned_values = np.partition(implied_values, np.unique(indices))
+
+        # Extract the breakpoint values from the partitioned array
+        breakpoints_from_list = partitioned_values[np.unique(indices)]
+
+        # Combine with lb and ub, ensuring uniqueness and correct sorting
+        final_breakpoints = {self.lb, self.ub}
+        final_breakpoints.update(breakpoints_from_list)
+
+        return sorted(list(final_breakpoints))
 
     def add_continuous_pwl(self, pwl_method: str) -> None:
         """Link continuous variables to the breakpoints.

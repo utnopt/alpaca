@@ -4,10 +4,9 @@
 @authors: kuen,
 """
 from typing import Iterator
-import copy
 import dataclasses
 import itertools
-import random
+import numpy as np
 import gurobipy as gp
 
 import alpaca.settings as s
@@ -28,15 +27,11 @@ class SeparatedPoint:
     """Non-integer point to be separated with perturbation capabilities."""
 
     def __init__(self) -> None:
-        random.seed(0)
-        self.implying_values: dict[str, list[float]] = {}
-        self.original_implying_values: dict[str, list[float]] = {}
-        self.implied_values: list[float] = []
-        self.original_implied_values: list[float] = []
-        self.perturbation_range = (
-            s.StaticSettings.feasibility_tolerance / 100,
-            10 * s.StaticSettings.feasibility_tolerance,
-        )
+        np.random.seed(0)
+        self.implying_values: dict[str, np.ndarray] = {}
+        self.implied_values: np.ndarray = np.array([])
+        self.implying_values_randomized: dict[str, np.ndarray] = {}
+        self.implied_values_randomized: np.ndarray = np.array([])
 
     def is_integer(self) -> bool:
         """Check if all variables are integer within tolerance."""
@@ -53,17 +48,26 @@ class SeparatedPoint:
 
     def perturb(self) -> None:
         """Apply random perturbation to variable values."""
-        self.original_implying_values = copy.deepcopy(self.implying_values)
-        self.original_implied_values = copy.deepcopy(self.implied_values)
-
         # Perturb implying values
-        for values in self.implying_values.values():
-            for i, _ in enumerate(values):
-                values[i] += random.uniform(*self.perturbation_range)
+        for key, values in self.implying_values.items():
+            self.implying_values_randomized[key] = np.add(
+                np.random.uniform(
+                    s.StaticSettings.feasibility_tolerance / 100,
+                    s.StaticSettings.feasibility_tolerance,
+                    len(values),
+                ),
+                values,
+            )
 
         # Perturb implied values
-        for i, _ in enumerate(self.implied_values):
-            self.implied_values[i] += random.uniform(*self.perturbation_range)
+        self.implied_values_randomized = np.add(
+            np.random.uniform(
+                s.StaticSettings.feasibility_tolerance / 100,
+                s.StaticSettings.feasibility_tolerance,
+                len(self.implied_values),
+            ),
+            self.implied_values,
+        )
 
 
 class Separator:  # pylint: disable=too-many-instance-attributes
@@ -298,31 +302,29 @@ class Separator:  # pylint: disable=too-many-instance-attributes
         for (
             implying_index,
             implying_values,
-        ) in self.point_to_be_separated.implying_values.items():
+        ) in self.point_to_be_separated.implying_values_randomized.items():
             for idx, val in enumerate(implying_values):
                 self.sep_implying_variables[implying_index][idx].obj = -val
 
-        for idx, val in enumerate(self.point_to_be_separated.implied_values):
+        for idx, val in enumerate(self.point_to_be_separated.implied_values_randomized):
             self.sep_implied_variables[idx].obj = val
 
     def _generate_cut(self) -> None:
         """Generate cut based on separation solution."""
         # Calculate violation
         implying_sum = sum(
-            variable.X
-            * self.point_to_be_separated.original_implying_values[implying_index][idx]
+            variable.X * self.point_to_be_separated.implying_values[implying_index][idx]
             for implying_index, variables in self.sep_implying_variables.items()
             for idx, variable in enumerate(variables)
         )
 
         implied_sum = sum(
-            variable.X * self.point_to_be_separated.original_implied_values[idx]
+            variable.X * self.point_to_be_separated.implied_values[idx]
             for idx, variable in enumerate(self.sep_implied_variables)
         )
 
         violation = implying_sum - implied_sum - len(self.sep_implying_variables) + 1
         self.cut.violation = violation
-        print("Violation:", violation)
 
         # Create cut if violation is significant
         if violation > s.StaticSettings.min_cut_violation:
@@ -345,16 +347,20 @@ class Separator:  # pylint: disable=too-many-instance-attributes
     def separate_solution(self) -> None:
         """Extract solution point and initiate separation."""
         self.point_to_be_separated.implying_values = {
-            implying_index: [
-                self.opt_model.cbGetNodeRel(variable.solver_variable)
-                for variable in variable.pwl_variables_binary
-            ]
+            implying_index: np.array(
+                [
+                    self.opt_model.cbGetNodeRel(variable.solver_variable)
+                    for variable in variable.pwl_variables_binary
+                ]
+            )
             for implying_index, variable in self.mpip.implying_variables.items()
         }
-        self.point_to_be_separated.implied_values = [
-            self.opt_model.cbGetNodeRel(variable.solver_variable)
-            for variable in self.mpip.implied_variable.pwl_variables_binary
-        ]
+        self.point_to_be_separated.implied_values = np.array(
+            [
+                self.opt_model.cbGetNodeRel(variable.solver_variable)
+                for variable in self.mpip.implied_variable.pwl_variables_binary
+            ]
+        )
         if self.point_to_be_separated.is_integer():
             print("Integer solution, no cut generated.")
             self.cut.rhs = 0

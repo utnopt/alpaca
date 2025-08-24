@@ -48,6 +48,10 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
             mpip.implied_variable.is_mpip_implied = True
             for implying_variable in mpip.implying_variables.values():
                 implying_variable.is_mpip_implying = True
+            mpip.interval_lp.addCons(
+                mpip.interval_lp_implied_var == mpip.implying_function
+            )
+            mpip.build_implied_values_list()
 
     def _find_mpip_instances_in_nonlinear_expressions(self) -> None:
         """Extract mpip instances from nonlinear expression trees."""

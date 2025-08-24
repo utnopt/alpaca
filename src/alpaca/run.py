@@ -38,8 +38,8 @@ def run_optimization():
         model_data.discretize_variables()
         model_data.translate_expressions_to_constraints()
 
-        gurobi_pre_solver = mgu.ModelGurobi(model_data, user_settings)
-        gurobi_pre_solver.add_solution_to_mip_start()
+        # gurobi_pre_solver = mgu.ModelGurobi(model_data, user_settings)
+        # gurobi_pre_solver.add_solution_to_mip_start()
 
         external_solver = (
             msc.ModelScip(model_data, user_settings)
@@ -47,7 +47,7 @@ def run_optimization():
             else mgu.ModelGurobi(model_data, user_settings)
         )
 
-        external_solver.add_mip_start()
+        # external_solver.add_mip_start()
 
         solver = slv.Solver(external_solver, user_settings)
 

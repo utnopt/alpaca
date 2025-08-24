@@ -33,7 +33,7 @@ mkdir -p "$EXPORT_PATH"
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 RESULTS_FILE="$EXPORT_PATH/results_${TIMESTAMP}.csv"
 # Added 'seed_value' to the CSV header
-echo "number_of_breakpoints,test_case,osil_file_name,runtime,gap,nodes,cuts,seed_value" > "$RESULTS_FILE"
+echo "number_of_breakpoints,test_case,osil_file_name,runtime,gap,cuts,seed_value" > "$RESULTS_FILE"
 
 # --- Job Definition ---
 

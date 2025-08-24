@@ -65,8 +65,8 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
         model_data.discretize_variables()
         model_data.translate_expressions_to_constraints()
 
-        gurobi_pre_solver = mgu.ModelGurobi(model_data, user_settings)
-        gurobi_pre_solver.add_solution_to_mip_start()
+        # gurobi_pre_solver = mgu.ModelGurobi(model_data, user_settings)
+        # gurobi_pre_solver.add_solution_to_mip_start()
 
         external_solver = (
             msc.ModelScip(model_data, user_settings)
@@ -74,7 +74,7 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
             else mgu.ModelGurobi(model_data, user_settings)
         )
 
-        external_solver.add_mip_start()
+        # external_solver.add_mip_start()
 
         solver = slv.Solver(external_solver, user_settings)
 
@@ -90,18 +90,13 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
                 )
             solver.mpip_separation_handler = mpip_separation_handler
         if user_settings.external_solver == "gurobi":
-            solver.external_solver.opt_model.setParam("Seed", 42)
+            solver.external_solver.opt_model.setParam("Seed", seed_value)
         else:
             solver.external_solver.opt_model.setIntParam(
-                "randomization/randomseedshift", 42
+                    "randomization/randomseedshift", seed_value
             )
-        # Solve the instance and capture the runtime
-        solver.external_solver.opt_model.setIntParam(
-            "randomization/randomseedshift", seed_value
-        )
         runtime = solver.solve_instance()
-        gap = round(solver.external_solver.opt_model.getGap(), 4)
-        nr_nodes = solver.external_solver.opt_model.getNNodes()
+        gap = round(solver.external_solver.opt_model.MIPGap, 4)
         nr_cuts = (
             0
             if not user_settings.feature_mpip
@@ -117,7 +112,7 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
         # Format: number_of_breakpoints,test_case,osil_file_name,runtime,gap
         print(
             f"{args.breakpoints},{args.test_case},{osil_file_name},"
-            f"{runtime},{gap},{nr_nodes},{nr_cuts},{seed_value}"
+            f"{runtime},{gap},{nr_cuts},{seed_value}"
         )
 
     except Exception as ex:  # pylint: disable=broad-exception-caught
