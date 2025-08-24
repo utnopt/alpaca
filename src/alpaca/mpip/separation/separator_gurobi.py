@@ -362,7 +362,6 @@ class Separator:  # pylint: disable=too-many-instance-attributes
             ]
         )
         if self.point_to_be_separated.is_integer():
-            print("Integer solution, no cut generated.")
             self.cut.rhs = 0
         else:
             self.point_to_be_separated.perturb()

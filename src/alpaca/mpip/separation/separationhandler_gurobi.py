@@ -60,7 +60,6 @@ class SeparationHandler:
 
         for cut in self.cut_pool:
             if cut.violation >= min_violation:
-                print(cut.lhs)
                 self.opt_model.cbCut(cut.lhs <= cut.rhs)
                 self.nr_added_cuts += 1
 
