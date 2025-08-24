@@ -56,7 +56,6 @@ class SeparationHandler:
         """Add cuts meeting violation threshold to model."""
         max_violation = max(cut.violation for cut in self.cut_pool)
         min_violation = s.StaticSettings.max_violation_relation * max_violation
-        self.nr_added_cuts = 0
 
         for cut in self.cut_pool:
             if cut.violation >= min_violation:

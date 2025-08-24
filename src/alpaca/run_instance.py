@@ -77,6 +77,7 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
         # external_solver.add_mip_start()
 
         solver = slv.Solver(external_solver, user_settings)
+        mpip_separation_handler = None
 
         if user_settings.feature_mpip:
             mpip_handler.build_mpip_instances()
@@ -100,9 +101,7 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
         nr_cuts = (
             0
             if not user_settings.feature_mpip
-            else sum(
-                mpip.separator.nr_of_cuts for mpip in mpip_handler.mpip_dict.values()
-            )
+            else mpip_separation_handler.nr_added_cuts
         )
 
         # Log and print the result in the specified CSV format for the shell script
