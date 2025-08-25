@@ -1,6 +1,6 @@
 {
 "solver_time_limit": 7200,
-  "osil_file_name": "tls6",
+  "osil_file_name": "ex8_6_2",
   "external_solver": "scip",
   "number_of_breakpoints": 10,
   "feature/mpip/separation": 0,

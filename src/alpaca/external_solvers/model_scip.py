@@ -93,4 +93,4 @@ class ModelScip:
             if param.startswith("heuristics/") and param.endswith("/freq"):
                 self.opt_model.setParam(param, -1)
         # self.opt_model.setParam("separating/maxroundsroot", 10)
-        self.opt_model.hideOutput(True)
+        # self.opt_model.hideOutput(True)
