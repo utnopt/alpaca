@@ -52,5 +52,7 @@ class SeparationHandler(scip.Sepa):
 
     def sepaexeclp(self):
         """Run callback event."""
+        if self.model.getDepth() == 0:
+            return {"result": SCIP_RESULT.DIDNOTFIND}
         self.opt_model = self.model
         return self.separate_solution()
