@@ -76,7 +76,7 @@ def run_optimization():
             solver.external_solver.opt_model.setParam("Seed", 42)
         else:
             solver.external_solver.opt_model.setIntParam(
-                "randomization/randomseedshift", 42
+                "randomization/randomseedshift", 57
             )
         runtime = solver.solve_instance()
 

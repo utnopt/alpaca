@@ -88,9 +88,9 @@ class ModelScip:
         self.opt_model.setRealParam("limits/time", self.settings.solver_time_limit)
         self.opt_model.setParam("parallel/maxnthreads", 4)
         self.opt_model.setParam("numerics/feastol", 1e-05)
-        all_params = self.opt_model.getParams()
-        for param in all_params:
-            if param.startswith("heuristics/") and param.endswith("/freq"):
-                self.opt_model.setParam(param, -1)
+        # all_params = self.opt_model.getParams()
+        # for param in all_params:
+        #     if param.startswith("heuristics/") and param.endswith("/freq"):
+        #         self.opt_model.setParam(param, -1)
         # self.opt_model.setParam("separating/maxroundsroot", 10)
         # self.opt_model.hideOutput(True)

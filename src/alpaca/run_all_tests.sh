@@ -51,7 +51,7 @@ for dir in "$IMPORT_PATH"/test_instances_*; do
     # Find all .osil files in the directory
     while IFS= read -r file; do
         # For each file and each test case, create 5 jobs with different seeds.
-        for seed in $(seq 1 1); do
+        for seed in $(seq 1 5); do
             jobs+=("$file $num_breakpoints MPIP 1 $seed")
             jobs+=("$file $num_breakpoints Standard 0 $seed")
         done
