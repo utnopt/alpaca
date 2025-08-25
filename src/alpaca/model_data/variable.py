@@ -80,6 +80,8 @@ class Variable:  # pylint: disable=too-many-instance-attributes
             self._add_binaries_multiple_choice()
 
     def _get_breakpoints(self, nr_of_breakpoints: int) -> list[float]:
+        if self.ub == self.lb:
+            return [self.lb]
         if (
             self.is_mpip_implying
             or not self.is_mpip_implied

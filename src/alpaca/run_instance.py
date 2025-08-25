@@ -48,7 +48,6 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
         # --- Override settings based on command-line arguments ---
         user_settings.osil_file_name = osil_file_name
         user_settings.number_of_breakpoints = args.breakpoints
-        user_settings.feature_mpip = int(args.mpip_stripe)
         user_settings.feature_mpip_separation = int(args.mpip_stripe)
         seed_value = int(args.seed_value)
         # --- End of overrides ---
@@ -65,8 +64,15 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
         model_data.discretize_variables()
         model_data.translate_expressions_to_constraints()
 
-        # gurobi_pre_solver = mgu.ModelGurobi(model_data, user_settings)
-        # gurobi_pre_solver.add_solution_to_mip_start()
+        gurobi_pre_solver = mgu.ModelGurobi(model_data, user_settings)
+        mpip_handler_pre_solve = mph.MPIPHandler(model_data)
+        mpip_handler_pre_solve.build_mpip_instances()
+        mpip_separation_handler_pre_solve = seg.SeparationHandler(
+            mpip_handler_pre_solve, gurobi_pre_solver.opt_model
+        )
+        mpip_separation_handler_pre_solve.add_mc_cormick_constraints()
+
+        gurobi_pre_solver.add_solution_to_mip_start()
 
         external_solver = (
             msc.ModelScip(model_data, user_settings)
@@ -74,7 +80,7 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
             else mgu.ModelGurobi(model_data, user_settings)
         )
 
-        # external_solver.add_mip_start()
+        external_solver.add_mip_start()
 
         solver = slv.Solver(external_solver, user_settings)
         mpip_separation_handler = None
@@ -97,12 +103,17 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
                     "randomization/randomseedshift", seed_value
             )
         runtime = solver.solve_instance()
-        gap = round(solver.external_solver.opt_model.MIPGap, 4)
-        nr_cuts = (
-            0
-            if not user_settings.feature_mpip
-            else mpip_separation_handler.nr_added_cuts
-        )
+        if user_settings.external_solver == "gurobi":
+            gap = round(solver.external_solver.opt_model.MIPGap, 4)
+            nr_cuts = (
+                0
+                if not user_settings.feature_mpip
+                else mpip_separation_handler.nr_added_cuts
+            )
+        else:
+            gap = round(solver.external_solver.opt_model.getGap(), 4)
+            nr_cuts = sum(mpip.separator.nr_of_cuts for mpip in mpip_handler.mpip_dict.values())
+
 
         # Log and print the result in the specified CSV format for the shell script
         logger.info(
