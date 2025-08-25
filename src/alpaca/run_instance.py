@@ -61,6 +61,9 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
 
         mpip_handler = mph.MPIPHandler(model_data)
 
+        if len(mpip_handler.mpip_dict) == 0:
+            raise ValueError("No mpip found in the model.")
+
         model_data.discretize_variables()
         model_data.translate_expressions_to_constraints()
 
