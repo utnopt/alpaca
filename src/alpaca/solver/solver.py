@@ -56,7 +56,7 @@ class Solver:
                 self.mpip_separation_handler,
                 "python_mpip",
                 "generates mpip_cuts",
-                priority=1000,
+                priority=536870911,
                 freq=1,
             )
 
