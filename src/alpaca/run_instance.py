@@ -68,15 +68,15 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
         model_data.discretize_variables()
         model_data.translate_expressions_to_constraints()
 
-        # gurobi_pre_solver = mgu.ModelGurobi(model_data, user_settings)
+        gurobi_pre_solver = mgu.ModelGurobi(model_data, user_settings)
         # mpip_handler_pre_solve = mph.MPIPHandler(model_data)
         # mpip_handler_pre_solve.build_mpip_instances()
         # mpip_separation_handler_pre_solve = seg.SeparationHandler(
         #     mpip_handler_pre_solve, gurobi_pre_solver.opt_model
         # )
         # mpip_separation_handler_pre_solve.add_mc_cormick_constraints()
-        #
-        # gurobi_pre_solver.add_solution_to_mip_start()
+
+        gurobi_pre_solver.add_solution_to_mip_start()
 
         external_solver = (
             msc.ModelScip(model_data, user_settings)
@@ -84,7 +84,7 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
             else mgu.ModelGurobi(model_data, user_settings)
         )
 
-        # external_solver.add_mip_start()
+        external_solver.add_mip_start()
 
         solver = slv.Solver(external_solver, user_settings)
         mpip_separation_handler = None
