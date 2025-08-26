@@ -116,7 +116,8 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
             )
         else:
             gap = round(solver.external_solver.opt_model.getGap(), 4)
-            nr_cuts = sum(mpip.separator.nr_of_cuts for mpip in mpip_handler.mpip_dict.values())
+            nr_cuts = 0 if not user_settings.feature_mpip else sum(
+                mpip.separator.nr_of_cuts for mpip in mpip_handler.mpip_dict.values())
 
         # Log and print the result in the specified CSV format for the shell script
         logger.info(
