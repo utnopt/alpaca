@@ -20,6 +20,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         self.implying_variables: dict[str, var.Variable] = {}
         self.implied_variable: var.Variable | None = None
         self.relation = {}
+        self.relation_ratio = 0.0
         self.implying_function = scip.Expr()
         self.interval_lp = scip.Model()
         self.interval_lp.hideOutput()
@@ -32,9 +33,14 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         """Build MPIP structure."""
         self._calculate_relation_function()
 
+    def calculate_relation_ratio(self) -> None:
+        """Calculate relation ratio."""
+        self.relation_ratio = sum(
+            len(implied_indices) for implied_indices in self.relation.values()
+        ) / len(self.relation)
+
     def build_implied_values_list(self, num_grid_points=100) -> None:
-        """Build list of implied values for domain of implying variables.
-        """
+        """Build list of implied values for domain of implying variables."""
         implying_domains = [
             np.linspace(variable.lb, variable.ub, num_grid_points)
             for variable in self.implying_variables.values()

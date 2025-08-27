@@ -42,12 +42,6 @@ def run_optimization():
         model_data.translate_expressions_to_constraints()
 
         gurobi_pre_solver = mgu.ModelGurobi(model_data, user_settings)
-        mpip_handler_pre_solve = mph.MPIPHandler(model_data)
-        mpip_handler_pre_solve.build_mpip_instances()
-        mpip_separation_handler_pre_solve = seg.SeparationHandler(
-            mpip_handler_pre_solve, gurobi_pre_solver.opt_model
-        )
-        mpip_separation_handler_pre_solve.add_mc_cormick_constraints()
 
         gurobi_pre_solver.add_solution_to_mip_start()
 

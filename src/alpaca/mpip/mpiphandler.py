@@ -41,6 +41,7 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         for mpip in self.mpip_dict.values():
             if not mpip.relation:
                 mpip.build_mpip()
+            mpip.calculate_relation_ratio()
 
     def _add_breakpoint_info_to_model_data(self) -> None:
         """Add breakpoint information to model data for all mpip instances."""

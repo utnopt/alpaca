@@ -104,7 +104,7 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
             solver.external_solver.opt_model.setParam("Seed", seed_value)
         else:
             solver.external_solver.opt_model.setIntParam(
-                    "randomization/randomseedshift", seed_value
+                "randomization/randomseedshift", seed_value
             )
         runtime = solver.solve_instance()
         if user_settings.external_solver == "gurobi":
@@ -117,9 +117,24 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
             nr_of_total_cuts = 0
         else:
             gap = round(solver.external_solver.opt_model.getGap(), 4)
-            nr_cuts = 0 if not user_settings.feature_mpip else sum(
-                mpip.separator.nr_of_cuts for mpip in mpip_handler.mpip_dict.values())
+            nr_cuts = (
+                0
+                if not user_settings.feature_mpip
+                else sum(
+                    mpip.separator.nr_of_cuts
+                    for mpip in mpip_handler.mpip_dict.values()
+                )
+            )
             nr_of_total_cuts = solver.external_solver.opt_model.getNCutsApplied()
+        mpip_ratio = (
+            0
+            if not user_settings.feature_mpip
+            else round(
+                sum(mpip.relation_ratio for mpip in mpip_handler.mpip_dict.values())
+                / len(mpip_handler.mpip_dict),
+                3,
+            )
+        )
 
         # Log and print the result in the specified CSV format for the shell script
         logger.info(
@@ -128,7 +143,7 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
         # Format: number_of_breakpoints,test_case,osil_file_name,runtime,gap
         print(
             f"{args.breakpoints},{args.test_case},{osil_file_name},"
-            f"{runtime},{gap},{nr_cuts},{nr_of_total_cuts},{seed_value}"
+            f"{runtime},{gap},{nr_cuts},{nr_of_total_cuts},{mpip_ratio},{seed_value}"
         )
 
     except Exception as ex:  # pylint: disable=broad-exception-caught
