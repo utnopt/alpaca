@@ -114,10 +114,12 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
                 if not user_settings.feature_mpip
                 else mpip_separation_handler.nr_added_cuts
             )
+            nr_of_total_cuts = 0
         else:
             gap = round(solver.external_solver.opt_model.getGap(), 4)
             nr_cuts = 0 if not user_settings.feature_mpip else sum(
                 mpip.separator.nr_of_cuts for mpip in mpip_handler.mpip_dict.values())
+            nr_of_total_cuts = solver.external_solver.opt_model.getNCutsApplied()
 
         # Log and print the result in the specified CSV format for the shell script
         logger.info(
@@ -126,7 +128,7 @@ def run_single_optimization(args):  # pylint: disable=too-many-statements
         # Format: number_of_breakpoints,test_case,osil_file_name,runtime,gap
         print(
             f"{args.breakpoints},{args.test_case},{osil_file_name},"
-            f"{runtime},{gap},{nr_cuts},{seed_value}"
+            f"{runtime},{gap},{nr_cuts},{nr_of_total_cuts},{seed_value}"
         )
 
     except Exception as ex:  # pylint: disable=broad-exception-caught

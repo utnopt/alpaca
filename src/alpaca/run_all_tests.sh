@@ -33,7 +33,7 @@ mkdir -p "$EXPORT_PATH"
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 RESULTS_FILE="$EXPORT_PATH/results_${TIMESTAMP}.csv"
 # Added 'seed_value' to the CSV header
-echo "number_of_breakpoints,test_case,osil_file_name,runtime,gap,cuts,seed_value" > "$RESULTS_FILE"
+echo "number_of_breakpoints,test_case,osil_file_name,runtime,gap,mpip_cuts,total_cuts,seed_value" > "$RESULTS_FILE"
 
 # --- Job Definition ---
 
@@ -51,7 +51,7 @@ for dir in "$IMPORT_PATH"/test_instances_*; do
     # Find all .osil files in the directory
     while IFS= read -r file; do
         # For each file and each test case, create 5 jobs with different seeds.
-        for seed in $(seq 1 1); do
+        for seed in $(seq 42 47); do
             jobs+=("$file $num_breakpoints MPIP 1 $seed")
             jobs+=("$file $num_breakpoints Standard 0 $seed")
         done
