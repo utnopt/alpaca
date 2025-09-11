@@ -466,10 +466,10 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         expr_hash = "b" + "_".join(sorted([first_var_index, second_var_index]))
         bilinear_expression = self.add_bilinear_expression(
             expr_hash,
-            (
+            [
                 self.variables[f"x_{first_var_index}"],
                 self.variables[f"x_{second_var_index}"],
-            ),
+            ],
             0,
         )
         self.constraints[f"c_{constraint_index}"].variables.append(
