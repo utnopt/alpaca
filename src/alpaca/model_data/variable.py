@@ -88,7 +88,7 @@ class Variable:  # pylint: disable=too-many-instance-attributes
             pwl_method: PWL method to use.
         """
         if pwl_method == "multiple-choice":
-            self._add_binaries_multiple_choice()
+            self._add_pwl_approximation_multiple_choice()
 
     def _add_pwl_approximation_multiple_choice(self):
         self._add_continuous_variables_multiple_choice()
