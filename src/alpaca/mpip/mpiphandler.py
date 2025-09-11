@@ -67,9 +67,9 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         mpip = mp.MPIP(mpip_id)
         representative_variable = bilinear_expression.representative_variable
         mpip.add_implied_id(representative_variable)
-        first_var = bilinear_expression.first_var
+        first_var = bilinear_expression.variables[0]
         mpip.add_implying_id(first_var)
-        second_var = bilinear_expression.second_var
+        second_var = bilinear_expression.variables[1]
         mpip.add_implying_id(second_var)
         mpip.relation = bilinear_expression.piecewise_constant_relation
         self.mpip_dict[mpip_id] = mpip

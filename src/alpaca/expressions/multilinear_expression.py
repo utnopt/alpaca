@@ -24,17 +24,14 @@ class MultilinearExpression(exn.Expression):
         representative_variable: Variable representing the result of the expression
     """
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments, too-many-positional-arguments
         self,
         name: str,
         model_data: "ModelData",
         variables: list[var.Variable],
         level: int,
         representative_variable: var.Variable | None = None,
-        reformulate: bool = True,
     ):
-        # pylint: disable=too-many-arguments
-        # pylint: disable=too-many-positional-arguments
         """Initialize multilinear expression.
 
         Args:
@@ -47,11 +44,9 @@ class MultilinearExpression(exn.Expression):
         super().__init__(name, model_data, level, representative_variable)
         self.variables = variables
         self.model_data = model_data
-        if not reformulate:
-            self.representative_variable.add_nonlinearity_to_occurring_in("multilinear")
         self.piecewise_constant_relation = {}
         for variable in self.variables:
-            variable.add_nonlinearity_to_occurring_in("multilinear")
+            variable.add_nonlinearity_to_occurring_in(f"multilinear{len(variables)}")
 
     def apply_piecewise_constant_relaxation(
         self, approximation: bool = False, reformulated: int = 0

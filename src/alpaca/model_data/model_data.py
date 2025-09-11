@@ -15,6 +15,7 @@ from alpaca.expressions import (
     expression_container as eco,
     bilinear_expression as ble,
     bilinear_binary_expression as bbe,
+    bilinear_mixed_binary_expression as bme,
     multilinear_expression as mle,
     one_dim_expression as ode,
     nonlinear_expression as nle,
@@ -77,7 +78,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
     def add_bilinear_expression(
         self,
         name: str,
-        variables: tuple[var.Variable, var.Variable],
+        variables: list[var.Variable],
         level: int,
         representative_variable: var.Variable | None = None,
     ) -> ble.BilinearExpression | bbe.BilinearBinaryExpression:
@@ -105,13 +106,34 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             )
             self.expressions.bilinear_binary_expressions[name] = bilinear_expression
             return bilinear_expression
+        if variables[0].var_type == "B":
+            bilinear_expression = bme.BilinearMixedBinaryExpression(
+                name,
+                self,
+                variables,
+                level,
+                representative_variable=representative_variable,
+            )
+            self.expressions.bilinear_mixed_binary_expressions[name] = (
+                bilinear_expression
+            )
+        if variables[1].var_type == "B":
+            bilinear_expression = bme.BilinearMixedBinaryExpression(
+                name,
+                self,
+                [variables[1], variables[0]],
+                level,
+                representative_variable=representative_variable,
+            )
+            self.expressions.bilinear_mixed_binary_expressions[name] = (
+                bilinear_expression
+            )
         bilinear_expression = ble.BilinearExpression(
             name,
             self,
             variables,
             level,
             representative_variable=representative_variable,
-            reformulate=self.settings.reformulate_multilinear,
         )
         self.expressions.bilinear_expressions[name] = bilinear_expression
         return bilinear_expression
@@ -142,7 +164,6 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             variables,
             level,
             representative_variable=representative_variable,
-            reformulate=self.settings.reformulate_multilinear,
         )
         self.expressions.multilinear_expressions[name] = multilinear_expression
         return multilinear_expression

@@ -19,7 +19,7 @@ class BilinearBinaryExpression:
         self,
         name: str,
         model_data: "ModelData",
-        variables: tuple[var.Variable, var.Variable],
+        variables: list[var.Variable],
         representative_variable: var.Variable | None = None,
     ):
         """Initialize bilinear expression.

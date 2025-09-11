@@ -58,15 +58,14 @@ class TestBilinearExpression(unittest.TestCase):
         bilinear_expr = ble.BilinearExpression(
             "test_bilinear",
             self.model_data,
-            (self.var_x, self.var_y),
+            [self.var_x, self.var_y],
             1,
-            reformulate=False,
         )
 
         # Check basic attributes
         self.assertEqual(bilinear_expr.name, "test_bilinear")
-        self.assertEqual(bilinear_expr.first_var, self.var_x)
-        self.assertEqual(bilinear_expr.second_var, self.var_y)
+        self.assertEqual(bilinear_expr.variables[0], self.var_x)
+        self.assertEqual(bilinear_expr.variables[1], self.var_y)
         self.assertEqual(bilinear_expr.level, 1)
 
         # Check representative variable
@@ -80,18 +79,16 @@ class TestBilinearExpression(unittest.TestCase):
         )
 
         # Check nonlinearity tracking
-        self.assertIn("bilinear", self.var_x.occurring_in)
-        self.assertIn("bilinear", self.var_y.occurring_in)
-        self.assertIn("bilinear", bilinear_expr.representative_variable.occurring_in)
+        self.assertIn("multilinear2", self.var_x.occurring_in)
+        self.assertIn("multilinear2", self.var_y.occurring_in)
 
     def test_bound_propagation_positive_variables(self):
         """Test bound propagation with positive variable bounds."""
         bilinear_expr = ble.BilinearExpression(
             "test_bilinear",
             self.model_data,
-            (self.var_x, self.var_y),
+            [self.var_x, self.var_y],
             1,
-            reformulate=False,
         )
 
         # Call bound propagation
@@ -122,7 +119,7 @@ class TestBilinearExpression(unittest.TestCase):
         self.model_data.variables["b"] = var_b
 
         bilinear_expr = ble.BilinearExpression(
-            "test_mixed", self.model_data, (var_a, var_b), 1, reformulate=False
+            "test_mixed", self.model_data, [var_a, var_b], 1
         )
 
         bilinear_expr.propagate_variable_bounds()
@@ -150,7 +147,7 @@ class TestBilinearExpression(unittest.TestCase):
         self.model_data.variables["b"] = var_b
 
         bilinear_expr = ble.BilinearExpression(
-            "test_zero", self.model_data, (var_a, var_b), 1, reformulate=False
+            "test_zero", self.model_data, [var_a, var_b], 1
         )
 
         bilinear_expr.propagate_variable_bounds()
@@ -181,6 +178,7 @@ class TestBilinearExpression(unittest.TestCase):
         # Initialize representative variable with breakpoints
         rep_var = var.Variable("r_test_bilinear_pwl", lb=0.0, ub=100.0)
         rep_var.breakpoints = [0.0, 10.0, 20.0, 30.0, 40.0]
+        rep_var.is_discretized = True
         rep_var.pwl_variables_binary = [
             MagicMock(),
             MagicMock(),
@@ -191,10 +189,9 @@ class TestBilinearExpression(unittest.TestCase):
         bilinear_expr = ble.BilinearExpression(
             "test_bilinear_pwl",
             self.model_data,
-            (self.var_x, self.var_y),
+            [self.var_x, self.var_y],
             1,
             rep_var,
-            reformulate=False,
         )
         self.model_data.constraints = {}
 
@@ -230,6 +227,7 @@ class TestBilinearExpression(unittest.TestCase):
         # Initialize representative variable with breakpoints
         rep_var = var.Variable("r_test_bilinear_approx", lb=0.0, ub=100.0)
         rep_var.breakpoints = [0.0, 10.0, 20.0, 30.0, 40.0]
+        rep_var.is_discretized = True
         rep_var.pwl_variables_binary = [
             MagicMock(),
             MagicMock(),
@@ -240,10 +238,9 @@ class TestBilinearExpression(unittest.TestCase):
         bilinear_expr = ble.BilinearExpression(
             "test_bilinear_approx",
             self.model_data,
-            (self.var_x, self.var_y),
+            [self.var_x, self.var_y],
             1,
             rep_var,
-            reformulate=False,
         )
         self.model_data.constraints = {}
 
@@ -270,7 +267,7 @@ class TestBilinearExpression(unittest.TestCase):
     def test_reformulate_to_sum_of_squares(self):
         """Test reformulation of bilinear expression to sum of squares."""
         bilinear_expr = ble.BilinearExpression(
-            "test_bilinear", self.model_data, (self.var_x, self.var_y), 1
+            "test_bilinear", self.model_data, [self.var_x, self.var_y], 1
         )
 
         # Mock the expression creation methods

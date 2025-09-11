@@ -64,7 +64,7 @@ class TestMultilinearExpression(unittest.TestCase):
         """Test initialization of MultilinearExpression."""
         variables = [self.var_x, self.var_y, self.var_z]
         multilinear_expr = mle.MultilinearExpression(
-            "test_multilinear", self.model_data, variables, 1, reformulate=False
+            "test_multilinear", self.model_data, variables, 1
         )
 
         # Check basic attributes
@@ -86,16 +86,13 @@ class TestMultilinearExpression(unittest.TestCase):
 
         # Check nonlinearity tracking
         for variable in variables:
-            self.assertIn("multilinear", variable.occurring_in)
-        self.assertIn(
-            "multilinear", multilinear_expr.representative_variable.occurring_in
-        )
+            self.assertIn("multilinear3", variable.occurring_in)
 
     def test_bound_propagation_three_variables(self):
         """Test bound propagation with three variables."""
         variables = [self.var_x, self.var_y, self.var_z]
         multilinear_expr = mle.MultilinearExpression(
-            "test_three_vars", self.model_data, variables, 1, reformulate=False
+            "test_three_vars", self.model_data, variables, 1
         )
 
         multilinear_expr.propagate_variable_bounds()
@@ -113,17 +110,17 @@ class TestMultilinearExpression(unittest.TestCase):
         """Test reformulation for 3 variables (base case)."""
         variables = [self.var_x, self.var_y, self.var_z]
         multilinear_expr = mle.MultilinearExpression(
-            "test_mle_3", self.model_data, variables, 1, reformulate=False
+            "test_mle_3", self.model_data, variables, 1
         )
 
         # Mock the creation of bilinear expressions
         mock_sub_be = ble.BilinearExpression(
-            "mb_test_mle_3_sub", self.model_data, (self.var_y, self.var_z), 2
+            "mb_test_mle_3_sub", self.model_data, [self.var_y, self.var_z], 2
         )
         mock_main_be = ble.BilinearExpression(
             "mb_test_mle_3",
             self.model_data,
-            (self.var_x, mock_sub_be.representative_variable),
+            [self.var_x, mock_sub_be.representative_variable],
             1,
         )
         self.model_data.add_bilinear_expression = MagicMock(
@@ -199,6 +196,7 @@ class TestMultilinearExpression(unittest.TestCase):
 
         rep_var = var.Variable("r_test_mle_approx", lb=0.0, ub=100.0)
         rep_var.breakpoints = [0.0, 10.0, 20.0, 30.0, 40.0]
+        rep_var.is_discretized = True
         rep_var.pwl_variables_binary = [
             MagicMock(),
             MagicMock(),
@@ -207,7 +205,7 @@ class TestMultilinearExpression(unittest.TestCase):
         ]
 
         multilinear_expr = mle.MultilinearExpression(
-            "test_mle_approx", self.model_data, variables, 1, rep_var, reformulate=False
+            "test_mle_approx", self.model_data, variables, 1, rep_var
         )
         self.model_data.constraints = {}
 
