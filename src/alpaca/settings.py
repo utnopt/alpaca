@@ -31,13 +31,14 @@ class StaticSettings:
     log_rotation_type = "size"  # use "size", "time" or "none"
 
     # ===== Data settings =====
-    infinity = 1e4
+    infinity = 1e7
     feasibility_tolerance = 1e-3
 
     # ===== MPIP settings =====
     max_violation_relation = 1e-2
-    min_cut_violation = 1e-2
+    min_cut_violation = 1e-3
     rounding_precision = 5
+    mpip_sparsity = 0.45
 
 
 class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance-attributes
@@ -46,10 +47,11 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
     """
 
     def __init__(self, config_dict):
+        self.seed = int(config_dict.get("seed", 42))
         self.solver_time_limit = int(config_dict.get("solver_time_limit", 7200))
+        self.solver_thread_limit = int(config_dict.get("solver_thread_limit", 4))
         self.osil_file_name = str(config_dict.get("osil_file_name", "st_e41"))
         self.number_of_breakpoints = int(config_dict.get("number_of_breakpoints", 5))
-        self.feature_mpip = int(config_dict.get("feature_mpip", 0))
         self.pwl_method = str(config_dict.get("pwl_method", "multiple-choice"))
         self.approximation = int(config_dict.get("approximation", 0))
         self.external_solver = str(config_dict.get("external_solver", "scip"))
@@ -63,6 +65,18 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         )
         self.reformulate_multilinear = int(
             config_dict.get("reformulate_multilinear", 1)
+        )
+        self.feature_mpip_separation = int(
+            config_dict.get("feature/mpip/separation", 0)
+        )
+        self.feature_mpip_mccormick = int(config_dict.get("feature/mpip/mccormick", 0))
+        self.feature_mpip_stair = int(config_dict.get("feature/mpip/stair", 0))
+        self.feature_mpip_stripe = int(config_dict.get("feature/mpip/stripe", 0))
+        self.feature_mpip = (
+            self.feature_mpip_separation
+            or self.feature_mpip_mccormick
+            or self.feature_mpip_stair
+            or self.feature_mpip_stripe
         )
 
     def save_to_json(self):

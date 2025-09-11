@@ -51,6 +51,7 @@ class Variable:  # pylint: disable=too-many-instance-attributes
         self.pwl_variables_binary = []
         self.pwl_variables_continuous = []
         self.pwl_constraints = []
+        self.implied_values_list: list[float] = []
 
     def add_nonlinearity_to_occurring_in(self, nonlinearity_type: str) -> None:
         """Save in which types of nonlinearities the variable occurs.
@@ -71,15 +72,19 @@ class Variable:  # pylint: disable=too-many-instance-attributes
             number_of_breakpoints: Number of discretization points to create.
             pwl_method: PWL method to use.
         """
-        self.breakpoints = np.linspace(self.lb, self.ub, number_of_breakpoints)
+        self.breakpoints = self._get_breakpoints(number_of_breakpoints)
         if pwl_method == "multiple-choice":
             self._add_binaries_multiple_choice()
+
+    def _get_breakpoints(self, nr_of_breakpoints: int) -> list[float]:
+        if self.ub == self.lb:
+            return [self.lb]
+        return np.linspace(self.lb, self.ub, nr_of_breakpoints).tolist()
 
     def add_continuous_pwl(self, pwl_method: str) -> None:
         """Link continuous variables to the breakpoints.
 
         Args:
-            number_of_breakpoints: Number of discretization points created.
             pwl_method: PWL method to use.
         """
         if pwl_method == "multiple-choice":

@@ -86,10 +86,7 @@ class TestMultilinearExpression(unittest.TestCase):
 
         # Check nonlinearity tracking
         for variable in variables:
-            self.assertIn("multilinear", variable.occurring_in)
-        self.assertIn(
-            "multilinear", multilinear_expr.representative_variable.occurring_in
-        )
+            self.assertIn("multilinear3", variable.occurring_in)
 
     def test_bound_propagation_three_variables(self):
         """Test bound propagation with three variables."""
@@ -103,7 +100,7 @@ class TestMultilinearExpression(unittest.TestCase):
         # Calculate expected bounds
         bounds = [(v.lb, v.ub) for v in variables]
         products = [reduce(mul, p) for p in itertools.product(*bounds)]
-        expected_lb = min(products)  # 5 * 7 * -3 = -105
+        expected_lb = min(products)  # 1 * 2 * -3 = -6.0, 5 * 7 * -3 = -105
         expected_ub = max(products)  # 5 * 7 * 4 = 140
 
         self.assertEqual(multilinear_expr.representative_variable.lb, expected_lb)
@@ -118,12 +115,12 @@ class TestMultilinearExpression(unittest.TestCase):
 
         # Mock the creation of bilinear expressions
         mock_sub_be = ble.BilinearExpression(
-            "mb_test_mle_3_sub", self.model_data, (self.var_y, self.var_z), 2
+            "mb_test_mle_3_sub", self.model_data, [self.var_y, self.var_z], 2
         )
         mock_main_be = ble.BilinearExpression(
             "mb_test_mle_3",
             self.model_data,
-            (self.var_x, mock_sub_be.representative_variable),
+            [self.var_x, mock_sub_be.representative_variable],
             1,
         )
         self.model_data.add_bilinear_expression = MagicMock(
@@ -136,16 +133,16 @@ class TestMultilinearExpression(unittest.TestCase):
         self.assertEqual(self.model_data.add_bilinear_expression.call_count, 2)
 
         # Check the call for the sub-expression (y*z)
-        call_1 = self.model_data.add_bilinear_expression.call_args_list[0]
-        self.assertEqual(call_1.args[0].name, "mb_test_mle_3_sub")
-        self.assertEqual(call_1.args[0].first_var, self.var_y)
-        self.assertEqual(call_1.args[0].second_var, self.var_z)
+        call_1_args = self.model_data.add_bilinear_expression.call_args_list[0].args
+        self.assertEqual(call_1_args[0], "mb_test_mle_3_sub")
+        self.assertEqual(call_1_args[1][0], self.var_y)
+        self.assertEqual(call_1_args[1][1], self.var_z)
 
         # Check the call for the main expression (x * sub_representative)
-        call_2 = self.model_data.add_bilinear_expression.call_args_list[1]
-        self.assertEqual(call_2.args[0].name, "mb_test_mle_3")
-        self.assertEqual(call_2.args[0].first_var, self.var_x)
-        self.assertEqual(call_2.args[0].second_var, mock_sub_be.representative_variable)
+        call_2_args = self.model_data.add_bilinear_expression.call_args_list[1].args
+        self.assertEqual(call_2_args[0], "mb_test_mle_3")
+        self.assertEqual(call_2_args[1][0], self.var_x)
+        self.assertEqual(call_2_args[1][1], mock_sub_be.representative_variable)
 
     def test_reformulate_to_bilinear_recursive_case(self):
         """Test reformulation for 4 variables (recursive case)."""
@@ -158,8 +155,8 @@ class TestMultilinearExpression(unittest.TestCase):
         self.model_data.add_bilinear_expression = MagicMock()
 
         with patch(
-                "alpaca.expressions.multilinear_expression.MultilinearExpression",
-                autospec=True
+            "alpaca.expressions.multilinear_expression.MultilinearExpression",
+            autospec=True,
         ) as mock_mle_class:
             # Configure the mock instance that will be returned by the patched class
             mock_sub_instance = mock_mle_class.return_value
@@ -181,10 +178,10 @@ class TestMultilinearExpression(unittest.TestCase):
 
             # Check that the final bilinear expression was created
             self.model_data.add_bilinear_expression.assert_called_once()
-            call_be = self.model_data.add_bilinear_expression.call_args.args[0]
-            self.assertEqual(call_be.name, "mb_test_mle_4")
-            self.assertEqual(call_be.first_var, self.var_x)
-            self.assertEqual(call_be.second_var, mock_sub_instance.representative_variable)
+            call_args = self.model_data.add_bilinear_expression.call_args.args
+            self.assertEqual(call_args[0], "mb_test_mle_4")
+            self.assertEqual(call_args[1][0], self.var_x)
+            self.assertEqual(call_args[1][1], mock_sub_instance.representative_variable)
 
     def test_apply_piecewise_constant_relaxation_with_approximation(
         self,
@@ -199,6 +196,7 @@ class TestMultilinearExpression(unittest.TestCase):
 
         rep_var = var.Variable("r_test_mle_approx", lb=0.0, ub=100.0)
         rep_var.breakpoints = [0.0, 10.0, 20.0, 30.0, 40.0]
+        rep_var.is_discretized = True
         rep_var.pwl_variables_binary = [
             MagicMock(),
             MagicMock(),

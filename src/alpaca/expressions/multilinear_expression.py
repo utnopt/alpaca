@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=duplicate-code
 """
 @authors: kuen,
 """
@@ -6,7 +7,7 @@ import itertools
 import bisect
 
 from alpaca.model_data import variable as var, constraint as con
-from alpaca.expressions import expression as exn, bilinear_expression as ble
+from alpaca.expressions import expression as exn
 
 
 class MultilinearExpression(exn.Expression):
@@ -23,7 +24,7 @@ class MultilinearExpression(exn.Expression):
         representative_variable: Variable representing the result of the expression
     """
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments, too-many-positional-arguments
         self,
         name: str,
         model_data: "ModelData",
@@ -31,8 +32,6 @@ class MultilinearExpression(exn.Expression):
         level: int,
         representative_variable: var.Variable | None = None,
     ):
-        # pylint: disable=too-many-arguments
-        # pylint: disable=too-many-positional-arguments
         """Initialize multilinear expression.
 
         Args:
@@ -45,12 +44,13 @@ class MultilinearExpression(exn.Expression):
         super().__init__(name, model_data, level, representative_variable)
         self.variables = variables
         self.model_data = model_data
-        self.representative_variable.add_nonlinearity_to_occurring_in("multilinear")
         self.piecewise_constant_relation = {}
         for variable in self.variables:
-            variable.add_nonlinearity_to_occurring_in("multilinear")
+            variable.add_nonlinearity_to_occurring_in(f"multilinear{len(variables)}")
 
-    def apply_piecewise_constant_relaxation(self, approximation: bool = False):
+    def apply_piecewise_constant_relaxation(
+        self, approximation: bool = False, reformulated: int = 0
+    ):
         """
         Apply piecewise constant relaxation for multilinear expressions.
 
@@ -58,6 +58,8 @@ class MultilinearExpression(exn.Expression):
         and applies constraints based on either an approximation or a strict
         lower/upper bound calculation.
         """
+        if not self.representative_variable.is_discretized:
+            return
         all_variables_mid_values_with_indices = (
             self._get_all_variables_mid_values_with_indices()
         )
@@ -77,8 +79,10 @@ class MultilinearExpression(exn.Expression):
                 implied_indices
             )
 
-            # Create and add the corresponding constraint to the model
-            self._add_piecewise_constraint(current_variable_indices, implied_indices)
+            if not reformulated:
+                self._add_piecewise_constraint(
+                    current_variable_indices, implied_indices
+                )
 
     def _calculate_implied_indices(
         self,
@@ -111,12 +115,8 @@ class MultilinearExpression(exn.Expression):
             for i, index in enumerate(current_variable_indices)
         ]
         implied_value_lb, implied_value_ub = self._get_implied_lb_and_ub(lb_ub_list)
-        implied_index_lb = self._get_implied_index_from_implied_value(
-            implied_value_lb
-        )
-        implied_index_ub = self._get_implied_index_from_implied_value(
-            implied_value_ub
-        )
+        implied_index_lb = self._get_implied_index_from_implied_value(implied_value_lb)
+        implied_index_ub = self._get_implied_index_from_implied_value(implied_value_ub)
         return tuple(range(implied_index_lb, implied_index_ub + 1))
 
     def _add_piecewise_constraint(
@@ -181,8 +181,13 @@ class MultilinearExpression(exn.Expression):
 
     def _get_implied_index_from_implied_value(self, implied_value: float) -> int:
         return min(
-            bisect.bisect_left(self.representative_variable.breakpoints, implied_value)
-            - 1,
+            max(
+                0,
+                bisect.bisect_left(
+                    self.representative_variable.breakpoints, implied_value
+                )
+                - 1,
+            ),
             len(self.representative_variable.breakpoints) - 2,
         )
 
@@ -198,21 +203,15 @@ class MultilinearExpression(exn.Expression):
             sub_bi_multilinear.reformulate_to_bilinear_expressions()
         else:
             sub_bi_multilinear = self.model_data.add_bilinear_expression(
-                ble.BilinearExpression(
-                    f"mb_{self.name}_sub",
-                    self.model_data,
-                    (self.variables[1], self.variables[2]),
-                    self.level + 1,
-                )
+                f"mb_{self.name}_sub",
+                (self.variables[1], self.variables[2]),
+                self.level + 1,
             )
         self.model_data.add_bilinear_expression(
-            ble.BilinearExpression(
-                f"mb_{self.name}",
-                self.model_data,
-                (self.variables[0], sub_bi_multilinear.representative_variable),
-                self.level,
-                representative_variable=self.representative_variable,
-            )
+            f"mb_{self.name}",
+            (self.variables[0], sub_bi_multilinear.representative_variable),
+            self.level,
+            representative_variable=self.representative_variable,
         )
 
     def propagate_variable_bounds(self):

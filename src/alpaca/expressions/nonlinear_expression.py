@@ -7,10 +7,7 @@ from __future__ import annotations
 import alpaca.utils.datahandling as udh
 from alpaca.model_data import variable as var
 from alpaca.expressions import (
-    bilinear_expression as ble,
-    multilinear_expression as mle,
     one_dim_expression as ode,
-    linear_expression as lie,
 )
 from alpaca.utils.logger import logger
 import alpaca.settings as s
@@ -122,7 +119,16 @@ class NonlinearExpression:
         elif self.expression_type == "inverse":
             next_level = self._fragment_one_dim_expression(ode.InverseExpression, level)
         elif self.expression_type == "power":
-            next_level = logger.warning("Expression type power not supported yet!")
+            if self.child_expressions[1] == 2.0:
+                next_level = self._fragment_one_dim_expression(
+                    ode.SquareExpression, level
+                )
+            elif self.child_expressions[1] == 0.5:
+                next_level = self._fragment_one_dim_expression(
+                    ode.SquareRootExpression, level
+                )
+            else:
+                next_level = logger.warning("Expression type power not supported yet!")
         elif self.expression_type == "xabsx":
             next_level = self._fragment_one_dim_expression(ode.AbsExpression, level)
         elif self.expression_type == "negate":
@@ -151,12 +157,9 @@ class NonlinearExpression:
         if product_coeff != 1.0:
             if len(variables_in_product) == 1:
                 lin_expression = self.model_data.add_linear_expression(
-                    lie.LinearExpression(
-                        f"le_{self.name}",
-                        self.model_data,
-                        level,
-                        representative_variable=self.representative_variable,
-                    )
+                    f"le_{self.name}",
+                    level,
+                    representative_variable=self.representative_variable,
                 )
                 lin_expression.variables = [(product_coeff, variables_in_product[0])]
             else:
@@ -216,12 +219,9 @@ class NonlinearExpression:
     ) -> var.Variable:
         helper_variable = self.model_data.add_variable(var.Variable(f"h_{self.name}"))
         lin_expression = self.model_data.add_linear_expression(
-            lie.LinearExpression(
-                f"le_h_{self.name}",
-                self.model_data,
-                level,
-                representative_variable=self.representative_variable,
-            )
+            f"le_h_{self.name}",
+            level,
+            representative_variable=self.representative_variable,
         )
         lin_expression.variables = [(product_coeff, helper_variable)]
         return helper_variable
@@ -235,23 +235,17 @@ class NonlinearExpression:
         num_vars = len(variables_in_product)
         if num_vars > 2:
             self.model_data.add_multilinear_expression(
-                mle.MultilinearExpression(
-                    f"ml_{representative_variable.name}",
-                    self.model_data,
-                    variables_in_product,
-                    level,
-                    representative_variable=representative_variable,
-                )
+                f"ml_{representative_variable.name}",
+                variables_in_product,
+                level,
+                representative_variable=representative_variable,
             )
         elif num_vars == 2 and not variables_in_product[0] is variables_in_product[1]:
             self.model_data.add_bilinear_expression(
-                ble.BilinearExpression(
-                    f"bl_{representative_variable.name}",
-                    self.model_data,
-                    tuple(variables_in_product),
-                    level,
-                    representative_variable=representative_variable,
-                )
+                f"bl_{representative_variable.name}",
+                tuple(variables_in_product),
+                level,
+                representative_variable=representative_variable,
             )
         elif num_vars == 2 and variables_in_product[0] is variables_in_product[1]:
             self._create_square_expression(
@@ -268,23 +262,18 @@ class NonlinearExpression:
     ) -> None:
         expr_name = f"square_{representative_variable.name}"
         self.model_data.add_one_dim_expression(
-            ode.SquareExpression(
-                expr_name,
-                self.model_data,
-                variables[0],
-                level,
-                representative_variable=representative_variable,
-            )
+            ode.SquareExpression,
+            expr_name,
+            variables[0],
+            level,
+            representative_variable=representative_variable,
         )
 
     def _fragment_sum_expression(self, level: int) -> int:
         lin_expression = self.model_data.add_linear_expression(
-            lie.LinearExpression(
-                f"le_{self.expression_type}_{self.name}",
-                self.model_data,
-                level,
-                representative_variable=self.representative_variable,
-            )
+            f"le_{self.expression_type}_{self.name}",
+            level,
+            representative_variable=self.representative_variable,
         )
         for child_expression in self.child_expressions:
             if isinstance(child_expression, tuple):
@@ -326,22 +315,17 @@ class NonlinearExpression:
             )
         helper_variable = self.model_data.add_variable(var.Variable(f"h_{self.name}"))
         lin_expression = self.model_data.add_linear_expression(
-            lie.LinearExpression(
-                f"le_{self.name}",
-                self.model_data,
-                level + 1,
-                representative_variable=helper_variable,
-            )
+            f"le_{self.name}",
+            level + 1,
+            representative_variable=helper_variable,
         )
         lin_expression.variables.append((coeff, variable))
         self.model_data.add_one_dim_expression(
-            expression_class(
-                f"{self.expression_type}_{helper_variable.name}",
-                self.model_data,
-                helper_variable,
-                level,
-                representative_variable=self.representative_variable,
-            )
+            expression_class,
+            f"{self.expression_type}_{helper_variable.name}",
+            helper_variable,
+            level,
+            representative_variable=self.representative_variable,
         )
 
     def _fragment_one_dim_expression_without_coefficient(
@@ -353,23 +337,18 @@ class NonlinearExpression:
             else self.child_expressions[0].representative_variable
         )
         self.model_data.add_one_dim_expression(
-            expression_class(
-                f"{self.expression_type}_{variable.name}",
-                self.model_data,
-                variable,
-                level,
-                representative_variable=self.representative_variable,
-            )
+            expression_class,
+            f"{self.expression_type}_{variable.name}",
+            variable,
+            level,
+            representative_variable=self.representative_variable,
         )
 
     def _fragment_negate_expression(self, level: int) -> int:
         lin_expression = self.model_data.add_linear_expression(
-            lie.LinearExpression(
-                f"le_{self.name}",
-                self.model_data,
-                level,
-                representative_variable=self.representative_variable,
-            )
+            f"le_{self.name}",
+            level,
+            representative_variable=self.representative_variable,
         )
         lin_expression.variables.append(
             (-1.0, self.child_expressions[0].representative_variable)
@@ -388,9 +367,7 @@ class NonlinearExpression:
             else 1 / self.child_expressions[1][0]
         )
         helper_inverse_expression = self.model_data.add_one_dim_expression(
-            ode.InverseExpression(
-                f"iv_{self.name}", self.model_data, denominator_variable, 0
-            )
+            ode.InverseExpression, f"iv_{self.name}", denominator_variable, 0
         )
         if isinstance(self.child_expressions[0], float):
             self._handle_division_float_numerator(
@@ -412,12 +389,9 @@ class NonlinearExpression:
         self, variable: var.Variable, denominator_coeff: float, level: int
     ):
         lin_expression = self.model_data.add_linear_expression(
-            lie.LinearExpression(
-                f"le_{self.name}",
-                self.model_data,
-                level,
-                representative_variable=self.representative_variable,
-            )
+            f"le_{self.name}",
+            level,
+            representative_variable=self.representative_variable,
         )
         lin_expression.variables.append(
             (denominator_coeff * self.child_expressions[0], variable)
@@ -464,9 +438,7 @@ class NonlinearExpression:
             )
             return
         child_expression = self.model_data.add_nonlinear_expression(
-            NonlinearExpression(
-                child_expression_tag_name, child_expression_tag, self.model_data
-            )
+            child_expression_tag_name, child_expression_tag
         )
         self.child_expressions.append(child_expression)
         child_expression.grow_expression_tree()
