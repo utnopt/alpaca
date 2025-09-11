@@ -2,11 +2,11 @@
 "solver_time_limit": 7200,
   "osil_file_name": "ex6_2_12",
   "external_solver": "scip",
-  "number_of_breakpoints": 10,
-  "feature/mpip/separation": 0,
-  "feature/mpip/mccormick": 0,
-  "feature/mpip/stair": 0,
-  "feature/mpip/stripe": 0,
+  "number_of_breakpoints": 5,
+  "feature/mpip/separation": 1,
+  "feature/mpip/mccormick": 1,
+  "feature/mpip/stair": 1,
+  "feature/mpip/stripe": 1,
   "approximation": 0,
   "reformulate_multilinear": 1
 }

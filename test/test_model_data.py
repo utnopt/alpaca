@@ -5,12 +5,12 @@
 """
 import unittest
 
-import alpaca.settings as s
-from alpaca.external_solvers import model_scip as msc, model_gurobi as mgu
 import alpaca.model_data.model_data as mda
+from alpaca.external_solvers import mip_model as mm
 import alpaca.solver.solver as slv
-from alpaca.mpip import mpiphandler as mph
-from alpaca.mpip.separation import separationhandler_scip as mps
+import alpaca.mpip.mpiphandler as mph
+import alpaca.mpip.separation.mpip_separationhandler as msh
+import alpaca.settings as s
 
 
 class TestModelData(unittest.TestCase):
@@ -30,25 +30,16 @@ class TestModelData(unittest.TestCase):
         user_settings = s.UserSettings(config_dict)
 
         model_data = mda.ModelData(user_settings)
-        scip_model = msc.ModelScip(model_data, user_settings)
-        solver = slv.Solver(scip_model, user_settings)
 
-        # Check if there are any nonlinear expressions before creating MPIPHandler
-        if model_data.expressions.first_level_nonlinear_expression_keys:
-            mpip_handler = mph.MPIPHandler(
-                [
-                    model_data.expressions.nonlinear_expressions[expr_key]
-                    for expr_key in model_data.expressions.first_level_nonlinear_expression_keys
-                ],
-                model_data.expressions.bilinear_expressions,
-                model_data.expressions.multilinear_expressions,
-            )
-            mpip_separation_handler = mps.SeparationHandler(
-                mpip_handler, scip_model.opt_model
-            )
-            solver.mpip_separation_handler = mpip_separation_handler
-
-        mgu.ModelGurobi(model_data, user_settings)
+        external_solver = mm.MIPModel(
+            model_data, user_settings, user_settings.external_solver
+        )
+        solver = slv.Solver(external_solver, user_settings)
+        mpip_handler = mph.MPIPHandler(model_data)
+        mpip_separation_handler = msh.MPIPSeparationHandler(
+            mpip_handler, external_solver.opt_model
+        )
+        solver.mpip_separation_handler = mpip_separation_handler
 
     def test_alkyl_model_data_creation(self):
         """Test model data creation for alkyl instance."""

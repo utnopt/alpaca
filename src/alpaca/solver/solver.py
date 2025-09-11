@@ -4,8 +4,7 @@
 """
 import time
 
-from alpaca.external_solvers import model_scip as msc, model_gurobi as mgu
-import alpaca.mpip.separation.separationhandler_gurobi as seg
+from alpaca.external_solvers import mip_model as mm, solver_wrapper as sw
 from alpaca.settings import UserSettings
 from alpaca.utils.logger import logger
 
@@ -13,9 +12,7 @@ from alpaca.utils.logger import logger
 class Solver:
     """Solver object."""
 
-    def __init__(
-        self, external_solver: msc.ModelScip | mgu.ModelGurobi, settings: UserSettings
-    ):
+    def __init__(self, external_solver: mm.MIPModel, settings: UserSettings):
         self.external_solver = external_solver
         self.settings = settings
         self.mpip_separation_handler = None
@@ -27,14 +24,8 @@ class Solver:
         self._activate_mpip_features()
         self._attach_event_handlers()
         start_time = time.time()
-        if self.settings.external_solver == "scip":
-            self.external_solver.opt_model.optimize()
-        elif self.settings.external_solver == "gurobi":
-            self.external_solver.opt_model.optimize(self.gurobi_callback_function)
-        else:
-            raise ValueError(
-                f"Unsupported external solver: {self.settings.external_solver}"
-            )
+        self.external_solver.opt_model.optimize(self.gurobi_callback_function)
+        self.external_solver.opt_model.model.printStatistics()
         runtime = time.time() - start_time
         return runtime
 
@@ -52,9 +43,12 @@ class Solver:
 
     def _attach_event_handlers_scip(self):
         if self.settings.feature_mpip_separation:
-            self.external_solver.opt_model.includeSepa(
-                self.mpip_separation_handler,
-                "python_mpip",
+            scip_mpip_separation = sw.ScipSeparation(self.mpip_separation_handler)
+            for mpip in self.mpip_separation_handler.mpip_handler.mpip_dict.values():
+                mpip.separator.separation_handler = scip_mpip_separation
+            self.external_solver.opt_model.model.includeSepa(
+                scip_mpip_separation,
+                "mpip",
                 "generates mpip_cuts",
                 priority=536870911,
                 freq=1,
@@ -63,7 +57,7 @@ class Solver:
     def _attach_event_handlers_gurobi(self):
         if self.settings.feature_mpip_separation:
             # pylint: disable=protected-access
-            self.external_solver.opt_model._separation_handler = (
+            self.external_solver.opt_model.model._mpip_separation_handler = (
                 self.mpip_separation_handler
             )
-            self.gurobi_callback_function = seg.separation_callback
+            self.gurobi_callback_function = sw.gurobi_separation_callback

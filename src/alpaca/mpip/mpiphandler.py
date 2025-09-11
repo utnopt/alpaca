@@ -33,28 +33,12 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         self._find_mpip_instances_in_nonlinear_expressions()
         self._find_mpip_instances_in_bilinear_expressions()
         self._find_mpip_instances_in_multilinear_expressions()
-        self._add_breakpoint_info_to_model_data()
+        self._build_mpip_instances()
 
-    def build_mpip_instances(self) -> None:
-        """Build all mpip instances."""
-        logger.info("Build mpip instances..")
+    def _build_mpip_instances(self) -> None:
         for mpip in self.mpip_dict.values():
             if not mpip.relation:
                 mpip.build_mpip()
-            mpip.calculate_relation_ratio()
-
-    def _add_breakpoint_info_to_model_data(self) -> None:
-        """Add breakpoint information to model data for all mpip instances."""
-        for mpip in self.mpip_dict.values():
-            mpip.implied_variable.is_mpip_implied = True
-            for implying_variable in mpip.implying_variables.values():
-                implying_variable.is_mpip_implying = True
-            mpip.interval_lp.addCons(
-                mpip.interval_lp_implied_var == mpip.implying_function
-            )
-            mpip_dimension = len(mpip.implying_variables)
-            num_grid_points = int(1000 ** (1 / mpip_dimension))
-            mpip.build_implied_values_list(num_grid_points=num_grid_points)
 
     def _find_mpip_instances_in_nonlinear_expressions(self) -> None:
         """Extract mpip instances from nonlinear expression trees."""
@@ -125,7 +109,7 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         mpip.implying_function = self._nonlinear_expression_to_scip_expression(
             nonlinear_expression, mpip
         )
-        if mpip.feasible and len(mpip.implying_variables) >= 2:
+        if mpip.feasible:
             self.mpip_dict[mpip_id] = mpip
 
     def _nonlinear_expression_to_scip_expression(
