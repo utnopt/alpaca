@@ -90,16 +90,6 @@ class Variable:  # pylint: disable=too-many-instance-attributes
         if pwl_method == "multiple-choice":
             self._add_binaries_multiple_choice()
 
-    def add_continuous_pwl(self, pwl_method: str) -> None:
-        """Link continuous variables to the breakpoints.
-
-        Args:
-            number_of_breakpoints: Number of discretization points created.
-            pwl_method: PWL method to use.
-        """
-        if pwl_method == "multiple-choice":
-            self._add_pwl_approximation_multiple_choice()
-
     def _add_pwl_approximation_multiple_choice(self):
         self._add_continuous_variables_multiple_choice()
         self._add_pwl_constraints_multiple_choice()

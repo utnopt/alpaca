@@ -81,7 +81,11 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         variables: list[var.Variable],
         level: int,
         representative_variable: var.Variable | None = None,
-    ) -> ble.BilinearExpression | bbe.BilinearBinaryExpression:
+    ) -> (
+        ble.BilinearExpression
+        | bbe.BilinearBinaryExpression
+        | bme.BilinearMixedBinaryExpression
+    ):
         """Add a bilinear expression to the model, or return it if it already exists.
 
         Args:
@@ -117,6 +121,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             self.expressions.bilinear_mixed_binary_expressions[name] = (
                 bilinear_expression
             )
+            return bilinear_expression
         if variables[1].var_type == "B":
             bilinear_expression = bme.BilinearMixedBinaryExpression(
                 name,
@@ -128,6 +133,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             self.expressions.bilinear_mixed_binary_expressions[name] = (
                 bilinear_expression
             )
+            return bilinear_expression
         bilinear_expression = ble.BilinearExpression(
             name,
             self,
