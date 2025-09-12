@@ -210,6 +210,7 @@ class TestMultilinearExpression(unittest.TestCase):
         self.model_data.constraints = {}
 
         multilinear_expr.apply_piecewise_constant_relaxation(approximation=True)
+        multilinear_expr.extract_mpip_relation(approximation=True)
 
         # Expected mid-values for x: 2, 4
         # Expected mid-values for y: 3, 5.5

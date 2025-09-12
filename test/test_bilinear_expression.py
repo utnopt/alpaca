@@ -197,6 +197,7 @@ class TestBilinearExpression(unittest.TestCase):
 
         # Test without approximation
         bilinear_expr.apply_piecewise_constant_relaxation(approximation=False)
+        bilinear_expr.extract_mpip_relation(approximation=False)
 
         # Expected implied bounds and indices
         # (i, j) | x_bounds  | y_bounds  | implied_bounds | implied_indices
@@ -246,6 +247,7 @@ class TestBilinearExpression(unittest.TestCase):
 
         # Test with approximation
         bilinear_expr.apply_piecewise_constant_relaxation(approximation=True)
+        bilinear_expr.extract_mpip_relation(approximation=True)
 
         # Expected mid-values for x: (1+3)/2=2, (3+5)/2=4
         # Expected mid-values for y: (2+4)/2=3, (4+7)/2=5.5

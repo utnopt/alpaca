@@ -6,6 +6,7 @@ from alpaca.expressions import (
     multilinear_expression as mle,
     one_dim_expression as ode,
 )
+import alpaca.model_data.constraint as con
 
 
 class BilinearExpression(mle.MultilinearExpression):
@@ -81,3 +82,59 @@ class BilinearExpression(mle.MultilinearExpression):
             (0.5, second_var_squared_rep),
             (-0.5, square_helper_var.representative_variable),
         ]
+
+    def add_mccormick_envelope(self):
+        """Add McCormick envelope constraints for bilinear expression."""
+        x = self.variables[0]
+        y = self.variables[1]
+        z = self.representative_variable
+
+        # McCormick envelope constraints
+        self.model_data.add_constraint(
+            con.Constraint(
+                f"mc1_{self.name}",
+                con_type=">=",
+                variables=[
+                    (1.0, z),
+                    (-x.lb, y),
+                    (-y.ub, x),
+                ],
+                rhs=-x.lb * y.ub,
+            )
+        )
+        self.model_data.add_constraint(
+            con.Constraint(
+                f"mc2_{self.name}",
+                con_type=">=",
+                variables=[
+                    (1.0, z),
+                    (-x.ub, y),
+                    (-y.lb, x),
+                ],
+                rhs=-x.ub * y.lb,
+            )
+        )
+        self.model_data.add_constraint(
+            con.Constraint(
+                f"mc3_{self.name}",
+                con_type="<=",
+                variables=[
+                    (1.0, z),
+                    (-x.lb, y),
+                    (-y.lb, x),
+                ],
+                rhs=-x.lb * y.lb,
+            )
+        )
+        self.model_data.add_constraint(
+            con.Constraint(
+                f"mc4_{self.name}",
+                con_type="<=",
+                variables=[
+                    (1.0, z),
+                    (-x.ub, y),
+                    (-y.ub, x),
+                ],
+                rhs=-x.ub * y.ub,
+            )
+        )

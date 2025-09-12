@@ -31,8 +31,7 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         self.mpip_counter: int = 0
         logger.info("Add feature mpip..")
         self._find_mpip_instances_in_nonlinear_expressions()
-        self._find_mpip_instances_in_bilinear_expressions()
-        self._find_mpip_instances_in_multilinear_expressions()
+        self._find_mpip_instances_in_multilinear_and_bilinear_expressions()
         self._build_mpip_instances()
 
     def _build_mpip_instances(self) -> None:
@@ -45,16 +44,15 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         for nonlinear_expression in self.first_level_nonlinear_expression_values:
             self._process_expression_tree(nonlinear_expression)
 
-    def _find_mpip_instances_in_bilinear_expressions(self) -> None:
-        """Extract mpip instances from bilinear expressions."""
-        for bilinear_expression in self.bilinear_expressions.values():
-            if bilinear_expression.piecewise_constant_relation:
-                self._add_mpip_instance_from_bilinear_expression(bilinear_expression)
-
-    def _find_mpip_instances_in_multilinear_expressions(self) -> None:
-        """Extract mpip instances from multilinear expressions."""
-        for multilinear_expression in self.multilinear_expressions.values():
-            if multilinear_expression.piecewise_constant_relation:
+    def _find_mpip_instances_in_multilinear_and_bilinear_expressions(self) -> None:
+        """Extract mpip instances from multilinear and bilinear expressions."""
+        for multilinear_expression in list(
+            self.multilinear_expressions.values()
+        ) + list(self.bilinear_expressions.values()):
+            if multilinear_expression.representative_variable.is_discretized:
+                multilinear_expression.extract_mpip_relation(
+                    approximation=self.model_data.settings.approximation
+                )
                 self._add_mpip_instance_from_multilinear_expression(
                     multilinear_expression
                 )

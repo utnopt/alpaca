@@ -48,9 +48,26 @@ class MultilinearExpression(exn.Expression):
         for variable in self.variables:
             variable.add_nonlinearity_to_occurring_in(f"multilinear{len(variables)}")
 
-    def apply_piecewise_constant_relaxation(
-        self, approximation: bool = False, reformulated: int = 0
-    ):
+    def extract_mpip_relation(self, approximation: bool = False):
+        """Extract the piecewise constant relation for the multilinear expression."""
+        if not self.representative_variable.is_discretized:
+            return
+        all_variables_mid_values_with_indices = (
+            self._get_all_variables_mid_values_with_indices()
+        )
+
+        for combination_with_indices in itertools.product(
+            *all_variables_mid_values_with_indices
+        ):
+            current_variable_indices = [index for _, index in combination_with_indices]
+            implied_indices = self._calculate_implied_indices(
+                combination_with_indices, current_variable_indices, approximation
+            )
+            self.piecewise_constant_relation[tuple(current_variable_indices)] = (
+                implied_indices
+            )
+
+    def apply_piecewise_constant_relaxation(self, approximation: bool = False):
         """
         Apply piecewise constant relaxation for multilinear expressions.
 
@@ -68,21 +85,10 @@ class MultilinearExpression(exn.Expression):
             *all_variables_mid_values_with_indices
         ):
             current_variable_indices = [index for _, index in combination_with_indices]
-
-            # Calculate the implied indices based on the approximation flag
             implied_indices = self._calculate_implied_indices(
                 combination_with_indices, current_variable_indices, approximation
             )
-
-            # Store the relationship
-            self.piecewise_constant_relation[tuple(current_variable_indices)] = (
-                implied_indices
-            )
-
-            if not reformulated:
-                self._add_piecewise_constraint(
-                    current_variable_indices, implied_indices
-                )
+            self._add_piecewise_constraint(current_variable_indices, implied_indices)
 
     def _calculate_implied_indices(
         self,
