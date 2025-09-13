@@ -69,9 +69,9 @@ class BoundPropagator:
         )
         for _ in range(self.model_data.settings.bound_propagation_rounds):
             for expression in sorted_expressions:
-                if expression.istype(ode.OneDimExpression):
+                if isinstance(expression, ode.OneDimExpression):
                     self._propagate_bounds_one_dim_expression(expression)
-                elif expression.istype(lie.LinearExpression):
+                elif isinstance(expression, lie.LinearExpression):
                     self._propagate_bounds_linear_expressions(expression)
                 else:
                     self._propagate_bounds_multilinear_expressions(expression)

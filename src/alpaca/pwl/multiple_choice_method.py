@@ -49,7 +49,7 @@ class MultipleChoiceMethod(pwm.PWLMethod):
                 variables=[
                     (1.0, variable) for variable in self.pwl_variables_continuous
                 ]
-                + [(-1.0, self)],
+                + [(-1.0, self.variable)],
             )
         )
         self.pwl_constraints.append(

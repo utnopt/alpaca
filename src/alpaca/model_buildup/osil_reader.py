@@ -76,7 +76,7 @@ class OsilReader:
             return
         for c in cons_tags:
             constraint = self.model_data.add_constraint(
-                con.Constraint(f"c_{len(self.model_data.constraints)}")
+                con.Constraint(f"c_{len(self.model_data.constraints) - 1}")
             )
             lb = c.get("lb")
             ub = c.get("ub")
