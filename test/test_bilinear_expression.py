@@ -119,16 +119,20 @@ class TestBilinearExpression(unittest.TestCase):
         # mc4: z <= x.ub*y + y.ub*x - x.ub*y.ub  => z <= 2*y + 5*x - 10
         expected = {
             f"mc1_{bilinear_expr.name}": {
-                "vars": {(1, z), (-1, y), (-5, x)}, "rhs": -5
+                "vars": {(1, z), (-1, y), (-5, x)},
+                "rhs": -5,
             },
             f"mc2_{bilinear_expr.name}": {
-                "vars": {(1, z), (-2, y), (-3, x)}, "rhs": -6
+                "vars": {(1, z), (-2, y), (-3, x)},
+                "rhs": -6,
             },
             f"mc3_{bilinear_expr.name}": {
-                "vars": {(1, z), (-1, y), (-3, x)}, "rhs": -3
+                "vars": {(1, z), (-1, y), (-3, x)},
+                "rhs": -3,
             },
             f"mc4_{bilinear_expr.name}": {
-                "vars": {(1, z), (-2, y), (-5, x)}, "rhs": -10
+                "vars": {(1, z), (-2, y), (-5, x)},
+                "rhs": -10,
             },
         }
 
@@ -237,23 +241,30 @@ class TestBilinearExpression(unittest.TestCase):
         rep_var.breakpoints = [0.0, 10.0, 20.0, 30.0, 40.0]
         rep_var.is_discretized = True
         rep_var.pwl_variables_binary = [
-            MagicMock(), MagicMock(), MagicMock(), MagicMock()
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
         ]
         test_cases = [
             {
                 "name": "no_approximation",
                 "approximation": False,
                 "expected": {
-                    (0, 0): (0, 1), (0, 1): (0, 1, 2),
-                    (1, 0): (0, 1), (1, 1): (1, 2, 3),
+                    (0, 0): (0, 1),
+                    (0, 1): (0, 1, 2),
+                    (1, 0): (0, 1),
+                    (1, 1): (1, 2, 3),
                 },
             },
             {
                 "name": "with_approximation",
                 "approximation": True,
                 "expected": {
-                    (0, 0): (0,), (0, 1): (1,),
-                    (1, 0): (1,), (1, 1): (2,),
+                    (0, 0): (0,),
+                    (0, 1): (1,),
+                    (1, 0): (1,),
+                    (1, 1): (2,),
                 },
             },
         ]
@@ -261,7 +272,10 @@ class TestBilinearExpression(unittest.TestCase):
             with self.subTest(case["name"]):
                 expr = ble.BilinearExpression(
                     f"test_{case['name']}",
-                    self.model_data, [self.var_x, self.var_y], 1, rep_var
+                    self.model_data,
+                    [self.var_x, self.var_y],
+                    1,
+                    rep_var,
                 )
                 self.model_data.constraints = {}
                 expr.apply_piecewise_constant_relaxation(case["approximation"])

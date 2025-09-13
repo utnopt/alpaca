@@ -3,11 +3,16 @@
 """
 @authors: kuen,
 """
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import itertools
 import bisect
 
 from alpaca.model_data import variable as var, constraint as con
 from alpaca.expressions import expression as exn
+
+if TYPE_CHECKING:
+    from alpaca.model_data.model_data import ModelData
 
 
 class MultilinearExpression(exn.Expression):
@@ -27,7 +32,7 @@ class MultilinearExpression(exn.Expression):
     def __init__(  # pylint: disable=too-many-arguments, too-many-positional-arguments
         self,
         name: str,
-        model_data: "ModelData",
+        model_data: ModelData,
         variables: list[var.Variable],
         level: int,
         representative_variable: var.Variable | None = None,

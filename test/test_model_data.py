@@ -8,7 +8,7 @@ import unittest
 import alpaca.model_data.model_data as mda
 from alpaca.external_solvers import mip_model as mm
 import alpaca.solver.solver as slv
-import alpaca.mpip.mpiphandler as mph
+import alpaca.mpip.mpip_handler as mph
 import alpaca.mpip.separation.mpip_separationhandler as msh
 import alpaca.settings as s
 

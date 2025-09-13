@@ -2,7 +2,13 @@
 """
 @authors: kuen,
 """
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from alpaca.model_data import variable as var
+
+if TYPE_CHECKING:
+    from alpaca.model_data.model_data import ModelData
 
 
 class Expression:
@@ -17,7 +23,7 @@ class Expression:
     def __init__(
         self,
         name: str,
-        model_data: "ModelData",
+        model_data: ModelData,
         level: int,
         representative_variable: var.Variable | None = None,
     ):

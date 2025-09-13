@@ -4,11 +4,15 @@
 """
 @authors: kuen,
 """
+from __future__ import annotations
 import math
-from typing import List, Tuple
+from typing import List, Tuple, TYPE_CHECKING
 
 from alpaca.model_data import variable as var, constraint as con
 import alpaca.expressions.expression as exn
+
+if TYPE_CHECKING:
+    from alpaca.model_data.model_data import ModelData
 
 
 class OneDimExpression(exn.Expression):
@@ -27,7 +31,7 @@ class OneDimExpression(exn.Expression):
     def __init__(
         self,
         name: str,
-        model_data: "ModelData",
+        model_data: ModelData,
         variable: var.Variable,
         level: int,
         representative_variable: var.Variable | None = None,
@@ -190,7 +194,7 @@ class SquareExpression(OneDimExpression):
     def __init__(
         self,
         name: str,
-        model_data: "ModelData",
+        model_data: ModelData,
         variable: var.Variable,
         level: int,
         representative_variable: var.Variable | None = None,
@@ -242,7 +246,7 @@ class ExponentialExpression(OneDimExpression):
     def __init__(
         self,
         name: str,
-        model_data: "ModelData",
+        model_data: ModelData,
         variable: var.Variable,
         level: int,
         representative_variable: var.Variable | None = None,
@@ -298,7 +302,7 @@ class LnExpression(OneDimExpression):
     def __init__(
         self,
         name: str,
-        model_data: "ModelData",
+        model_data: ModelData,
         variable: var.Variable,
         level: int,
         representative_variable: var.Variable | None = None,
@@ -354,7 +358,7 @@ class SquareRootExpression(OneDimExpression):
     def __init__(
         self,
         name: str,
-        model_data: "ModelData",
+        model_data: ModelData,
         variable: var.Variable,
         level: int,
         representative_variable: var.Variable | None = None,
@@ -410,7 +414,7 @@ class SineExpression(OneDimExpression):
     def __init__(
         self,
         name: str,
-        model_data: "ModelData",
+        model_data: ModelData,
         variable: var.Variable,
         level: int,
         representative_variable: var.Variable | None = None,
@@ -485,7 +489,7 @@ class CosineExpression(OneDimExpression):
     def __init__(
         self,
         name: str,
-        model_data: "ModelData",
+        model_data: ModelData,
         variable: var.Variable,
         level: int,
         representative_variable: var.Variable | None = None,
@@ -561,7 +565,7 @@ class LogExpression(OneDimExpression):
     def __init__(
         self,
         name: str,
-        model_data: "ModelData",
+        model_data: ModelData,
         variable: var.Variable,
         level: int,
         representative_variable: var.Variable | None = None,
@@ -715,7 +719,7 @@ class TangensHExpression(OneDimExpression):
     def __init__(
         self,
         name: str,
-        model_data: "ModelData",
+        model_data: ModelData,
         variable: var.Variable,
         level: int,
         representative_variable: var.Variable | None = None,
@@ -776,7 +780,7 @@ class InverseExpression(OneDimExpression):
     def __init__(
         self,
         name: str,
-        model_data: "ModelData",
+        model_data: ModelData,
         variable: var.Variable,
         level: int,
         representative_variable: var.Variable | None = None,

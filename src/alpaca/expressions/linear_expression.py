@@ -2,8 +2,14 @@
 """
 @authors: kuen,
 """
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from alpaca.model_data import variable as var, constraint as con
 import alpaca.expressions.expression as exn
+
+if TYPE_CHECKING:
+    from alpaca.model_data.model_data import ModelData
 
 
 class LinearExpression(exn.Expression):
@@ -21,7 +27,7 @@ class LinearExpression(exn.Expression):
     def __init__(
         self,
         name: str,
-        model_data,
+        model_data: ModelData,
         level: int,
         representative_variable: var.Variable | None = None,
     ):
@@ -36,7 +42,7 @@ class LinearExpression(exn.Expression):
         super().__init__(name, model_data, level, representative_variable)
         self.variables: list[tuple[float, var.Variable]] = []
         self.constant: float = 0.0
-        self.model_data: "ModelData" = model_data
+        self.model_data: ModelData = model_data
 
     def add_constraint_from_linear_expression(self):
         """Add constraint from linear expression."""

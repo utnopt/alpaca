@@ -2,7 +2,7 @@
 """
 @authors: kuen,
 """
-from alpaca.mpip import mpiphandler as mph
+from alpaca.mpip import mpip_handler as mph
 import alpaca.external_solvers.solver_wrapper as sw
 from alpaca.mpip.separation import mpip_separator as mps
 
