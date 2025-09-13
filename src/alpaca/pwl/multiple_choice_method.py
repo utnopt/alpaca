@@ -103,7 +103,7 @@ class MultipleChoiceMethod(pwm.PWLMethod):
     def _apply_multiple_choice_method_approximation(
         self, expression: ode.OneDimExpression
     ):
-        variables_in_constraint = [(-1.0, self.variable)]
+        variables_in_constraint = [(-1.0, expression.representative_variable)]
         for i, bp in enumerate(self.variable.breakpoints[:-1]):
             slope, intercept = (
                 expression.get_linear_approximation_function_parameters_for_segment(
@@ -123,7 +123,7 @@ class MultipleChoiceMethod(pwm.PWLMethod):
     def _apply_multiple_choice_method_relaxation(
         self, expression: ode.OneDimExpression
     ):
-        continuous_variables_in_constraint = [(-1.0, self.variable)]
+        continuous_variables_in_constraint = [(-1.0, expression.representative_variable)]
         binary_variables_in_underestimating_constraint = []
         binary_variables_in_overestimating_constraint = []
         for i, bp in enumerate(self.variable.breakpoints[:-1]):
