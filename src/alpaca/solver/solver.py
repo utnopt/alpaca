@@ -25,6 +25,7 @@ class Solver:
         self._attach_event_handlers()
         start_time = time.time()
         self.external_solver.opt_model.optimize(self.gurobi_callback_function)
+        self.external_solver.opt_model.model.write("model3.lp")
         runtime = time.time() - start_time
         return runtime
 

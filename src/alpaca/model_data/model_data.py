@@ -281,18 +281,22 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         etr.ExpressionTree(self).decompose()
 
         # Step 4: Handle multilinear and bilinear terms based on settings.
-        mlh.MultilinearHandler(self).handle()
+        multilinear_handler = mlh.MultilinearHandler(self)
+        multilinear_handler.handle()
 
         # Step 5: Propagate bounds again, now through the expression structures.
         bound_propagator.propagate_expressions()
 
-        # Step 6: Discretize variables that are part of nonlinear terms.
+        # Step 6: Add McCormick envelopes for bilinear terms if specified.
+        multilinear_handler.add_mccormick_envelopes()
+
+        # Step 7: Discretize variables that are part of nonlinear terms.
         dis.BreakpointGenerator(self).generate_breakpoints()
 
-        # Step 7: Apply piecewise relaxations for remaining nonlinear expressions.
+        # Step 8: Apply piecewise relaxations for remaining nonlinear expressions.
         pwh.PWLHandler(self).apply_relaxations()
 
-        # Step 8: Convert any remaining linear expression objects into standard constraints.
+        # Step 9: Convert any remaining linear expression objects into standard constraints.
         self._translate_linear_expressions_to_constraints()
 
     def _translate_linear_expressions_to_constraints(

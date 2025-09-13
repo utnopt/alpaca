@@ -63,6 +63,7 @@ class PWLHandler:
         if self.model_data.settings.bilinear_handling == 2:
             for expression in self.model_data.expressions.bilinear_expressions.values():
                 constraints = expression.representative_variable.pwl.apply_pwc_relaxation(
+                    expression,
                     approximation=self.model_data.settings.approximation,
                 )
                 for constraint in constraints:

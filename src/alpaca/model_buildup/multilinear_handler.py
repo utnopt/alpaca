@@ -24,10 +24,13 @@ class MultilinearHandler:
 
         if self.model_data.settings.bilinear_handling == 1:
             self._reformulate_bilinear_to_sum_of_squares()
-        elif self.model_data.settings.bilinear_handling == 0:
-            self._add_mccormick_envelope_to_bilinear_expressions()
         elif self.model_data.settings.bilinear_handling == 2:
             self._mark_representative_variables_of_bilinear_expressions_as_discretized()
+
+    def add_mccormick_envelopes(self) -> None:
+        """Adds McCormick envelope constraints to bilinear expressions."""
+        if self.model_data.settings.bilinear_handling == 0:
+            self._add_mccormick_envelope_to_bilinear_expressions()
 
     def _reformulate_multilinear_to_bilinear(self) -> None:
         """Reformulates multilinear expressions into bilinear expressions."""
