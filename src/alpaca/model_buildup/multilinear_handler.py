@@ -14,20 +14,19 @@ class MultilinearHandler:
 
     def __init__(self, model_data: ModelData):
         self.model_data = model_data
-        self.settings = model_data.settings
 
     def handle(self):
         """Applies reformulations based on user settings."""
-        if self.settings.reformulate_multilinear_to_bilinear:
+        if self.model_data.settings.reformulate_multilinear_to_bilinear:
             self._reformulate_multilinear_to_bilinear()
         else:
             self._mark_representative_variables_of_multilinear_expressions_as_discretized()
 
-        if self.settings.bilinear_handling == 1:
+        if self.model_data.settings.bilinear_handling == 1:
             self._reformulate_bilinear_to_sum_of_squares()
-        elif self.settings.bilinear_handling == 0:
+        elif self.model_data.settings.bilinear_handling == 0:
             self._add_mccormick_envelope_to_bilinear_expressions()
-        elif self.settings.bilinear_handling == 2:
+        elif self.model_data.settings.bilinear_handling == 2:
             self._mark_representative_variables_of_bilinear_expressions_as_discretized()
 
     def _reformulate_multilinear_to_bilinear(self) -> None:

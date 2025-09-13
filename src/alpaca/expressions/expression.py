@@ -43,8 +43,5 @@ class Expression:
         )
         self.level = level
 
-    def propagate_variable_bounds(self):
-        """Propagate variables bounds."""
-
     def __repr__(self):
         return self.name

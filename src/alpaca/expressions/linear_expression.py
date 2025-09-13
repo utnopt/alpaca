@@ -54,16 +54,3 @@ class LinearExpression(exn.Expression):
                 variables=self.variables + [(-1.0, self.representative_variable)],
             )
         )
-
-    def propagate_variable_bounds(self):
-        """Propagate variables bounds."""
-        lb = self.constant + sum(
-            min(coeff * variable.lb, coeff * variable.ub)
-            for coeff, variable in self.variables
-        )
-        ub = self.constant + sum(
-            max(coeff * variable.lb, coeff * variable.ub)
-            for coeff, variable in self.variables
-        )
-        self.representative_variable.lb = max(lb, self.representative_variable.lb)
-        self.representative_variable.ub = min(ub, self.representative_variable.ub)

@@ -20,11 +20,11 @@ from alpaca.expressions import (
 )
 from alpaca.model_buildup import (
     bound_propagator as bpr,
-    discretizor as dis,
+    breakpoint_generator as dis,
     expression_tree as etr,
     multilinear_handler as mlh,
     osil_reader as osr,
-    pwl,
+    pwl_handler as pwh,
 )
 
 
@@ -287,10 +287,10 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         bound_propagator.propagate_expressions()
 
         # Step 6: Discretize variables that are part of nonlinear terms.
-        dis.Discretizor(self).discretize_variables()
+        dis.BreakpointGenerator(self).generate_breakpoints()
 
         # Step 7: Apply piecewise relaxations for remaining nonlinear expressions.
-        pwl.PWL(self).apply_relaxations()
+        pwh.PWLHandler(self).apply_relaxations()
 
         # Step 8: Convert any remaining linear expression objects into standard constraints.
         self._translate_linear_expressions_to_constraints()
