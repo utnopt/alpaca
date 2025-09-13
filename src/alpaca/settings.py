@@ -63,9 +63,12 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             + f"/data/export/{time.strftime('%Y-%m-%d_%H-%M-%S')}_"
             f"Result_{StaticSettings.project_name}/"
         )
-        self.reformulate_multilinear = int(
-            config_dict.get("reformulate_multilinear", 1)
+        self.reformulate_multilinear_to_bilinear = int(
+            config_dict.get("reformulate_multilinear_to_bilinear", 1)
         )
+        self.bilinear_handling = int(
+            config_dict.get("bilinear_handling", 0)
+        )  # 0: mccormick, 1: reformulate to sum of squares, 2: piecewise constant
         self.feature_mpip_separation = int(
             config_dict.get("feature/mpip/separation", 0)
         )

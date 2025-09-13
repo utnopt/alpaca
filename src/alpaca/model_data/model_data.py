@@ -275,11 +275,21 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         )
         self._grow_nonlinear_expression_trees()
         self._fragment_expression_trees_to_low_dimensional_functions()
-        if self.settings.reformulate_multilinear:
-            self._reformulate_multilinear_and_bilinear_expressions()
+        if self.settings.reformulate_multilinear_to_bilinear:
+            self._reformulate_multilinear_to_bilinear()
+        else:
+            self._mark_representative_variables_of_multilinear_expressions_as_discretized()
+        if self.settings.bilinear_handling == 1:
+            self._reformulate_bilinear_to_sum_of_squares()
+        elif self.settings.bilinear_handling == 0:
+            self._add_mccormick_envelope_to_bilinear_expressions()
+        elif self.settings.bilinear_handling == 2:
+            self._mark_representative_variables_of_bilinear_expressions_as_discretized()
         self._propagate_bounds_expressions()
         self._discretize_variables()
-        self._translate_expressions_to_constraints()
+        self._apply_piecewise_linear_relaxation_for_one_dim_expressions()
+        self._apply_piecewise_constant_relaxation_for_multilinear_expressions()
+        self._translate_linear_expressions_to_constraints()
 
     def _read_osil_file(self) -> BeautifulSoup:
         """Reads the OSiL file and returns its parsed XML content.
@@ -522,10 +532,36 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             ]
             nl_expression.fragment_expression_tree_to_low_dimensional_functions(1)
 
-    def _reformulate_multilinear_and_bilinear_expressions(self) -> None:
+    def _reformulate_multilinear_to_bilinear(self) -> None:
         """Reformulates multilinear and bilinear expressions based on settings."""
         for expression in self.expressions.multilinear_expressions.values():
             expression.reformulate_to_bilinear_expressions()
+
+    def _mark_representative_variables_of_multilinear_expressions_as_discretized(
+        self,
+    ) -> None:
+        """Marks representative variables of multilinear expressions for discretization."""
+        for expression in self.expressions.multilinear_expressions.values():
+            expression.representative_variable.add_nonlinearity_to_occurring_in(
+                f"multilinearimplied{len(expression.variables)}"
+            )
+
+    def _mark_representative_variables_of_bilinear_expressions_as_discretized(
+        self,
+    ) -> None:
+        """Marks representative variables of bilinear expressions for discretization."""
+        for expression in self.expressions.bilinear_expressions.values():
+            expression.representative_variable.add_nonlinearity_to_occurring_in(
+                "multilinearimplied2"
+            )
+
+    def _add_mccormick_envelope_to_bilinear_expressions(self) -> None:
+        """Adds McCormick envelope to bilinear expressions."""
+        for expression in self.expressions.bilinear_expressions.values():
+            expression.add_mccormick_envelope()
+
+    def _reformulate_bilinear_to_sum_of_squares(self) -> None:
+        """Reformulates bilinear expressions to sum of squares."""
         for expression in self.expressions.bilinear_expressions.values():
             expression.reformulate_to_sum_of_squares()
 
@@ -568,31 +604,29 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         for constraint in pwl_constraints:
             self.add_constraint(constraint)
 
-    def _translate_expressions_to_constraints(
+    def _translate_linear_expressions_to_constraints(
         self,
     ) -> None:
         """Converts expression objects into their equivalent constraint representations."""
-        self._apply_piecewise_linear_relaxation()
-        self._apply_piecewise_constant_relaxation()
         for expression in self.expressions.linear_expressions.values():
             expression.add_constraint_from_linear_expression()
 
-    def _apply_piecewise_linear_relaxation(self) -> None:
+    def _apply_piecewise_linear_relaxation_for_one_dim_expressions(self) -> None:
         """Applies piecewise linear relaxation to all one-dimensional expressions."""
         for expression in self.expressions.one_dim_expressions.values():
             expression.apply_piecewise_linear_relaxation(
                 approximation=self.settings.approximation
             )
 
-    def _apply_piecewise_constant_relaxation(self) -> None:
+    def _apply_piecewise_constant_relaxation_for_multilinear_expressions(self) -> None:
         """Applies piecewise constant relaxation to bilinear and multilinear expressions."""
-        for expression in self.expressions.bilinear_expressions.values():
-            expression.apply_piecewise_constant_relaxation(
-                approximation=self.settings.approximation,
-                reformulated=self.settings.reformulate_multilinear,
-            )
-        for expression in self.expressions.multilinear_expressions.values():
-            expression.apply_piecewise_constant_relaxation(
-                approximation=self.settings.approximation,
-                reformulated=self.settings.reformulate_multilinear,
-            )
+        if self.settings.bilinear_handling == 2:
+            for expression in self.expressions.bilinear_expressions.values():
+                expression.apply_piecewise_constant_relaxation(
+                    approximation=self.settings.approximation,
+                )
+        if not self.settings.reformulate_multilinear_to_bilinear:
+            for expression in self.expressions.multilinear_expressions.values():
+                expression.apply_piecewise_constant_relaxation(
+                    approximation=self.settings.approximation,
+                )

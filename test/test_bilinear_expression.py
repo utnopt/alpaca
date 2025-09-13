@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=duplicate-code
 """
 Unit tests for BilinearExpression class
 """
@@ -27,7 +26,6 @@ class TestBilinearExpression(unittest.TestCase):
         # Create mock model_data with proper mock setup
         self.model_data = MagicMock()
         self.model_data.variables = {}
-        # Ensure model_data.constraints is a dictionary for testing updates
         self.model_data.constraints = {}
         self.model_data.expressions = MagicMock()
         self.model_data.expressions.linear_expressions = {}
@@ -62,257 +60,214 @@ class TestBilinearExpression(unittest.TestCase):
             1,
         )
 
-        # Check basic attributes
         self.assertEqual(bilinear_expr.name, "test_bilinear")
         self.assertEqual(bilinear_expr.variables[0], self.var_x)
         self.assertEqual(bilinear_expr.variables[1], self.var_y)
         self.assertEqual(bilinear_expr.level, 1)
-
-        # Check representative variable
         self.assertIsNotNone(bilinear_expr.representative_variable)
         self.assertEqual(bilinear_expr.representative_variable.name, "r_test_bilinear")
-        self.assertEqual(
-            bilinear_expr.representative_variable.lb, -s.StaticSettings.infinity
-        )
-        self.assertEqual(
-            bilinear_expr.representative_variable.ub, s.StaticSettings.infinity
-        )
-
-        # Check nonlinearity tracking
         self.assertIn("multilinear2", self.var_x.occurring_in)
         self.assertIn("multilinear2", self.var_y.occurring_in)
 
-    def test_bound_propagation_positive_variables(self):
-        """Test bound propagation with positive variable bounds."""
-        bilinear_expr = ble.BilinearExpression(
-            "test_bilinear",
-            self.model_data,
-            [self.var_x, self.var_y],
-            1,
-        )
-
-        # Call bound propagation
-        bilinear_expr.propagate_variable_bounds()
-
-        # Calculate expected bounds
-        combinations = [
-            self.var_x.lb * self.var_y.lb,
-            self.var_x.lb * self.var_y.ub,
-            self.var_x.ub * self.var_y.lb,
-            self.var_x.ub * self.var_y.ub,
-        ]
-        expected_lb = min(combinations)  # 1*2 = 2
-        expected_ub = max(combinations)  # 5*7 = 35
-
-        # Check both bounds are updated
-        self.assertEqual(bilinear_expr.representative_variable.lb, expected_lb)
-        self.assertEqual(bilinear_expr.representative_variable.ub, expected_ub)
-
-    def test_bound_propagation_mixed_bounds(self):
-        """Test bound propagation with variables that have negative bounds."""
-        # Create variables with negative bounds
-        var_a = var.Variable("a", lb=-3.0, ub=-1.0)
-        var_b = var.Variable("b", lb=2.0, ub=4.0)
-        var_a.occurring_in = []
-        var_b.occurring_in = []
-        self.model_data.variables["a"] = var_a
-        self.model_data.variables["b"] = var_b
-
-        bilinear_expr = ble.BilinearExpression(
-            "test_mixed", self.model_data, [var_a, var_b], 1
-        )
-
-        bilinear_expr.propagate_variable_bounds()
-
-        # Calculate expected bounds for (-3.0, -1.0) × (2.0, 4.0)
-        combinations = [
-            -3.0 * 2.0,  # -6
-            -3.0 * 4.0,  # -12
-            -1.0 * 2.0,  # -2
-            -1.0 * 4.0,  # -4
-        ]
-        expected_lb = min(combinations)  # -12
-        expected_ub = max(combinations)  # -2
-
-        self.assertEqual(bilinear_expr.representative_variable.lb, expected_lb)
-        self.assertEqual(bilinear_expr.representative_variable.ub, expected_ub)
-
-    def test_bound_propagation_zero_included(self):
-        """Test bound propagation when zero is included in variable bounds."""
-        var_a = var.Variable("a", lb=-2.0, ub=3.0)
-        var_b = var.Variable("b", lb=-1.0, ub=4.0)
-        var_a.occurring_in = []
-        var_b.occurring_in = []
-        self.model_data.variables["a"] = var_a
-        self.model_data.variables["b"] = var_b
-
-        bilinear_expr = ble.BilinearExpression(
-            "test_zero", self.model_data, [var_a, var_b], 1
-        )
-
-        bilinear_expr.propagate_variable_bounds()
-
-        # Calculate expected bounds for (-2.0, 3.0) × (-1.0, 4.0)
-        combinations = [
-            -2.0 * -1.0,  # 2
-            -2.0 * 4.0,  # -8
-            3.0 * -1.0,  # -3
-            3.0 * 4.0,  # 12
-        ]
-        expected_lb = min(combinations)  # -8
-        expected_ub = max(combinations)  # 12
-
-        self.assertEqual(bilinear_expr.representative_variable.lb, expected_lb)
-        self.assertEqual(bilinear_expr.representative_variable.ub, expected_ub)
-
-    def test_apply_piecewise_constant_relaxation(self):
-        """Test apply_piecewise_constant_relaxation for BilinearExpression."""
-        # Set up breakpoints for variables
-        self.var_x.breakpoints = [1.0, 3.0, 5.0]  # Two intervals
-        self.var_y.breakpoints = [2.0, 4.0, 7.0]  # Two intervals
-
-        # Mock binary variables for PWL
-        self.var_x.pwl_variables_binary = [MagicMock(), MagicMock()]
-        self.var_y.pwl_variables_binary = [MagicMock(), MagicMock()]
-
-        # Initialize representative variable with breakpoints
-        rep_var = var.Variable("r_test_bilinear_pwl", lb=0.0, ub=100.0)
-        rep_var.breakpoints = [0.0, 10.0, 20.0, 30.0, 40.0]
-        rep_var.is_discretized = True
-        rep_var.pwl_variables_binary = [
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
+    def test_bound_propagation(self):
+        """Test bound propagation with various variable bounds."""
+        test_cases = [
+            # Case 1: All positive bounds
+            {"name": "pos", "x": (1.0, 5.0), "y": (2.0, 7.0), "exp_z": (2.0, 35.0)},
+            # Case 2: Mixed positive and negative bounds
+            {"name": "mix", "x": (-3.0, -1.0), "y": (2.0, 4.0), "exp_z": (-12.0, -2.0)},
+            # Case 3: Bounds including zero
+            {"name": "zero", "x": (-2.0, 3.0), "y": (-1.0, 4.0), "exp_z": (-8.0, 12.0)},
         ]
 
+        for case in test_cases:
+            with self.subTest(case["name"]):
+                var_a = var.Variable("a", lb=case["x"][0], ub=case["x"][1])
+                var_b = var.Variable("b", lb=case["y"][0], ub=case["y"][1])
+                expr = ble.BilinearExpression(
+                    f"test_{case['name']}", self.model_data, [var_a, var_b], 1
+                )
+                expr.propagate_variable_bounds()
+                self.assertAlmostEqual(
+                    expr.representative_variable.lb, case["exp_z"][0]
+                )
+                self.assertAlmostEqual(
+                    expr.representative_variable.ub, case["exp_z"][1]
+                )
+
+    def test_add_mccormick_envelope_minimal_example(self):
+        """Test adding McCormick envelope with a simple, verifiable example."""
+        # Arrange a minimal example: x in [1, 2], y in [3, 5]
+        x = var.Variable("x", lb=1.0, ub=2.0)
+        y = var.Variable("y", lb=3.0, ub=5.0)
         bilinear_expr = ble.BilinearExpression(
-            "test_bilinear_pwl",
-            self.model_data,
-            [self.var_x, self.var_y],
-            1,
-            rep_var,
+            "test_mccormick", self.model_data, [x, y], 1
         )
-        self.model_data.constraints = {}
+        z = bilinear_expr.representative_variable
+        self.model_data.constraints.clear()
 
-        # Test without approximation
-        bilinear_expr.apply_piecewise_constant_relaxation(approximation=False)
+        # Act
+        bilinear_expr.add_mccormick_envelope()
 
-        # Expected implied bounds and indices
-        # (i, j) | x_bounds  | y_bounds  | implied_bounds | implied_indices
-        # (0, 0) | [1, 3]    | [2, 4]    | [2, 12]        | (0, 1) -> range(0, 2) -> (0, 1)
-        # (0, 1) | [1, 3]    | [4, 7]    | [4, 21]        | (0, 2) -> range(0, 3) -> (0, 1, 2)
-        # (1, 0) | [3, 5]    | [2, 4]    | [6, 20]        | (0, 1) -> range(0, 2) -> (0, 1)
-        # (1, 1) | [3, 5]    | [4, 7]    | [12, 35]       | (1, 3) -> range(1, 4) -> (1, 2, 3)
-
-        expected_relation = {
-            (0, 0): (0, 1),
-            (0, 1): (0, 1, 2),
-            (1, 0): (0, 1),
-            (1, 1): (1, 2, 3),
-        }
-        self.assertEqual(bilinear_expr.piecewise_constant_relation, expected_relation)
+        # Assert: Check that the four McCormick constraints are created correctly
         self.assertEqual(len(self.model_data.constraints), 4)
 
-    def test_apply_piecewise_constant_relaxation_with_approximation(self):
-        """Test apply_piecewise_constant_relaxation with approximation."""
-        # Set up breakpoints for variables
-        self.var_x.breakpoints = [1.0, 3.0, 5.0]
-        self.var_y.breakpoints = [2.0, 4.0, 7.0]
-
-        # Mock binary variables for PWL
-        self.var_x.pwl_variables_binary = [MagicMock(), MagicMock()]
-        self.var_y.pwl_variables_binary = [MagicMock(), MagicMock()]
-
-        # Initialize representative variable with breakpoints
-        rep_var = var.Variable("r_test_bilinear_approx", lb=0.0, ub=100.0)
-        rep_var.breakpoints = [0.0, 10.0, 20.0, 30.0, 40.0]
-        rep_var.is_discretized = True
-        rep_var.pwl_variables_binary = [
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
-        ]
-
-        bilinear_expr = ble.BilinearExpression(
-            "test_bilinear_approx",
-            self.model_data,
-            [self.var_x, self.var_y],
-            1,
-            rep_var,
-        )
-        self.model_data.constraints = {}
-
-        # Test with approximation
-        bilinear_expr.apply_piecewise_constant_relaxation(approximation=True)
-
-        # Expected mid-values for x: (1+3)/2=2, (3+5)/2=4
-        # Expected mid-values for y: (2+4)/2=3, (4+7)/2=5.5
-        # (i, j) | mid_x | mid_y | implied_value | implied_index
-        # (0, 0) | 2     | 3     | 6             | 0
-        # (0, 1) | 2     | 5.5   | 11            | 1
-        # (1, 0) | 4     | 3     | 12            | 1
-        # (1, 1) | 4     | 5.5   | 22            | 2
-
-        expected_relation = {
-            (0, 0): (0,),
-            (0, 1): (1,),
-            (1, 0): (1,),
-            (1, 1): (2,),
+        # Expected constraints from z = x*y, x in [1,2], y in [3,5]
+        # mc1: z >= x.lb*y + y.ub*x - x.lb*y.ub  => z >= 1*y + 5*x - 5
+        # mc2: z >= x.ub*y + y.lb*x - x.ub*y.lb  => z >= 2*y + 3*x - 6
+        # mc3: z <= x.lb*y + y.lb*x - x.lb*y.lb  => z <= 1*y + 3*x - 3
+        # mc4: z <= x.ub*y + y.ub*x - x.ub*y.ub  => z <= 2*y + 5*x - 10
+        expected = {
+            f"mc1_{bilinear_expr.name}": {
+                "vars": {(1, z), (-1, y), (-5, x)}, "rhs": -5
+            },
+            f"mc2_{bilinear_expr.name}": {
+                "vars": {(1, z), (-2, y), (-3, x)}, "rhs": -6
+            },
+            f"mc3_{bilinear_expr.name}": {
+                "vars": {(1, z), (-1, y), (-3, x)}, "rhs": -3
+            },
+            f"mc4_{bilinear_expr.name}": {
+                "vars": {(1, z), (-2, y), (-5, x)}, "rhs": -10
+            },
         }
-        self.assertEqual(bilinear_expr.piecewise_constant_relation, expected_relation)
-        self.assertEqual(len(self.model_data.constraints), 4)
+
+        for name, const in self.model_data.constraints.items():
+            self.assertIn(name, expected)
+            self.assertEqual(set(const.variables), expected[name]["vars"])
+            self.assertAlmostEqual(const.rhs, expected[name]["rhs"])
+
+    def _setup_reformulation_mocks(self):
+        """Helper to set up mocks for reformulation tests."""
+        created_linear_exprs, created_one_dim_exprs = [], []
+
+        def le_factory(*_args, **_kwargs):
+            mock = MagicMock(
+                spec=lie.LinearExpression,
+                variables=[],
+                representative_variable=MagicMock(spec=var.Variable),
+            )
+            created_linear_exprs.append(mock)
+            return mock
+
+        def ode_factory(*_args, **_kwargs):
+            mock = MagicMock(
+                spec=ode.SquareExpression,
+                representative_variable=MagicMock(spec=var.Variable),
+            )
+            created_one_dim_exprs.append(mock)
+            return mock
+
+        self.model_data.add_linear_expression.side_effect = le_factory
+        self.model_data.add_one_dim_expression.side_effect = ode_factory
+        return created_linear_exprs, created_one_dim_exprs
 
     def test_reformulate_to_sum_of_squares(self):
-        """Test reformulation of bilinear expression to sum of squares."""
+        """Test reformulation of a continuous bilinear expression to sum of squares."""
         bilinear_expr = ble.BilinearExpression(
             "test_bilinear", self.model_data, [self.var_x, self.var_y], 1
         )
+        created_linear_exprs, created_one_dim_exprs = self._setup_reformulation_mocks()
 
-        # Mock the expression creation methods
-        mock_master_le = lie.LinearExpression(
-            "le_test_bilinear_master", self.model_data, 1
-        )
-        mock_sub_le = lie.LinearExpression("le_test_bilinear_sub", self.model_data, 3)
-        mock_square_x = ode.SquareExpression(
-            "fvs_test_bilinear", self.model_data, self.var_x, 2
-        )
-        mock_square_y = ode.SquareExpression(
-            "svs_test_bilinear", self.model_data, self.var_y, 2
-        )
-        mock_square_h = ode.SquareExpression(
-            "hvs_test_bilinear", self.model_data, mock_sub_le.representative_variable, 2
-        )
-
-        self.model_data.add_linear_expression = MagicMock(
-            side_effect=[mock_master_le, mock_sub_le]
-        )
-        self.model_data.add_one_dim_expression = MagicMock(
-            side_effect=[mock_square_x, mock_square_y, mock_square_h]
-        )
-
-        # Call the method
+        # Act
         bilinear_expr.reformulate_to_sum_of_squares()
 
-        # Check calls to create expressions
+        # Assert
         self.assertEqual(self.model_data.add_linear_expression.call_count, 2)
         self.assertEqual(self.model_data.add_one_dim_expression.call_count, 3)
 
-        # Check sub linear expression: p = x - y
-        self.assertIn((1.0, self.var_x), mock_sub_le.variables)
-        self.assertIn((-1.0, self.var_y), mock_sub_le.variables)
+        self.assertEqual(len(created_linear_exprs), 2)
+        master_le, sub_le = created_linear_exprs[0], created_linear_exprs[1]
+        self.assertEqual(len(created_one_dim_exprs), 3)
+        sq_x, sq_y, sq_h = (
+            created_one_dim_exprs[0],
+            created_one_dim_exprs[1],
+            created_one_dim_exprs[2],
+        )
 
-        # Check master linear expression: z = 0.5 * (x^2 + y^2 - p^2)
-        self.assertIn(
-            (0.5, mock_square_x.representative_variable), mock_master_le.variables
+        # Assert sub-expression p = x - y
+        self.assertEqual(set(sub_le.variables), {(1.0, self.var_x), (-1.0, self.var_y)})
+
+        # Assert master-expression z = 0.5 * (x^2 + y^2 - p^2)
+        expected_master_vars = {
+            (0.5, sq_x.representative_variable),
+            (0.5, sq_y.representative_variable),
+            (-0.5, sq_h.representative_variable),
+        }
+        self.assertEqual(set(master_le.variables), expected_master_vars)
+
+    def test_reformulate_to_sum_of_squares_with_binary_var(self):
+        """Test sum of squares reformulation where one variable is binary."""
+        var_b = var.Variable("b", var_type="B", lb=0.0, ub=1.0)
+        bilinear_expr = ble.BilinearExpression(
+            "test_binary", self.model_data, [var_b, self.var_y], 1
         )
-        self.assertIn(
-            (0.5, mock_square_y.representative_variable), mock_master_le.variables
-        )
-        self.assertIn(
-            (-0.5, mock_square_h.representative_variable), mock_master_le.variables
-        )
+        created_linear_exprs, created_one_dim_exprs = self._setup_reformulation_mocks()
+
+        # Act
+        bilinear_expr.reformulate_to_sum_of_squares()
+
+        # Assert
+        self.assertEqual(self.model_data.add_linear_expression.call_count, 2)
+        self.assertEqual(self.model_data.add_one_dim_expression.call_count, 2)
+
+        self.assertEqual(len(created_linear_exprs), 2)
+        master_le, sub_le = created_linear_exprs[0], created_linear_exprs[1]
+        self.assertEqual(len(created_one_dim_exprs), 2)
+        sq_y, sq_h = created_one_dim_exprs[0], created_one_dim_exprs[1]
+
+        # Assert sub-expression p = b - y
+        self.assertEqual(set(sub_le.variables), {(1.0, var_b), (-1.0, self.var_y)})
+
+        # Assert master-expression z = 0.5 * (b + y^2 - p^2)
+        expected_master_vars = {
+            (0.5, var_b),  # Direct use of binary variable
+            (0.5, sq_y.representative_variable),
+            (-0.5, sq_h.representative_variable),
+        }
+        self.assertEqual(set(master_le.variables), expected_master_vars)
+
+    def test_apply_piecewise_constant_relaxation(self):
+        """Test apply_piecewise_constant_relaxation with and without approximation."""
+        self.var_x.breakpoints = [1.0, 3.0, 5.0]
+        self.var_y.breakpoints = [2.0, 4.0, 7.0]
+        self.var_x.pwl_variables_binary = [MagicMock(), MagicMock()]
+        self.var_y.pwl_variables_binary = [MagicMock(), MagicMock()]
+        rep_var = var.Variable("r_test_pwcr", lb=0.0, ub=100.0)
+        rep_var.breakpoints = [0.0, 10.0, 20.0, 30.0, 40.0]
+        rep_var.is_discretized = True
+        rep_var.pwl_variables_binary = [
+            MagicMock(), MagicMock(), MagicMock(), MagicMock()
+        ]
+        test_cases = [
+            {
+                "name": "no_approximation",
+                "approximation": False,
+                "expected": {
+                    (0, 0): (0, 1), (0, 1): (0, 1, 2),
+                    (1, 0): (0, 1), (1, 1): (1, 2, 3),
+                },
+            },
+            {
+                "name": "with_approximation",
+                "approximation": True,
+                "expected": {
+                    (0, 0): (0,), (0, 1): (1,),
+                    (1, 0): (1,), (1, 1): (2,),
+                },
+            },
+        ]
+        for case in test_cases:
+            with self.subTest(case["name"]):
+                expr = ble.BilinearExpression(
+                    f"test_{case['name']}",
+                    self.model_data, [self.var_x, self.var_y], 1, rep_var
+                )
+                self.model_data.constraints = {}
+                expr.apply_piecewise_constant_relaxation(case["approximation"])
+                expr.extract_mpip_relation(case["approximation"])
+                self.assertEqual(expr.piecewise_constant_relation, case["expected"])
+                self.assertEqual(len(self.model_data.constraints), 4)
 
 
 if __name__ == "__main__":
