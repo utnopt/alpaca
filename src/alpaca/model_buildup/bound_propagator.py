@@ -84,7 +84,7 @@ class BoundPropagator:
         else:
             left = expression.f(expression.variable.lb)
             right = expression.f(expression.variable.ub)
-            root = expression.f(expression.variable.ub)
+            root = expression.f(0)
             lb, _, ub = sorted([left, right, root])
         expression.representative_variable.lb = max(
             lb, expression.representative_variable.lb

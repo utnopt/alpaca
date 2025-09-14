@@ -29,8 +29,8 @@ class MultilinearHandler:
 
     def add_mccormick_envelopes(self) -> None:
         """Adds McCormick envelope constraints to bilinear expressions."""
-        if self.model_data.settings.bilinear_handling == 0:
-            self._add_mccormick_envelope_to_bilinear_expressions()
+        for expression in self.model_data.expressions.bilinear_expressions.values():
+            expression.add_mccormick_envelope()
 
     def _reformulate_multilinear_to_bilinear(self) -> None:
         """Reformulates multilinear expressions into bilinear expressions."""
@@ -54,11 +54,6 @@ class MultilinearHandler:
             expression.representative_variable.add_nonlinearity_to_occurring_in(
                 "multilinearimplied2"
             )
-
-    def _add_mccormick_envelope_to_bilinear_expressions(self) -> None:
-        """Adds McCormick envelope constraints to bilinear expressions."""
-        for expression in self.model_data.expressions.bilinear_expressions.values():
-            expression.add_mccormick_envelope()
 
     def _reformulate_bilinear_to_sum_of_squares(self) -> None:
         """Reformulates bilinear expressions into a sum of squares."""
