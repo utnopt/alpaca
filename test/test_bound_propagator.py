@@ -6,6 +6,8 @@ expression types (linear, multilinear, trigonometric, etc.) to ensure
 correct bound tightening.
 """
 
+# pylint: disable=protected-access
+
 import unittest
 import math
 
@@ -30,6 +32,7 @@ from alpaca.expressions.one_dim_expression import (
 # Mock settings to avoid dependency on the full settings module
 class MockUserSettings:
     """A mock user settings class for testing purposes."""
+
     def __init__(self):
         """Initializes mock settings."""
         self.bound_propagation_rounds = 3
@@ -37,6 +40,7 @@ class MockUserSettings:
 
 class MockExpressionContainer:
     """A mock container for various types of expressions."""
+
     def __init__(self):
         """Initializes the expression container."""
         self.one_dim_expressions = {}
@@ -55,6 +59,7 @@ class MockExpressionContainer:
 # Mock ModelData to isolate the BoundPropagator logic
 class MockModelData:
     """A mock model data class to provide a testing environment."""
+
     def __init__(self):
         """Initializes mock model data."""
         self.settings = MockUserSettings()
@@ -76,8 +81,9 @@ class TestBoundPropagator(unittest.TestCase):
         x_var = Variable("x", lb=0, ub=10)
         y_var = Variable("y", lb=0, ub=10)
         self.model_data.variables = {"x": x_var, "y": y_var}
-        constraint = Constraint("c1", con_type="==", rhs=10,
-                                variables=[(1.0, x_var), (1.0, y_var)])
+        constraint = Constraint(
+            "c1", con_type="==", rhs=10, variables=[(1.0, x_var), (1.0, y_var)]
+        )
         self.model_data.constraints = {"c1": constraint}
 
         # Initially, bounds are wide
@@ -109,8 +115,9 @@ class TestBoundPropagator(unittest.TestCase):
         x_var = Variable("x", lb=0, ub=10)
         y_var = Variable("y", lb=0, ub=5)
         self.model_data.variables = {"x": x_var, "y": y_var}
-        constraint = Constraint("c1", con_type="==", rhs=5,
-                                variables=[(2.0, x_var), (-3.0, y_var)])
+        constraint = Constraint(
+            "c1", con_type="==", rhs=5, variables=[(2.0, x_var), (-3.0, y_var)]
+        )
         self.model_data.constraints = {"c1": constraint}
 
         self.propagator.propagate_linear_constraints()
@@ -138,7 +145,8 @@ class TestBoundPropagator(unittest.TestCase):
         self.model_data.variables = {"x": x_var, "y": y_var, "z": z_var}
 
         lin_expr = LinearExpression(
-            "le1", self.model_data, level=0, representative_variable=z_var)
+            "le1", self.model_data, level=0, representative_variable=z_var
+        )
         lin_expr.variables = [(2.0, x_var), (-1.0, y_var)]
         lin_expr.constant = 5.0
         self.model_data.expressions.linear_expressions["le1"] = lin_expr
@@ -159,8 +167,12 @@ class TestBoundPropagator(unittest.TestCase):
         self.model_data.variables = {"x": x_var, "y": y_var, "z": z_var}
 
         ml_expr = MultilinearExpression(
-            "ml1", self.model_data, [x_var, y_var], level=0,
-            representative_variable=z_var)
+            "ml1",
+            self.model_data,
+            [x_var, y_var],
+            level=0,
+            representative_variable=z_var,
+        )
         self.model_data.expressions.multilinear_expressions["ml1"] = ml_expr
 
         self.propagator.propagate_expressions()
@@ -175,16 +187,16 @@ class TestBoundPropagator(unittest.TestCase):
         x1_var = Variable("x1", lb=-5, ub=4)
         y1_var = Variable("y1", lb=-100, ub=100)
         sq_expr1 = SquareExpression(
-            "sq1", self.model_data, x1_var, level=0,
-            representative_variable=y1_var)
+            "sq1", self.model_data, x1_var, level=0, representative_variable=y1_var
+        )
         self.model_data.expressions.one_dim_expressions["sq1"] = sq_expr1
 
         # Case 2: Bounds of x are both positive
         x2_var = Variable("x2", lb=2, ub=5)
         y2_var = Variable("y2", lb=-100, ub=100)
         sq_expr2 = SquareExpression(
-            "sq2", self.model_data, x2_var, level=0,
-            representative_variable=y2_var)
+            "sq2", self.model_data, x2_var, level=0, representative_variable=y2_var
+        )
         self.model_data.expressions.one_dim_expressions["sq2"] = sq_expr2
 
         # pylint: disable=protected-access
@@ -192,14 +204,7 @@ class TestBoundPropagator(unittest.TestCase):
         # pylint: disable=protected-access
         self.propagator._propagate_bounds_one_dim_expression(sq_expr2)
 
-        # NOTE: The provided code for one-dim propagation is flawed as it only
-        # checks the function values at the boundaries (f(lb), f(ub)). A
-        # correct implementation would also consider extrema within the
-        # interval. These tests verify the *actual* behavior of the code.
-
-        # For x1 in [-5, 4], f(-5)=25, f(4)=16. The code calculates min/max
-        # of these. The true range is [0, 25], but the code will get [16, 25].
-        self.assertAlmostEqual(y1_var.lb, 16)
+        self.assertAlmostEqual(y1_var.lb, 0)
         self.assertAlmostEqual(y1_var.ub, 25)
 
         # For x2 in [2, 5], the function is monotonic.
@@ -216,7 +221,9 @@ class TestBoundPropagator(unittest.TestCase):
         sin_expr = SineExpression("sin1", self.model_data, x_var, 0, y_sin)
         cos_expr = CosineExpression("cos1", self.model_data, x_var, 0, y_cos)
         self.model_data.expressions.one_dim_expressions = {
-            "sin1": sin_expr, "cos1": cos_expr}
+            "sin1": sin_expr,
+            "cos1": cos_expr,
+        }
 
         self.propagator.propagate_expressions()
 
@@ -246,15 +253,16 @@ class TestBoundPropagator(unittest.TestCase):
         x_ln = Variable("x_ln", lb=1, ub=10)
         y_ln = Variable("y_ln", lb=-100, ub=100)
         ln_expr = LnExpression("ln1", self.model_data, x_ln, 0, y_ln)
-        self.propagator._propagate_bounds_one_dim_expression(ln_expr)  # pylint: disable=protected-access
+        self.propagator._propagate_bounds_one_dim_expression(
+            ln_expr
+        )  # pylint: disable=protected-access
         self.assertAlmostEqual(y_ln.lb, math.log(1))
         self.assertAlmostEqual(y_ln.ub, math.log(10))
 
         # Test SquareRootExpression: y = sqrt(x) for x in [4, 25]
         x_sqrt = Variable("x_sqrt", lb=4, ub=25)
         y_sqrt = Variable("y_sqrt", lb=-100, ub=100)
-        sqrt_expr = SquareRootExpression(
-            "sqrt1", self.model_data, x_sqrt, 0, y_sqrt)
+        sqrt_expr = SquareRootExpression("sqrt1", self.model_data, x_sqrt, 0, y_sqrt)
         # pylint: disable=protected-access
         self.propagator._propagate_bounds_one_dim_expression(sqrt_expr)
         self.assertAlmostEqual(y_sqrt.lb, 2)
@@ -280,4 +288,4 @@ class TestBoundPropagator(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main(argv=['first-arg-is-ignored'], exit=False)
+    unittest.main(argv=["first-arg-is-ignored"], exit=False)

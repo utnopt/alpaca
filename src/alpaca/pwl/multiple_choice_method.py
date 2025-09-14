@@ -123,7 +123,9 @@ class MultipleChoiceMethod(pwm.PWLMethod):
     def _apply_multiple_choice_method_relaxation(
         self, expression: ode.OneDimExpression
     ):
-        continuous_variables_in_constraint = [(-1.0, expression.representative_variable)]
+        continuous_variables_in_constraint = [
+            (-1.0, expression.representative_variable)
+        ]
         binary_variables_in_underestimating_constraint = []
         binary_variables_in_overestimating_constraint = []
         for i, bp in enumerate(self.variable.breakpoints[:-1]):
@@ -159,9 +161,7 @@ class MultipleChoiceMethod(pwm.PWLMethod):
             ),
         ]
 
-    def apply_pwc_relaxation(
-        self, expression, approximation: bool = False
-    ):
+    def apply_pwc_relaxation(self, expression, approximation: bool = False):
         """
         Apply piecewise constant relaxation for multilinear expressions.
 

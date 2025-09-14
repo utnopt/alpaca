@@ -148,8 +148,8 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
                 added_cuts += 1
                 self.opt_model.add_constraint(
                     sum(
-                        list(self.mpip.implying_variables.values())[implying_vars_index].pwl
-                        .pwl_variables_binary[implying_index]
+                        list(self.mpip.implying_variables.values())[implying_vars_index]
+                        .pwl.pwl_variables_binary[implying_index]
                         .solver_variable
                         for implying_index in implying_indices
                     )
@@ -327,7 +327,9 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
                     solution_value
                     * self.point_to_be_separated.implying_values[implying_index][idx]
                 )
-        for idx, variable in enumerate(self.mpip.implied_variable.pwl.pwl_variables_binary):
+        for idx, variable in enumerate(
+            self.mpip.implied_variable.pwl.pwl_variables_binary
+        ):
             solution_value = self.separation_model.get_val(
                 self.sep_implied_variables[idx]
             )

@@ -50,8 +50,10 @@ class PWLHandler:
             if isinstance(expression, ode.AbsExpression):
                 expression.handle_abs_expression(self.model_data)
                 continue
-            constraints = expression.variable.pwl.couple_domain_to_function_value_one_dim(
-                expression, approximation=self.model_data.settings.approximation
+            constraints = (
+                expression.variable.pwl.couple_domain_to_function_value_one_dim(
+                    expression, approximation=self.model_data.settings.approximation
+                )
             )
             for constraint in constraints:
                 self.model_data.add_constraint(constraint)
@@ -62,9 +64,11 @@ class PWLHandler:
         """Applies piecewise constant relaxation to bilinear and multilinear expressions."""
         if self.model_data.settings.bilinear_handling == 2:
             for expression in self.model_data.expressions.bilinear_expressions.values():
-                constraints = expression.representative_variable.pwl.apply_pwc_relaxation(
-                    expression,
-                    approximation=self.model_data.settings.approximation,
+                constraints = (
+                    expression.representative_variable.pwl.apply_pwc_relaxation(
+                        expression,
+                        approximation=self.model_data.settings.approximation,
+                    )
                 )
                 for constraint in constraints:
                     self.model_data.add_constraint(constraint)
@@ -72,9 +76,11 @@ class PWLHandler:
             for (
                 expression
             ) in self.model_data.expressions.multilinear_expressions.values():
-                constraints = expression.representative_variable.pwl.apply_pwc_relaxation(
-                    expression,
-                    approximation=self.model_data.settings.approximation,
+                constraints = (
+                    expression.representative_variable.pwl.apply_pwc_relaxation(
+                        expression,
+                        approximation=self.model_data.settings.approximation,
+                    )
                 )
                 for constraint in constraints:
                     self.model_data.add_constraint(constraint)

@@ -5,6 +5,7 @@ This module tests the creation of PWL formulations, including domain
 representation (e.g., Multiple Choice) and the coupling of functions to
 these domains for both approximations and relaxations.
 """
+
 import unittest
 import math
 from types import SimpleNamespace
@@ -20,6 +21,7 @@ from alpaca.model_buildup.pwl_handler import PWLHandler
 # Mock settings to avoid dependency on the full settings module
 class MockUserSettings:
     """A mock user settings class for testing purposes."""
+
     def __init__(self, approximation=False, pwl_method="multiple-choice"):
         """
         Initializes mock settings for PWL tests.
@@ -37,6 +39,7 @@ class MockUserSettings:
 # Mock ModelData to isolate the PWL logic
 class MockModelData:
     """A mock model data class to provide a testing environment for PWL."""
+
     def __init__(self, approximation=False, pwl_method="multiple-choice"):
         """
         Initializes mock model data.
@@ -50,9 +53,7 @@ class MockModelData:
         self.constraints = {}
         # Keep track of expressions for the handler test
         self.expressions = SimpleNamespace(
-            one_dim_expressions={},
-            multilinear_expressions={},
-            bilinear_expressions={}
+            one_dim_expressions={}, multilinear_expressions={}, bilinear_expressions={}
         )
 
     def add_variable(self, var):
@@ -88,13 +89,13 @@ class TestPWLRelaxations(unittest.TestCase):
         self.assertEqual(len(mc_method.pwl_constraints), 8)
 
         con_sum_cont = next(
-            c for c in mc_method.pwl_constraints if c.name == "mc_varlink_cont_x")
+            c for c in mc_method.pwl_constraints if c.name == "mc_varlink_cont_x"
+        )
         vars_in_con = {var.name: coeff for coeff, var in con_sum_cont.variables}
         self.assertAlmostEqual(vars_in_con["x"], -1.0)
         self.assertAlmostEqual(vars_in_con["x_c_0"], 1.0)
 
-        con_lb1 = next(
-            c for c in mc_method.pwl_constraints if c.name == "mc_lb_x_1")
+        con_lb1 = next(c for c in mc_method.pwl_constraints if c.name == "mc_lb_x_1")
         lb1_vars = {var.name: coeff for coeff, var in con_lb1.variables}
         self.assertAlmostEqual(lb1_vars["x_bp_1"], 3)
         self.assertAlmostEqual(lb1_vars["x_c_1"], -1)
@@ -106,23 +107,17 @@ class TestPWLRelaxations(unittest.TestCase):
         y_var = Variable("y")
 
         x_var.pwl = MultipleChoiceMethod(x_var)
-        sq_expr = SquareExpression(
-            "sq1", self.model_data_approx, x_var, 0, y_var)
+        sq_expr = SquareExpression("sq1", self.model_data_approx, x_var, 0, y_var)
 
         constraints = x_var.pwl.couple_domain_to_function_value_one_dim(
-            sq_expr, approximation=True)
+            sq_expr, approximation=True
+        )
         self.assertEqual(len(constraints), 1)
 
         approx_con = constraints[0]
         self.assertEqual(approx_con.name, "mc_sq1")
-
-        # The source code may have a bug where the representative variable `y`
-        # is used instead of `x` in _apply_multiple_choice_method_approximation.
-        # This test assumes the intended logic is to use the expression's
-        # variable `x`.
-        # Expected: -y + (m0*xc0 + t0*xbp0) + (m1*xc1 + t1*xbp1) == 0
         vars_in_con = {var.name: coeff for coeff, var in approx_con.variables}
-        self.assertAlmostEqual(vars_in_con["x"], -1.0)  # Corrected based on bug
+        self.assertAlmostEqual(vars_in_con["y"], -1.0)  # Corrected based on bug
         self.assertAlmostEqual(vars_in_con["x_c_0"], 2.0)
         self.assertAlmostEqual(vars_in_con["x_bp_0"], 0.0)
         self.assertAlmostEqual(vars_in_con["x_c_1"], 6.0)
@@ -138,7 +133,8 @@ class TestPWLRelaxations(unittest.TestCase):
         sin_expr = SineExpression("sin1", self.model_data_relax, x_var, 0, y_var)
 
         constraints = x_var.pwl.couple_domain_to_function_value_one_dim(
-            sin_expr, approximation=False)
+            sin_expr, approximation=False
+        )
         self.assertEqual(len(constraints), 2)
 
         under_con = next(c for c in constraints if "under" in c.name)
@@ -167,7 +163,8 @@ class TestPWLRelaxations(unittest.TestCase):
         z_var.breakpoints = [0, 1.5, 5, 8]
 
         ml_expr = MultilinearExpression(
-            "ml1", self.model_data_approx, [x_var, y_var], 0, z_var)
+            "ml1", self.model_data_approx, [x_var, y_var], 0, z_var
+        )
         ml_expr.representative_variable.is_discretized = True
         ml_expr.extract_mpip_relation(approximation=True)
 
@@ -190,7 +187,8 @@ class TestPWLRelaxations(unittest.TestCase):
         z_var.pwl = MultipleChoiceMethod(z_var)
 
         ml_expr = MultilinearExpression(
-            "ml1", self.model_data_relax, [x_var, y_var], 0, z_var)
+            "ml1", self.model_data_relax, [x_var, y_var], 0, z_var
+        )
         # Manually set a relation for testing: x_bp_0=1, y_bp_0=1 => z_bp_0=1
         ml_expr.piecewise_constant_relation = {(0, 0): (0,)}
 
@@ -232,4 +230,4 @@ class TestPWLRelaxations(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main(argv=['first-arg-is-ignored'], exit=False)
+    unittest.main(argv=["first-arg-is-ignored"], exit=False)
