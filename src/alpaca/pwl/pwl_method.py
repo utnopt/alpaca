@@ -18,7 +18,7 @@ class PWLMethod:
         self._represent_domain()
 
     def _represent_domain(self):
-        """Represent the domain of a variable using the multiple choice method."""
+        """Represent the domain of a variable using the specific PWL method."""
 
     def couple_domain_to_function_value_one_dim(
         self, expression: ode.OneDimExpression, approximation=False
