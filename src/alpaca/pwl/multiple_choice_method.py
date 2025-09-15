@@ -86,7 +86,7 @@ class MultipleChoiceMethod(pwm.PWLMethod):
             )
             self.pwl_constraints.append(
                 con.Constraint(
-                    lsf.con_name_pwl_multiple_choice_interval_lb(
+                    lsf.con_name_pwl_multiple_choice_interval_ub(
                         self.variable.name, breakpoint_index
                     ),
                     con_type=lsf.constraint_geq(),

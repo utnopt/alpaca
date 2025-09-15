@@ -263,7 +263,7 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
 
     @classmethod
     def obj_con_name(cls) -> str:
-        return "objective_constraint"
+        return cls.con_name(-1)
 
     @classmethod
     def osil_inf_neg(cls) -> str:
@@ -408,7 +408,7 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
     @classmethod
     def mip_solver_parameter_thread_limit(cls, solver_name: str) -> str:
         if solver_name == cls.solver_name_scip():
-            return "limits/threads"
+            return "parallel/maxnthreads"
         if solver_name == cls.solver_name_gurobi():
             return "Threads"
         return "thread_limit"
@@ -416,7 +416,7 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
     @classmethod
     def mip_solver_parameter_seed(cls, solver_name: str) -> str:
         if solver_name == cls.solver_name_scip():
-            return "randomization/seed"
+            return "randomization/randomseedshift"
         if solver_name == cls.solver_name_gurobi():
             return "Seed"
         return "seed"

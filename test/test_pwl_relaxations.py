@@ -16,6 +16,7 @@ from alpaca.expressions.one_dim_expression import SquareExpression, SineExpressi
 from alpaca.expressions.multilinear_expression import MultilinearExpression
 from alpaca.pwl.multiple_choice_method import MultipleChoiceMethod
 from alpaca.model_buildup.pwl_handler import PWLHandler
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 # Mock settings to avoid dependency on the full settings module
@@ -81,24 +82,42 @@ class TestPWLRelaxations(unittest.TestCase):
         mc_method = MultipleChoiceMethod(x_var)
 
         self.assertEqual(len(mc_method.pwl_variables_binary), 3)
-        self.assertEqual(mc_method.pwl_variables_binary[0].name, "x_bp_0")
+        self.assertEqual(
+            mc_method.pwl_variables_binary[0].name,
+            lsf.var_name_pwl_multiple_choice_binary("x", 0),
+        )
 
         self.assertEqual(len(mc_method.pwl_variables_continuous), 3)
-        self.assertEqual(mc_method.pwl_variables_continuous[0].name, "x_c_0")
+        self.assertEqual(
+            mc_method.pwl_variables_continuous[0].name,
+            lsf.var_name_pwl_multiple_choice_continuous("x", 0),
+        )
 
         self.assertEqual(len(mc_method.pwl_constraints), 8)
 
         con_sum_cont = next(
-            c for c in mc_method.pwl_constraints if c.name == "mc_varlink_cont_x"
+            c
+            for c in mc_method.pwl_constraints
+            if c.name == lsf.con_name_pwl_multiple_choice_variable_link_continuous("x")
         )
         vars_in_con = {var.name: coeff for coeff, var in con_sum_cont.variables}
         self.assertAlmostEqual(vars_in_con["x"], -1.0)
-        self.assertAlmostEqual(vars_in_con["x_c_0"], 1.0)
+        self.assertAlmostEqual(
+            vars_in_con[lsf.var_name_pwl_multiple_choice_continuous("x", 0)], 1.0
+        )
 
-        con_lb1 = next(c for c in mc_method.pwl_constraints if c.name == "mc_lb_x_1")
+        con_lb1 = next(
+            c
+            for c in mc_method.pwl_constraints
+            if c.name == lsf.con_name_pwl_multiple_choice_interval_lb("x", 1)
+        )
         lb1_vars = {var.name: coeff for coeff, var in con_lb1.variables}
-        self.assertAlmostEqual(lb1_vars["x_bp_1"], 3)
-        self.assertAlmostEqual(lb1_vars["x_c_1"], -1)
+        self.assertAlmostEqual(
+            lb1_vars[lsf.var_name_pwl_multiple_choice_binary("x", 1)], 3
+        )
+        self.assertAlmostEqual(
+            lb1_vars[lsf.var_name_pwl_multiple_choice_continuous("x", 1)], -1
+        )
 
     def test_pwl_approximation_one_dim(self):
         """Test the piecewise linear approximation for y = x^2."""
@@ -115,13 +134,23 @@ class TestPWLRelaxations(unittest.TestCase):
         self.assertEqual(len(constraints), 1)
 
         approx_con = constraints[0]
-        self.assertEqual(approx_con.name, "mc_sq1")
+        self.assertEqual(
+            approx_con.name, lsf.con_name_pwl_multiple_choice_approximation("sq1")
+        )
         vars_in_con = {var.name: coeff for coeff, var in approx_con.variables}
         self.assertAlmostEqual(vars_in_con["y"], -1.0)  # Corrected based on bug
-        self.assertAlmostEqual(vars_in_con["x_c_0"], 2.0)
-        self.assertAlmostEqual(vars_in_con["x_bp_0"], 0.0)
-        self.assertAlmostEqual(vars_in_con["x_c_1"], 6.0)
-        self.assertAlmostEqual(vars_in_con["x_bp_1"], -8.0)
+        self.assertAlmostEqual(
+            vars_in_con[lsf.var_name_pwl_multiple_choice_continuous("x", 0)], 2.0
+        )
+        self.assertAlmostEqual(
+            vars_in_con[lsf.var_name_pwl_multiple_choice_binary("x", 0)], 0.0
+        )
+        self.assertAlmostEqual(
+            vars_in_con[lsf.var_name_pwl_multiple_choice_continuous("x", 1)], 6.0
+        )
+        self.assertAlmostEqual(
+            vars_in_con[lsf.var_name_pwl_multiple_choice_binary("x", 1)], -8.0
+        )
 
     def test_pwl_relaxation_one_dim_nonconvex(self):
         """Test the PWL relaxation for a non-convex function y = sin(x)."""
@@ -146,12 +175,24 @@ class TestPWLRelaxations(unittest.TestCase):
         # Intercepts: t0 = 0, t1 = 2
 
         over_vars = {var.name: coeff for coeff, var in over_con.variables}
-        self.assertAlmostEqual(over_vars["x_bp_0"], 0 + 0.2105, places=4)
-        self.assertAlmostEqual(over_vars["x_bp_1"], 2 + 0.2105, places=4)
+        self.assertAlmostEqual(
+            over_vars[lsf.var_name_pwl_multiple_choice_binary("x", 0)],
+            0 + 0.2105,
+            places=4,
+        )
+        self.assertAlmostEqual(
+            over_vars[lsf.var_name_pwl_multiple_choice_binary("x", 1)],
+            2 + 0.2105,
+            places=4,
+        )
 
         under_vars = {var.name: coeff for coeff, var in under_con.variables}
-        self.assertAlmostEqual(under_vars["x_bp_0"], 0.0)
-        self.assertAlmostEqual(under_vars["x_bp_1"], 2.0)
+        self.assertAlmostEqual(
+            under_vars[lsf.var_name_pwl_multiple_choice_binary("x", 0)], 0.0
+        )
+        self.assertAlmostEqual(
+            under_vars[lsf.var_name_pwl_multiple_choice_binary("x", 1)], 2.0
+        )
 
     def test_pwc_approximation_multilinear(self):
         """Test the piecewise constant approximation for z = x*y."""
@@ -199,17 +240,25 @@ class TestPWLRelaxations(unittest.TestCase):
 
         con = constraints[0]
         # Expected constraint: -z_bp_0 + x_bp_0 + y_bp_0 <= 1
-        self.assertEqual(con.name, "mc_ml1_0_0")
+        self.assertEqual(
+            con.name, lsf.con_name_pwc_multiple_choice_multilinear("ml1", [0, 0])
+        )
         self.assertAlmostEqual(con.rhs, 1.0)
         vars_in_con = {v.name: c for c, v in con.variables}
-        self.assertAlmostEqual(vars_in_con["z_bp_0"], -1.0)
-        self.assertAlmostEqual(vars_in_con["x_bp_0"], 1.0)
-        self.assertAlmostEqual(vars_in_con["y_bp_0"], 1.0)
+        self.assertAlmostEqual(
+            vars_in_con[lsf.var_name_pwl_multiple_choice_binary("z", 0)], -1.0
+        )
+        self.assertAlmostEqual(
+            vars_in_con[lsf.var_name_pwl_multiple_choice_binary("x", 0)], 1.0
+        )
+        self.assertAlmostEqual(
+            vars_in_con[lsf.var_name_pwl_multiple_choice_binary("y", 0)], 1.0
+        )
 
     def test_pwl_handler_method_selection(self):
         """Test that PWLHandler selects the correct PWL method from settings."""
         # Test Multiple Choice
-        model_mc = MockModelData(pwl_method="multiple-choice")
+        model_mc = MockModelData(pwl_method="multiple_choice")
         x_mc = Variable("x")
         x_mc.is_discretized = True
         model_mc.add_variable(x_mc)
