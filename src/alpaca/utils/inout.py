@@ -9,6 +9,7 @@ import pathlib
 
 from alpaca.settings import StaticSettings, UserSettings
 from alpaca.utils.logger import logger
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 def config_console_logger(log_level=logging.DEBUG):
@@ -48,22 +49,22 @@ def config_file_logger(
                 logger.removeHandler(hdlr)
             except Exception as ex:  # pylint: disable=broad-exception-caught
                 logger.warning(
-                    "Couldn't remove previous log file handler with files %s due to error %s",
-                    str(hdlr.baseFilename),
-                    ex,
+                    lsf.warning_could_not_remove_log_file_handler(
+                        str(hdlr.baseFilename), ex
+                    )
                 )
 
     # Create folder if it doesn't exists:
     if not os.path.exists(log_folder_name):
         os.makedirs(log_folder_name, exist_ok=True)
 
-    if StaticSettings.log_rotation_type.lower() == "size":
+    if StaticSettings.log_rotation_type.lower() == lsf.log_rotation_type_size():
         handler = RotatingFileHandler(
             log_folder_name + log_file_name,
             maxBytes=5 * 1024 * 1024,  # store up 5 MB per file
             backupCount=5,  # keep up to 5 files
         )
-    elif StaticSettings.log_rotation_type.lower() == "time":
+    elif StaticSettings.log_rotation_type.lower() == lsf.log_rotation_type_time():
         handler = TimedRotatingFileHandler(
             log_folder_name + log_file_name,
             when="midnight",  # you can also use 'W0' for rotating each Monday
@@ -97,9 +98,5 @@ def create_folder_if_not_exists(path: str):
     if not isinstance(path, pathlib.Path):
         path = pathlib.Path(path)
     if path.exists() and not path.is_dir():
-        except_str = (
-            "'create_folder_if_not_exists' trying to create directory {} failed, "
-            + "since this path already exists and is not a directory!"
-        )
-        raise FileExistsError(except_str.format(path.as_posix()))
+        raise FileExistsError(lsf.error_path_exists(path.as_posix()))
     path.mkdir(parents=True, exist_ok=True)

@@ -3,6 +3,7 @@
 @authors: kuen,
 """
 from alpaca.model_data import variable as var
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class Constraint:
@@ -18,7 +19,9 @@ class Constraint:
         variables: Coefficients paired with variables in the constraint expression.
     """
 
-    def __init__(self, name: str, con_type="<=", rhs=0.0, variables=None):
+    def __init__(
+        self, name: str, con_type=lsf.constraint_leq(), rhs=0.0, variables=None
+    ):
         """Initializes a Constraint instance.
 
         Args:

@@ -3,7 +3,6 @@
 @authors: kuen,
 """
 from alpaca.settings import UserSettings
-from alpaca.utils.logger import logger
 from alpaca.model_data import (
     variable as var,
     constraint as con,
@@ -26,6 +25,7 @@ from alpaca.model_buildup import (
     osil_reader as osr,
     pwl_handler as pwh,
 )
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class ModelData:  # pylint: disable=too-many-instance-attributes
@@ -43,7 +43,9 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             settings: User configuration settings for the model.
         """
         self.settings = settings
-        self.variables: dict[str, var.Variable] = {"x_-1": var.Variable("x_-1")}
+        self.variables: dict[str, var.Variable] = {
+            lsf.objective_var(): var.Variable(lsf.objective_var())
+        }
         self.constraints: dict[str, con.Constraint] = {}
         self.expressions = eco.ExpressionContainer()
         self._build_model_from_osil_data()
@@ -58,9 +60,9 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             The added constraint object.
         """
         constraint_name = constraint.name
-        assert (
-            constraint_name not in self.constraints
-        ), f"Duplicate constraint name {constraint_name}."
+        assert constraint_name not in self.constraints, lsf.error_duplicate_con_name(
+            constraint_name
+        )
         self.constraints[constraint_name] = constraint
         return constraint
 
@@ -74,9 +76,9 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             The added variable object.
         """
         variable_name = variable.name
-        assert (
-            variable_name not in self.variables
-        ), f"Duplicate variable name {variable_name}."
+        assert variable_name not in self.variables, lsf.error_duplicate_var_name(
+            variable_name
+        )
         self.variables[variable_name] = variable
         return variable
 
@@ -106,7 +108,10 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             return self.expressions.bilinear_expressions[name]
         if name in self.expressions.bilinear_binary_expressions:
             return self.expressions.bilinear_binary_expressions[name]
-        if variables[0].var_type == "B" and variables[1].var_type == "B":
+        if (
+            variables[0].var_type == lsf.var_type_binary()
+            and variables[1].var_type == lsf.var_type_binary()
+        ):
             bilinear_expression = bbe.BilinearBinaryExpression(
                 name,
                 self,
@@ -115,7 +120,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             )
             self.expressions.bilinear_binary_expressions[name] = bilinear_expression
             return bilinear_expression
-        if variables[0].var_type == "B":
+        if variables[0].var_type == lsf.var_type_binary():
             bilinear_expression = bme.BilinearMixedBinaryExpression(
                 name,
                 self,
@@ -127,7 +132,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
                 bilinear_expression
             )
             return bilinear_expression
-        if variables[1].var_type == "B":
+        if variables[1].var_type == lsf.var_type_binary():
             bilinear_expression = bme.BilinearMixedBinaryExpression(
                 name,
                 self,
@@ -266,7 +271,6 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         building variables, constraints, and expressions, propagating bounds,
         and preparing the model for optimization using dedicated handler classes.
         """
-        logger.info("Reading data..")
 
         # Step 1: Read OSiL file and build the basic model structure.
         # This includes variables, objective, constraints, and all expressions.

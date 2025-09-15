@@ -7,6 +7,7 @@ import itertools
 import alpaca.pwl.pwl_method as pwm
 from alpaca.model_data import constraint as con, variable as var
 from alpaca.expressions import one_dim_expression as ode, multilinear_expression as mle
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class MultipleChoiceMethod(pwm.PWLMethod):
@@ -21,7 +22,10 @@ class MultipleChoiceMethod(pwm.PWLMethod):
         for breakpoint_index in range(len(self.variable.breakpoints) - 1):
             self.pwl_variables_binary.append(
                 var.Variable(
-                    f"{self.variable.name}_bp_{breakpoint_index}", var_type="B"
+                    lsf.var_name_pwl_multiple_choice_binary(
+                        self.variable.name, breakpoint_index
+                    ),
+                    var_type=lsf.var_type_binary(),
                 )
             )
 
@@ -34,8 +38,10 @@ class MultipleChoiceMethod(pwm.PWLMethod):
         for breakpoint_index in range(len(self.variable.breakpoints) - 1):
             self.pwl_variables_continuous.append(
                 var.Variable(
-                    f"{self.variable.name}_c_{breakpoint_index}",
-                    var_type="C",
+                    lsf.var_name_pwl_multiple_choice_continuous(
+                        self.variable.name, breakpoint_index
+                    ),
+                    var_type=lsf.var_type_continuous(),
                     lb=min(0.0, self.variable.lb),
                     ub=max(0.0, self.variable.ub),
                 )
@@ -44,8 +50,10 @@ class MultipleChoiceMethod(pwm.PWLMethod):
     def _add_pwl_constraints_multiple_choice(self) -> None:
         self.pwl_constraints.append(
             con.Constraint(
-                f"mc_varlink_cont_{self.variable.name}",
-                con_type="==",
+                lsf.con_name_pwl_multiple_choice_variable_link_continuous(
+                    self.variable.name
+                ),
+                con_type=lsf.constraint_eq(),
                 variables=[
                     (1.0, variable) for variable in self.pwl_variables_continuous
                 ]
@@ -54,8 +62,8 @@ class MultipleChoiceMethod(pwm.PWLMethod):
         )
         self.pwl_constraints.append(
             con.Constraint(
-                f"mc_varlink_{self.variable.name}",
-                con_type="==",
+                lsf.con_name_pwl_multiple_choice_sos(self.variable.name),
+                con_type=lsf.constraint_eq(),
                 variables=[(1.0, variable) for variable in self.pwl_variables_binary],
                 rhs=1.0,
             )
@@ -63,8 +71,10 @@ class MultipleChoiceMethod(pwm.PWLMethod):
         for breakpoint_index in range(len(self.variable.breakpoints) - 1):
             self.pwl_constraints.append(
                 con.Constraint(
-                    f"mc_lb_{self.variable.name}_{breakpoint_index}",
-                    con_type="<=",
+                    lsf.con_name_pwl_multiple_choice_interval_lb(
+                        self.variable.name, breakpoint_index
+                    ),
+                    con_type=lsf.constraint_leq(),
                     variables=[
                         (
                             self.variable.breakpoints[breakpoint_index],
@@ -76,8 +86,10 @@ class MultipleChoiceMethod(pwm.PWLMethod):
             )
             self.pwl_constraints.append(
                 con.Constraint(
-                    f"mc_ub_{self.variable.name}_{breakpoint_index}",
-                    con_type=">=",
+                    lsf.con_name_pwl_multiple_choice_interval_lb(
+                        self.variable.name, breakpoint_index
+                    ),
+                    con_type=lsf.constraint_geq(),
                     variables=[
                         (
                             self.variable.breakpoints[breakpoint_index + 1],
@@ -114,8 +126,8 @@ class MultipleChoiceMethod(pwm.PWLMethod):
             variables_in_constraint.append((intercept, self.pwl_variables_binary[i]))
         return [
             con.Constraint(
-                f"mc_{expression.name}",
-                con_type="==",
+                lsf.con_name_pwl_multiple_choice_approximation(expression.name),
+                con_type=lsf.constraint_eq(),
                 variables=variables_in_constraint,
             )
         ]
@@ -148,14 +160,14 @@ class MultipleChoiceMethod(pwm.PWLMethod):
             )
         return [
             con.Constraint(
-                f"mc_under_{expression.name}",
-                con_type="<=",
+                lsf.con_name_pwl_multiple_choice_underestimation(expression.name),
+                con_type=lsf.constraint_leq(),
                 variables=continuous_variables_in_constraint
                 + binary_variables_in_underestimating_constraint,
             ),
             con.Constraint(
-                f"mc_over_{expression.name}",
-                con_type=">=",
+                lsf.con_name_pwl_multiple_choice_overestimation(expression.name),
+                con_type=lsf.constraint_geq(),
                 variables=continuous_variables_in_constraint
                 + binary_variables_in_overestimating_constraint,
             ),
@@ -181,30 +193,25 @@ class MultipleChoiceMethod(pwm.PWLMethod):
                 combination_with_indices, current_variable_indices, approximation
             )
             constraints.append(
-                self._add_piecewise_constraint(
+                self._add_piecewise_constant_constraint(
                     current_variable_indices, implied_indices, expression
                 )
             )
         return constraints
 
-    def _add_piecewise_constraint(
+    def _add_piecewise_constant_constraint(
         self,
-        current_variable_indices: list[int],
+        implying_variable_indices: list[int],
         implied_indices: tuple[int, ...],
         expression: mle.MultilinearExpression,
     ):
         """
-        Builds and adds a single piecewise relaxation constraint to the model.
+        Builds and adds a single piecewise constant relaxation constraint to the model.
 
         Args:
-            current_variable_indices: The list of indices for the active variable intervals.
+            implying_variable_indices: The list of indices for the active variable intervals.
             implied_indices: The resulting indices for the representative variable.
         """
-        constraint_name = (
-            f"mc_{expression.name}_{'_'.join(map(str, current_variable_indices))}"
-        )
-
-        # Define the initial part of the constraint involving the representative variable
         constraint_variables = [
             (
                 -1.0,
@@ -218,12 +225,13 @@ class MultipleChoiceMethod(pwm.PWLMethod):
                     index_in_combination
                 ],
             )
-            for var_idx, index_in_combination in enumerate(current_variable_indices)
+            for var_idx, index_in_combination in enumerate(implying_variable_indices)
         ]
-
         constraint = con.Constraint(
-            name=constraint_name,
-            con_type="<=",
+            name=lsf.con_name_pwc_multiple_choice_multilinear(
+                expression.name, implying_variable_indices
+            ),
+            con_type=lsf.constraint_leq(),
             variables=constraint_variables,
             rhs=len(expression.variables) - 1.0,
         )

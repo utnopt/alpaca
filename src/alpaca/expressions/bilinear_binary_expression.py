@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from alpaca.model_data import variable as var, constraint as con
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData
@@ -42,9 +43,11 @@ class BilinearBinaryExpression:
         self.representative_variable = (
             representative_variable
             if representative_variable
-            else model_data.add_variable(var.Variable(f"r_{name}"))
+            else model_data.add_variable(
+                var.Variable(lsf.representative_variable_name(name))
+            )
         )
-        self.representative_variable.var_type = "B"
+        self.representative_variable.var_type = lsf.var_type_binary()
         self.representative_variable.lb = 0.0
         self.representative_variable.ub = 1.0
         self._add_mc_cormick_constraints()

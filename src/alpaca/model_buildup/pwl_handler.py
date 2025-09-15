@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from alpaca.pwl import multiple_choice_method as mcm, delta_method as dem
 import alpaca.expressions.one_dim_expression as ode
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData
@@ -28,10 +29,11 @@ class PWLHandler:
         pwl_variables = []
         pwl_constraints = []
         for variable in self.model_data.variables.values():
-            if variable.is_discretized and variable.var_type != "B":
+            if variable.is_discretized and variable.var_type != lsf.var_type_binary():
                 variable.pwl = (
                     mcm.MultipleChoiceMethod(variable)
-                    if self.model_data.settings.pwl_method == "multiple-choice"
+                    if self.model_data.settings.pwl_method
+                    == lsf.pwl_method_multiple_choice()
                     else dem.DeltaMethod(variable)
                 )
                 pwl_variables.extend(

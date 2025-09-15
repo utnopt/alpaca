@@ -8,6 +8,7 @@ import os
 import time
 
 from alpaca.utils.logger import logger
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class StaticSettings:
@@ -15,7 +16,7 @@ class StaticSettings:
     Class containing static settings.
     """
 
-    project_name = "bip-pwl"
+    project_name = lsf.project_name()
     # ===== Paths to (static) input files =====
     base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
     data_path = base_path + "/data/"

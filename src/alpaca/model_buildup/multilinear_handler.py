@@ -5,6 +5,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData
 
@@ -43,7 +45,7 @@ class MultilinearHandler:
         """Marks representative variables of multilinear expressions for discretization."""
         for expression in self.model_data.expressions.multilinear_expressions.values():
             expression.representative_variable.add_nonlinearity_to_occurring_in(
-                f"multilinearimplied{len(expression.variables)}"
+                lsf.nonlinearity_type_multilinear_implied(len(expression.variables))
             )
 
     def _mark_representative_variables_of_bilinear_expressions_as_discretized(
@@ -52,7 +54,7 @@ class MultilinearHandler:
         """Marks representative variables of bilinear expressions for discretization."""
         for expression in self.model_data.expressions.bilinear_expressions.values():
             expression.representative_variable.add_nonlinearity_to_occurring_in(
-                "multilinearimplied2"
+                lsf.nonlinearity_type_multilinear_implied(2)
             )
 
     def _reformulate_bilinear_to_sum_of_squares(self) -> None:

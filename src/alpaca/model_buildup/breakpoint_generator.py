@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 import alpaca.model_data.variable as var
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData
@@ -21,7 +22,7 @@ class BreakpointGenerator:
     def generate_breakpoints(self) -> None:
         """Creates piecewise linear approximations for variables marked for discretization."""
         for variable in self.model_data.variables.values():
-            if variable.is_discretized and variable.var_type != "B":
+            if variable.is_discretized and variable.var_type != lsf.var_type_binary():
                 variable.breakpoints = self._get_breakpoints_for_variable(variable)
 
     def _get_breakpoints_for_variable(self, variable: var.Variable) -> list[float]:

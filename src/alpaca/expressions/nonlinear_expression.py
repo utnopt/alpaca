@@ -5,7 +5,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-import alpaca.utils.datahandling as udh
+import alpaca.utils.data_handling as udh
 from alpaca.model_data import variable as var
 from alpaca.expressions import (
     one_dim_expression as ode,

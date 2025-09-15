@@ -5,7 +5,7 @@
 import pyscipopt as scip
 
 from alpaca.utils.logger import logger
-import alpaca.utils.datahandling as udh
+import alpaca.utils.data_handling as udh
 import alpaca.model_data.model_data as mda
 from alpaca.expressions import (
     nonlinear_expression as nle,
@@ -13,6 +13,7 @@ from alpaca.expressions import (
     multilinear_expression as mle,
 )
 import alpaca.mpip.mpip as mp
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class MPIPHandler:  # pylint: disable=too-many-instance-attributes
@@ -20,6 +21,7 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
 
     def __init__(self, model_data: mda.ModelData) -> None:
         """Initialize MPIP instance."""
+        logger.info(lsf.info_init_mpip_handler())
         self.model_data = model_data
         self.first_level_nonlinear_expression_values = [
             model_data.expressions.nonlinear_expressions[expr_key]
@@ -29,7 +31,6 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         self.multilinear_expressions = model_data.expressions.multilinear_expressions
         self.mpip_dict: dict[str, mp.MPIP] = {}
         self.mpip_counter: int = 0
-        logger.info("Add feature mpip..")
         self._find_mpip_instances_in_nonlinear_expressions()
         self._find_mpip_instances_in_multilinear_and_bilinear_expressions()
         self._build_mpip_instances()
@@ -61,7 +62,7 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         self, bilinear_expression: ble.BilinearExpression
     ) -> None:
         self.mpip_counter += 1
-        mpip_id = f"mpip_{self.mpip_counter}"
+        mpip_id = lsf.mpip_id(self.mpip_counter)
         mpip = mp.MPIP(mpip_id)
         representative_variable = bilinear_expression.representative_variable
         mpip.add_implied_id(representative_variable)
@@ -76,7 +77,7 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         self, multilinear_expression: mle.MultilinearExpression
     ) -> None:
         self.mpip_counter += 1
-        mpip_id = f"mpip_{self.mpip_counter}"
+        mpip_id = lsf.mpip_id(self.mpip_counter)
         mpip = mp.MPIP(mpip_id)
         representative_variable = multilinear_expression.representative_variable
         mpip.add_implied_id(representative_variable)
@@ -100,7 +101,7 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         self, nonlinear_expression: nle.NonlinearExpression
     ) -> None:
         self.mpip_counter += 1
-        mpip_id = f"mpip_{self.mpip_counter}"
+        mpip_id = lsf.mpip_id(self.mpip_counter)
         mpip = mp.MPIP(mpip_id)
         representative_variable = nonlinear_expression.representative_variable
         mpip.add_implied_id(representative_variable)
@@ -113,21 +114,21 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
     def _nonlinear_expression_to_scip_expression(
         self, nonlinear_expression: nle.NonlinearExpression, mpip: mp.MPIP
     ) -> scip.Expr:
-        if nonlinear_expression.expression_type == "product":
+        if nonlinear_expression.expression_type == lsf.expression_type_product():
             implying_function = 1
             for child_nonlinear_expression in nonlinear_expression.child_expressions:
                 implying_function *= self._continue_mpip_instance(
                     child_nonlinear_expression, mpip
                 )
             return implying_function
-        if nonlinear_expression.expression_type == "sum":
+        if nonlinear_expression.expression_type == lsf.expression_type_sum():
             implying_function = 0
             for child_nonlinear_expression in nonlinear_expression.child_expressions:
                 implying_function += self._continue_mpip_instance(
                     child_nonlinear_expression, mpip
                 )
             return implying_function
-        if nonlinear_expression.expression_type == "divide":
+        if nonlinear_expression.expression_type == lsf.expression_type_divide():
             return self._continue_mpip_instance(
                 nonlinear_expression.child_expressions[0], mpip
             ) / self._continue_mpip_instance(
