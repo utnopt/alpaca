@@ -3,6 +3,7 @@
 @authors: kuen,
 """
 from __future__ import annotations
+from typing import TYPE_CHECKING
 
 import alpaca.utils.datahandling as udh
 from alpaca.model_data import variable as var
@@ -11,6 +12,9 @@ from alpaca.expressions import (
 )
 from alpaca.utils.logger import logger
 import alpaca.settings as s
+
+if TYPE_CHECKING:
+    from alpaca.model_data.model_data import ModelData
 
 
 class NonlinearExpression:
@@ -31,7 +35,7 @@ class NonlinearExpression:
         fragmented: Flag indicating if the expression has been decomposed
     """
 
-    def __init__(self, name: str, expression_tag, model_data: "ModelData"):
+    def __init__(self, name: str, expression_tag, model_data: ModelData):
         """Initialize a nonlinear expression with its XML tag and optional model data.
 
         Args:
@@ -42,7 +46,7 @@ class NonlinearExpression:
         self.name = name
         self.expression_type = expression_tag.name
         self.expression_tag = expression_tag
-        self.model_data: "ModelData" = model_data
+        self.model_data = model_data
         self.child_expressions: list = []
         self.representative_variable = model_data.add_variable(
             var.Variable(f"r_{self.name}", lb=-s.StaticSettings.infinity)

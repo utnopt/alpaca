@@ -87,7 +87,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
             implying_variables,
         ) in self._generate_implying_combinations():
             implied_variables = tuple(
-                self.mpip.implied_variable.pwl_variables_binary[implied_index]
+                self.mpip.implied_variable.pwl.pwl_variables_binary[implied_index]
                 for implied_index in self.mpip.relation[implying_indices]
             )
             self._add_mccormick_constraint(
@@ -100,7 +100,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
         """Generate all combinations of implying variables."""
         for combination in itertools.product(
             *[
-                enumerate(variable.pwl_variables_binary)
+                enumerate(variable.pwl.pwl_variables_binary)
                 for variable in self.mpip.implying_variables.values()
             ]
         ):
@@ -130,7 +130,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
         for implying_vars_index, implying_var in enumerate(
             self.mpip.implying_variables.values()
         ):
-            for implying_index in range(len(implying_var.pwl_variables_binary)):
+            for implying_index in range(len(implying_var.pwl.pwl_variables_binary)):
                 slice_dict[implying_vars_index][(implying_index,)] = set(
                     sum(
                         {
@@ -149,14 +149,14 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
                 self.opt_model.add_constraint(
                     sum(
                         list(self.mpip.implying_variables.values())[implying_vars_index]
-                        .pwl_variables_binary[implying_index]
+                        .pwl.pwl_variables_binary[implying_index]
                         .solver_variable
                         for implying_index in implying_indices
                     )
                     + sum(
                         sum(
                             variable.solver_variable
-                            for variable in other_implying_var.pwl_variables_binary
+                            for variable in other_implying_var.pwl.pwl_variables_binary
                         )
                         for other_vars_index, other_implying_var in enumerate(
                             self.mpip.implying_variables.values()
@@ -165,7 +165,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
                     )
                     - sum(
                         (
-                            self.mpip.implied_variable.pwl_variables_binary[
+                            self.mpip.implied_variable.pwl.pwl_variables_binary[
                                 implied_index
                             ].solver_variable
                             for implied_index in implied_indices
@@ -222,7 +222,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
             self.opt_model.add_constraint(
                 sum(
                     variable.solver_variable
-                    for variable in implying_variable.pwl_variables_binary
+                    for variable in implying_variable.pwl.pwl_variables_binary
                 )
                 == 1,
                 name=f"mc_implying_{implying_index}_{self.mpip.mpip_id}",
@@ -233,7 +233,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
         self.opt_model.add_constraint(
             sum(
                 variable.solver_variable
-                for variable in self.mpip.implied_variable.pwl_variables_binary
+                for variable in self.mpip.implied_variable.pwl.pwl_variables_binary
             )
             == 1,
             name=f"mc_implied_{self.mpip.mpip_id}",
@@ -248,7 +248,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
         """Create variables for separation model."""
         for implying_index, implying_variable in self.mpip.implying_variables.items():
             sep_implying_variables = []
-            for i in range(len(implying_variable.pwl_variables_binary)):
+            for i in range(len(implying_variable.pwl.pwl_variables_binary)):
                 variable = self.separation_model.add_variable(
                     f"sep_implying_{implying_index}_{i}", ub=1, obj=1
                 )
@@ -257,7 +257,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
 
         self.sep_implied_variables = [
             self.separation_model.add_variable(f"sep_implied_{i}", ub=1, obj=-1)
-            for i in range(len(self.mpip.implied_variable.pwl_variables_binary))
+            for i in range(len(self.mpip.implied_variable.pwl.pwl_variables_binary))
         ]
 
     def _add_separation_constraints(self) -> None:
@@ -314,7 +314,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
         )
         violation = -len(self.sep_implying_variables) + 1
         for implying_index, implying_variable in self.mpip.implying_variables.items():
-            for idx, variable in enumerate(implying_variable.pwl_variables_binary):
+            for idx, variable in enumerate(implying_variable.pwl.pwl_variables_binary):
                 solution_value = self.separation_model.get_val(
                     self.sep_implying_variables[implying_index][idx]
                 )
@@ -327,7 +327,9 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
                     solution_value
                     * self.point_to_be_separated.implying_values[implying_index][idx]
                 )
-        for idx, variable in enumerate(self.mpip.implied_variable.pwl_variables_binary):
+        for idx, variable in enumerate(
+            self.mpip.implied_variable.pwl.pwl_variables_binary
+        ):
             solution_value = self.separation_model.get_val(
                 self.sep_implied_variables[idx]
             )
@@ -349,7 +351,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
             implying_index: np.array(
                 [
                     self.opt_model.get_val_callback(v.solver_variable)
-                    for v in variable.pwl_variables_binary
+                    for v in variable.pwl.pwl_variables_binary
                 ]
             )
             for implying_index, variable in self.mpip.implying_variables.items()
@@ -357,7 +359,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
         self.point_to_be_separated.implied_values = np.array(
             [
                 self.opt_model.get_val_callback(v.solver_variable)
-                for v in self.mpip.implied_variable.pwl_variables_binary
+                for v in self.mpip.implied_variable.pwl.pwl_variables_binary
             ]
         )
         if self.point_to_be_separated.is_integer():

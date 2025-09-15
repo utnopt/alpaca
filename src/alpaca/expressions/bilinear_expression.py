@@ -92,8 +92,8 @@ class BilinearExpression(mle.MultilinearExpression):
         # McCormick envelope constraints
         self.model_data.add_constraint(
             con.Constraint(
-                f"mc1_{self.name}",
-                con_type=">=",
+                f"mcclu_{self.name}",
+                con_type="<=",
                 variables=[
                     (1.0, z),
                     (-x.lb, y),
@@ -104,8 +104,8 @@ class BilinearExpression(mle.MultilinearExpression):
         )
         self.model_data.add_constraint(
             con.Constraint(
-                f"mc2_{self.name}",
-                con_type=">=",
+                f"mccul_{self.name}",
+                con_type="<=",
                 variables=[
                     (1.0, z),
                     (-x.ub, y),
@@ -116,8 +116,8 @@ class BilinearExpression(mle.MultilinearExpression):
         )
         self.model_data.add_constraint(
             con.Constraint(
-                f"mc3_{self.name}",
-                con_type="<=",
+                f"mccll_{self.name}",
+                con_type=">=",
                 variables=[
                     (1.0, z),
                     (-x.lb, y),
@@ -128,8 +128,8 @@ class BilinearExpression(mle.MultilinearExpression):
         )
         self.model_data.add_constraint(
             con.Constraint(
-                f"mc4_{self.name}",
-                con_type="<=",
+                f"mccuu_{self.name}",
+                con_type=">=",
                 variables=[
                     (1.0, z),
                     (-x.ub, y),

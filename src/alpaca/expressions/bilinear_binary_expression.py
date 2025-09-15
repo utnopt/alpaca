@@ -2,7 +2,13 @@
 """
 @authors: kuen,
 """
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from alpaca.model_data import variable as var, constraint as con
+
+if TYPE_CHECKING:
+    from alpaca.model_data.model_data import ModelData
 
 
 class BilinearBinaryExpression:
@@ -18,7 +24,7 @@ class BilinearBinaryExpression:
     def __init__(
         self,
         name: str,
-        model_data: "ModelData",
+        model_data: ModelData,
         variables: list[var.Variable],
         representative_variable: var.Variable | None = None,
     ):

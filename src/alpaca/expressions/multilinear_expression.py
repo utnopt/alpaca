@@ -3,11 +3,16 @@
 """
 @authors: kuen,
 """
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import itertools
 import bisect
 
-from alpaca.model_data import variable as var, constraint as con
+from alpaca.model_data import variable as var
 from alpaca.expressions import expression as exn
+
+if TYPE_CHECKING:
+    from alpaca.model_data.model_data import ModelData
 
 
 class MultilinearExpression(exn.Expression):
@@ -27,7 +32,7 @@ class MultilinearExpression(exn.Expression):
     def __init__(  # pylint: disable=too-many-arguments, too-many-positional-arguments
         self,
         name: str,
-        model_data: "ModelData",
+        model_data: ModelData,
         variables: list[var.Variable],
         level: int,
         representative_variable: var.Variable | None = None,
@@ -53,44 +58,21 @@ class MultilinearExpression(exn.Expression):
         if not self.representative_variable.is_discretized:
             return
         all_variables_mid_values_with_indices = (
-            self._get_all_variables_mid_values_with_indices()
+            self.get_all_variables_mid_values_with_indices()
         )
 
         for combination_with_indices in itertools.product(
             *all_variables_mid_values_with_indices
         ):
             current_variable_indices = [index for _, index in combination_with_indices]
-            implied_indices = self._calculate_implied_indices(
+            implied_indices = self.calculate_implied_indices(
                 combination_with_indices, current_variable_indices, approximation
             )
             self.piecewise_constant_relation[tuple(current_variable_indices)] = (
                 implied_indices
             )
 
-    def apply_piecewise_constant_relaxation(self, approximation: bool = False):
-        """
-        Apply piecewise constant relaxation for multilinear expressions.
-
-        This function iterates through all combinations of variable intervals
-        and applies constraints based on either an approximation or a strict
-        lower/upper bound calculation.
-        """
-        if not self.representative_variable.is_discretized:
-            return
-        all_variables_mid_values_with_indices = (
-            self._get_all_variables_mid_values_with_indices()
-        )
-
-        for combination_with_indices in itertools.product(
-            *all_variables_mid_values_with_indices
-        ):
-            current_variable_indices = [index for _, index in combination_with_indices]
-            implied_indices = self._calculate_implied_indices(
-                combination_with_indices, current_variable_indices, approximation
-            )
-            self._add_piecewise_constraint(current_variable_indices, implied_indices)
-
-    def _calculate_implied_indices(
+    def calculate_implied_indices(
         self,
         combination_with_indices: tuple[tuple[float, int], ...],
         current_variable_indices: list[int],
@@ -120,62 +102,15 @@ class MultilinearExpression(exn.Expression):
             )
             for i, index in enumerate(current_variable_indices)
         ]
-        implied_value_lb, implied_value_ub = self._get_implied_lb_and_ub(lb_ub_list)
+        implied_value_lb, implied_value_ub = self.get_implied_lb_and_ub(lb_ub_list)
         implied_index_lb = self._get_implied_index_from_implied_value(implied_value_lb)
         implied_index_ub = self._get_implied_index_from_implied_value(implied_value_ub)
         return tuple(range(implied_index_lb, implied_index_ub + 1))
 
-    def _add_piecewise_constraint(
-        self, current_variable_indices: list[int], implied_indices: tuple[int, ...]
-    ):
-        """
-        Builds and adds a single piecewise relaxation constraint to the model.
-
-        Args:
-            current_variable_indices: The list of indices for the active variable intervals.
-            implied_indices: The resulting indices for the representative variable.
-        """
-        # Assuming 'con' is available in the class scope
-        constraint_name = (
-            f"mc_{self.name}_{'_'.join(map(str, current_variable_indices))}"
-        )
-
-        # Define the initial part of the constraint involving the representative variable
-        constraint_variables = [
-            (
-                -1.0,
-                self.representative_variable.pwl_variables_binary[implied_index],
-            )
-            for implied_index in implied_indices
-        ] + [
-            (
-                1.0,
-                self.variables[var_idx].pwl_variables_binary[index_in_combination],
-            )
-            for var_idx, index_in_combination in enumerate(current_variable_indices)
-        ]
-
-        constraint = self.model_data.add_constraint(
-            con.Constraint(
-                name=constraint_name,
-                con_type="<=",
-                variables=constraint_variables,
-                rhs=len(self.variables) - 1.0,
-            )
-        )
-
-        # Add the original variables to the constraint
-        for var_idx, index_in_combination in enumerate(current_variable_indices):
-            constraint.variables.append(
-                (
-                    1.0,
-                    self.variables[var_idx].pwl_variables_binary[index_in_combination],
-                )
-            )
-
-    def _get_all_variables_mid_values_with_indices(
+    def get_all_variables_mid_values_with_indices(
         self,
     ) -> list[list[tuple[float, int]]]:
+        """Get mid values and their indices for all variables."""
         all_variables_mid_values_with_indices = []
         for variable in self.variables:
             mid_values_for_current_var = []
@@ -210,31 +145,21 @@ class MultilinearExpression(exn.Expression):
         else:
             sub_bi_multilinear = self.model_data.add_bilinear_expression(
                 f"mb_{self.name}_sub",
-                (self.variables[1], self.variables[2]),
+                [self.variables[1], self.variables[2]],
                 self.level + 1,
             )
         self.model_data.add_bilinear_expression(
             f"mb_{self.name}",
-            (self.variables[0], sub_bi_multilinear.representative_variable),
+            [self.variables[0], sub_bi_multilinear.representative_variable],
             self.level,
             representative_variable=self.representative_variable,
         )
 
-    def propagate_variable_bounds(self):
-        """Propagate variables bounds."""
-        lb_ub_list = [(variable.lb, variable.ub) for variable in self.variables]
-        implied_lb, implied_ub = self._get_implied_lb_and_ub(lb_ub_list)
-        self.representative_variable.lb = max(
-            self.representative_variable.lb, implied_lb
-        )
-        self.representative_variable.ub = min(
-            self.representative_variable.ub, implied_ub
-        )
-
     @staticmethod
-    def _get_implied_lb_and_ub(
+    def get_implied_lb_and_ub(
         lb_ub_list: list[tuple[float, float]],
     ) -> tuple[float, float]:
+        """Calculate the implied lower and upper bounds from a list of (lb, ub) tuples."""
         lb, ub = lb_ub_list[0]
         for next_lb, next_ub in lb_ub_list[1:]:
             candidates = [lb * next_lb, lb * next_ub, ub * next_lb, ub * next_ub]
