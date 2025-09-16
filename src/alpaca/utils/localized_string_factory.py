@@ -217,12 +217,24 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return "negate"
 
     @classmethod
+    def nonlinearity_type_min(cls) -> str:
+        return "min"
+
+    @classmethod
+    def nonlinearity_type_power(cls) -> str:
+        return "power"
+
+    @classmethod
     def nonlinearity_type_multilinear_implied(cls, nr_of_implying_vars: int) -> str:
         return f"multilinear_implied_{nr_of_implying_vars}"
 
     @classmethod
     def nonlinearity_type_multilinear(cls, nr_of_implying_vars: int) -> str:
         return f"multilinear_{nr_of_implying_vars}"
+
+    @classmethod
+    def warning_expression_type_not_supported(cls, expr_type: str) -> str:
+        return f"Expression type '{expr_type}' is not supported."
 
     @classmethod
     def error_path_exists(cls, path: str) -> str:
@@ -276,6 +288,14 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
     @classmethod
     def osil_tag_variables(cls) -> str:
         return "variables"
+
+    @classmethod
+    def osil_tag_variable(cls) -> str:
+        return "variable"
+
+    @classmethod
+    def osil_tag_number(cls) -> str:
+        return "number"
 
     @classmethod
     def osil_tag_var(cls) -> str:
@@ -366,12 +386,16 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return "idxTwo"
 
     @classmethod
-    def square_expr_hash(cls, index: str) -> str:
-        return f"q_{index}"
+    def expression_hash_bilinear(cls, idx1: str, idx2: str) -> str:
+        return "bl" + "_".join(sorted([idx1, idx2]))
 
     @classmethod
-    def bilinear_expr_hash(cls, idx1: str, idx2: str) -> str:
-        return "b" + "_".join(sorted([idx1, idx2]))
+    def expression_hash_multilinear(cls, names: list[str]) -> str:
+        return "ml" + "_".join(sorted(names))
+
+    @classmethod
+    def expression_hash_linear(cls, name: str) -> str:
+        return f"le_{name}"
 
     @classmethod
     def osil_tag_nonlinear_expressions(cls) -> str:
@@ -455,3 +479,95 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
     @classmethod
     def representative_variable_name(cls, name: str) -> str:
         return f"rep_{name}"
+
+    @classmethod
+    def helper_variable_name(cls, name: str) -> str:
+        return f"helper_{name}"
+
+    @classmethod
+    def con_name_mc_cormick_binary_ub_ub(cls, name: str) -> str:
+        return f"mc_cormick_bb_ub_ub_{name}"
+
+    @classmethod
+    def con_name_mc_cormick_binary_ub_lb(cls, name: str) -> str:
+        return f"mc_cormick_bb_ub_lb_{name}"
+
+    @classmethod
+    def con_name_mc_cormick_binary_lb_ub(cls, name: str) -> str:
+        return f"mc_cormick_bb_lb_ub_{name}"
+
+    @classmethod
+    def con_name_mc_cormick_continuous_ub_ub(cls, name: str) -> str:
+        return f"mc_cormick_cb_ub_ub_{name}"
+
+    @classmethod
+    def con_name_mc_cormick_continuous_ub_lb(cls, name: str) -> str:
+        return f"mc_cormick_cb_ub_lb_{name}"
+
+    @classmethod
+    def con_name_mc_cormick_continuous_lb_ub(cls, name: str) -> str:
+        return f"mc_cormick_cb_lb_ub_{name}"
+
+    @classmethod
+    def con_name_mc_cormick_continuous_lb_lb(cls, name: str) -> str:
+        return f"mc_cormick_cb_lb_lb_{name}"
+
+    @classmethod
+    def linear_expression_bilinear_to_sum_of_squares(cls, name: str) -> str:
+        return f"bilinear_to_sum_of_squares_{name}"
+
+    @classmethod
+    def linear_expression_bilinear_to_sum_of_squares_helper(cls, name: str) -> str:
+        return f"bilinear_to_sum_of_squares_helper_{name}"
+
+    @classmethod
+    def expression_hash_square(cls, name: str) -> str:
+        return f"square_{name}"
+
+    @classmethod
+    def expression_hash_generic_nonlinear(cls, name: str, nonlinearity: str) -> str:
+        return f"{nonlinearity}_{name}"
+
+    @classmethod
+    def error_one_variable_in_product(cls) -> str:
+        return "A product expression must have at least two variables."
+
+    @classmethod
+    def con_name_indicator_bilinear_mixed_binary_1(cls, name: str) -> str:
+        return f"indicator_bilinear_mixed_binary_1_{name}"
+
+    @classmethod
+    def con_name_indicator_bilinear_mixed_binary_2(cls, name: str) -> str:
+        return f"indicator_bilinear_mixed_binary_2_{name}"
+
+    @classmethod
+    def con_name_indicator_bilinear_mixed_binary_3(cls, name: str) -> str:
+        return f"indicator_bilinear_mixed_binary_3_{name}"
+
+    @classmethod
+    def con_name_indicator_bilinear_mixed_binary_4(cls, name: str) -> str:
+        return f"indicator_bilinear_mixed_binary_4_{name}"
+
+    @classmethod
+    def error_subclasses_must_implement_method(cls) -> str:
+        return "Subclass must implement method."
+
+    @classmethod
+    def var_name_binary_abs_reformulation(cls, name: str) -> str:
+        return f"abs_bin_{name}"
+
+    @classmethod
+    def con_name_abs_reformulation_negative(cls, name: str) -> str:
+        return f"abs_reform_neg_{name}"
+
+    @classmethod
+    def con_name_abs_reformulation_positive(cls, name: str) -> str:
+        return f"abs_reform_pos_{name}"
+
+    @classmethod
+    def con_name_abs_reformulation_negative_big_m(cls, name: str) -> str:
+        return f"abs_reform_neg_big_m_{name}"
+
+    @classmethod
+    def con_name_abs_reformulation_positive_big_m(cls, name: str) -> str:
+        return f"abs_reform_pos_big_m_{name}"

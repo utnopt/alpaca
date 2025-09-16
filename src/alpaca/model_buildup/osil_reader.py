@@ -190,7 +190,7 @@ class OsilReader:
         self, var_index: str, constraint_index: str, coeff: float
     ):
         """Creates and adds a square expression to a specified constraint."""
-        expr_hash = lsf.square_expr_hash(var_index)
+        expr_hash = lsf.expression_hash_square(var_index)
         square_expression = self.model_data.add_one_dim_expression(
             ode.SquareExpression,
             expr_hash,
@@ -209,7 +209,7 @@ class OsilReader:
         coeff: float,
     ):
         """Creates and adds a bilinear expression to a specified constraint."""
-        expr_hash = lsf.bilinear_expr_hash(first_var_index, second_var_index)
+        expr_hash = lsf.expression_hash_bilinear(first_var_index, second_var_index)
         bilinear_expression = self.model_data.add_bilinear_expression(
             expr_hash,
             [

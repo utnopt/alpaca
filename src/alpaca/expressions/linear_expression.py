@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from alpaca.model_data import variable as var, constraint as con
 import alpaca.expressions.expression as exn
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData
@@ -48,8 +49,8 @@ class LinearExpression(exn.Expression):
         """Add constraint from linear expression."""
         self.model_data.add_constraint(
             con.Constraint(
-                f"c_{self.name}",
-                con_type="==",
+                lsf.con_name(self.name),
+                con_type=lsf.constraint_eq(),
                 rhs=-self.constant,
                 variables=self.variables + [(-1.0, self.representative_variable)],
             )

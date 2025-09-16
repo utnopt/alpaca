@@ -66,15 +66,22 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         self.constraints[constraint_name] = constraint
         return constraint
 
-    def add_variable(self, variable: var.Variable) -> var.Variable:
+    def add_variable(
+        self,
+        variable: var.Variable,
+        representative_variable: var.Variable | None = None,
+    ) -> var.Variable:
         """Add a variable to the model.
 
         Args:
             variable: The variable to be added.
+            representative_variable: The variable to be added represents an expression.
 
         Returns:
             The added variable object.
         """
+        if representative_variable:
+            return representative_variable
         variable_name = variable.name
         assert variable_name not in self.variables, lsf.error_duplicate_var_name(
             variable_name

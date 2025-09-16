@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from alpaca.model_data import variable as var, constraint as con
 import alpaca.expressions.multilinear_expression as mle
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData
@@ -46,8 +47,8 @@ class BilinearMixedBinaryExpression(mle.MultilinearExpression):
         b_var, c_var = tuple(self.variables)
         self.model_data.add_constraint(
             con.Constraint(
-                f"indicator_{self.name}_1",
-                con_type="<=",
+                lsf.con_name_indicator_bilinear_mixed_binary_1(self.name),
+                con_type=lsf.constraint_leq(),
                 variables=[
                     (-c_var.ub, b_var),
                     (1.0, self.representative_variable),
@@ -57,8 +58,8 @@ class BilinearMixedBinaryExpression(mle.MultilinearExpression):
         )
         self.model_data.add_constraint(
             con.Constraint(
-                f"indicator_{self.name}_2",
-                con_type=">=",
+                lsf.con_name_indicator_bilinear_mixed_binary_2(self.name),
+                con_type=lsf.constraint_geq(),
                 variables=[
                     (-c_var.lb, b_var),
                     (1.0, self.representative_variable),
@@ -68,8 +69,8 @@ class BilinearMixedBinaryExpression(mle.MultilinearExpression):
         )
         self.model_data.add_constraint(
             con.Constraint(
-                f"indicator_{self.name}_3",
-                con_type="<=",
+                lsf.con_name_indicator_bilinear_mixed_binary_3(self.name),
+                con_type=lsf.constraint_leq(),
                 variables=[
                     (-1.0, c_var),
                     (-c_var.lb, b_var),
@@ -80,8 +81,8 @@ class BilinearMixedBinaryExpression(mle.MultilinearExpression):
         )
         self.model_data.add_constraint(
             con.Constraint(
-                f"indicator_{self.name}_4",
-                con_type=">=",
+                lsf.con_name_indicator_bilinear_mixed_binary_4(self.name),
+                con_type=lsf.constraint_leq(),
                 variables=[
                     (-1.0, c_var),
                     (-c_var.ub, b_var),

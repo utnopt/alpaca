@@ -40,12 +40,9 @@ class BilinearBinaryExpression:
         self.name = name
         self.first_var, self.second_var = variables
         self.model_data = model_data
-        self.representative_variable = (
-            representative_variable
-            if representative_variable
-            else model_data.add_variable(
-                var.Variable(lsf.representative_variable_name(name))
-            )
+        self.representative_variable = model_data.add_variable(
+            var.Variable(lsf.representative_variable_name(name)),
+            representative_variable=representative_variable,
         )
         self.representative_variable.var_type = lsf.var_type_binary()
         self.representative_variable.lb = 0.0
@@ -56,8 +53,8 @@ class BilinearBinaryExpression:
         """Add McCormick constraints for bilinear binary expressions."""
         self.model_data.add_constraint(
             con.Constraint(
-                f"mc_cormick_{self.name}_1",
-                con_type=">=",
+                lsf.con_name_mc_cormick_binary_ub_ub(self.name),
+                con_type=lsf.constraint_geq(),
                 variables=[
                     (-1.0, self.first_var),
                     (-1.0, self.second_var),
@@ -68,16 +65,16 @@ class BilinearBinaryExpression:
         )
         self.model_data.add_constraint(
             con.Constraint(
-                f"mc_cormick_{self.name}_2",
-                con_type=">=",
+                lsf.con_name_mc_cormick_binary_ub_lb(self.name),
+                con_type=lsf.constraint_geq(),
                 variables=[(1.0, self.first_var), (-1.0, self.representative_variable)],
                 rhs=0.0,
             )
         )
         self.model_data.add_constraint(
             con.Constraint(
-                f"mc_cormick_{self.name}_3",
-                con_type=">=",
+                lsf.con_name_mc_cormick_binary_lb_ub(self.name),
+                con_type=lsf.constraint_geq(),
                 variables=[
                     (1.0, self.second_var),
                     (-1.0, self.representative_variable),
