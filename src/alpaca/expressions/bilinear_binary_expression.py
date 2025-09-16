@@ -40,9 +40,12 @@ class BilinearBinaryExpression:
         self.name = name
         self.first_var, self.second_var = variables
         self.model_data = model_data
-        self.representative_variable = model_data.add_variable(
-            var.Variable(lsf.representative_variable_name(name)),
-            representative_variable=representative_variable,
+        self.representative_variable = (  # pylint: disable=duplicate-code
+            representative_variable
+            if representative_variable
+            else model_data.add_variable(
+                var.Variable(lsf.representative_variable_name(name))
+            )
         )
         self.representative_variable.var_type = lsf.var_type_binary()
         self.representative_variable.lb = 0.0

@@ -37,9 +37,12 @@ class Expression:
             representative_variable: Optional existing variable to represent product
         """
         self.name = name
-        self.representative_variable = model_data.add_variable(
-            var.Variable(lsf.representative_variable_name(name)),
-            representative_variable=representative_variable,
+        self.representative_variable = (
+            representative_variable
+            if representative_variable
+            else model_data.add_variable(
+                var.Variable(lsf.representative_variable_name(name))
+            )
         )
         self.level = level
 
