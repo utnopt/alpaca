@@ -5,6 +5,9 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from alpaca.utils.logger import logger
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData
 
@@ -17,6 +20,7 @@ class MultilinearHandler:
 
     def handle(self):
         """Applies reformulations based on user settings."""
+        logger.info(lsf.info_reformulate_multilinear_expressions())
         if self.model_data.settings.reformulate_multilinear_to_bilinear:
             self._reformulate_multilinear_to_bilinear()
         else:
@@ -29,6 +33,7 @@ class MultilinearHandler:
 
     def add_mccormick_envelopes(self) -> None:
         """Adds McCormick envelope constraints to bilinear expressions."""
+        logger.info(lsf.info_add_mccormick_envelopes())
         for expression in self.model_data.expressions.bilinear_expressions.values():
             expression.add_mccormick_envelope()
 
@@ -43,7 +48,7 @@ class MultilinearHandler:
         """Marks representative variables of multilinear expressions for discretization."""
         for expression in self.model_data.expressions.multilinear_expressions.values():
             expression.representative_variable.add_nonlinearity_to_occurring_in(
-                f"multilinearimplied{len(expression.variables)}"
+                lsf.nonlinearity_type_multilinear_implied(len(expression.variables))
             )
 
     def _mark_representative_variables_of_bilinear_expressions_as_discretized(
@@ -52,7 +57,7 @@ class MultilinearHandler:
         """Marks representative variables of bilinear expressions for discretization."""
         for expression in self.model_data.expressions.bilinear_expressions.values():
             expression.representative_variable.add_nonlinearity_to_occurring_in(
-                "multilinearimplied2"
+                lsf.nonlinearity_type_multilinear_implied(2)
             )
 
     def _reformulate_bilinear_to_sum_of_squares(self) -> None:

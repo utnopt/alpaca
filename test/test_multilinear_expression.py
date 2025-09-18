@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, call, patch
 
 from alpaca.model_data.variable import Variable
 from alpaca.expressions.multilinear_expression import MultilinearExpression
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 # Mock missing modules and dependencies to make tests self-contained.
 MOCK_SETTINGS = MagicMock()
@@ -56,11 +57,13 @@ class TestMultilinearExpression(unittest.TestCase):
         )
         self.assertEqual(expr.level, 0)
         for var in variables:
-            self.assertIn("multilinear3", var.occurring_in)
+            self.assertIn(lsf.nonlinearity_type_multilinear(3), var.occurring_in)
             self.assertTrue(var.is_discretized)
         # Test idempotency of occurring_in
         MultilinearExpression("test_init_expr_2", self.model_data, [self.x], 0)
-        self.assertEqual(self.x.occurring_in.count("multilinear1"), 1)
+        self.assertEqual(
+            self.x.occurring_in.count(lsf.nonlinearity_type_multilinear(1)), 1
+        )
 
     def test_get_implied_lb_and_ub(self):
         """Test the static method get_implied_lb_and_ub."""
@@ -101,9 +104,15 @@ class TestMultilinearExpression(unittest.TestCase):
 
         self.assertEqual(self.model_data.add_bilinear_expression.call_count, 2)
         expected_calls = [
-            call("mb_tri_expr_sub", [self.y, self.z], 1),
             call(
-                "mb_tri_expr",
+                lsf.expression_hash_bilinear(self.y.name, self.z.name),
+                [self.y, self.z],
+                1,
+            ),
+            call(
+                lsf.expression_hash_bilinear(
+                    self.x.name, sub_bilinear.representative_variable.name
+                ),
                 [self.x, sub_bilinear.representative_variable],
                 0,
                 representative_variable=self.rep_var,
@@ -130,13 +139,20 @@ class TestMultilinearExpression(unittest.TestCase):
 
         # Check that a sub-multilinear expression was created for (w*x*y*z)
         mock_mle_class.assert_called_once_with(
-            "mb_penta_expr_sub", self.model_data, [self.w, self.x, self.y, self.z], 1
+            lsf.expression_hash_multilinear(
+                [self.w.name, self.x.name, self.y.name, self.z.name]
+            ),
+            self.model_data,
+            [self.w, self.x, self.y, self.z],
+            1,
         )
         # Check that the sub-expression's reformulation was called
         mock_sub_mle.reformulate_to_bilinear_expressions.assert_called_once()
         # Check that the final bilinear expression for v*(wxyz) was created
         self.model_data.add_bilinear_expression.assert_called_once_with(
-            "mb_penta_expr",
+            lsf.expression_hash_bilinear(
+                self.v.name, mock_sub_mle.representative_variable.name
+            ),
             [self.v, mock_sub_mle.representative_variable],
             0,
             representative_variable=self.rep_var,

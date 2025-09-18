@@ -2,6 +2,8 @@
 """
 @authors: kuen,
 """
+import os
+import sys
 import traceback
 
 import alpaca.model_data.model_data as mda
@@ -10,8 +12,9 @@ import alpaca.solver.solver as slv
 import alpaca.mpip.mpip_handler as mph
 import alpaca.mpip.separation.mpip_separationhandler as msh
 import alpaca.settings as s
-from alpaca.utils import inout as ut_io, datareading as ut_dr
+from alpaca.utils import inout as ut_io, data_reading as ut_dr
 from alpaca.utils.logger import logger
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 def run_optimization():
@@ -44,15 +47,13 @@ def run_optimization():
             solver.mpip_separation_handler = mpip_separation_handler
         runtime = solver.solve_instance()
 
-        logger.info(
-            "Optimization finished successfully. Runtime: %.2f seconds", runtime
-        )
-        return {"status": "success"}
+        logger.info(lsf.info_optimization_finished(runtime))
     except Exception as ex:  # pylint: disable=broad-exception-caught
-        logger.error("Error occurred while running optimization: %s", ex)
+        logger.error(lsf.error_exception_occurred(ex))
         logger.warning("%s", traceback.format_exc())
-        return {"status": "error", "errorMessages": str(ex)}
 
 
 if __name__ == "__main__":
-    run_optimization()
+    with open(os.devnull, "w", encoding="utf-8") as devnull:
+        sys.stdout = devnull
+        run_optimization()

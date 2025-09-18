@@ -6,12 +6,14 @@ from alpaca.model_data import model_data as mda
 from alpaca.settings import UserSettings
 from alpaca.utils.logger import logger
 import alpaca.external_solvers.solver_wrapper as sw
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class MIPModel:
     """Optimization model object."""
 
     def __init__(self, data: mda.ModelData, settings: UserSettings, solver_name: str):
+        logger.info(lsf.info_init_mip_model_buildup())
         self.opt_model = sw.SolverWrapper(solver_name)
         self.data = data
         self.settings = settings
@@ -21,7 +23,6 @@ class MIPModel:
         """
         Buildup optimization model.
         """
-        logger.info("Creating model..")
         self._add_variables()
         self._add_constraints()
         self._add_objective()
@@ -38,7 +39,7 @@ class MIPModel:
 
     def _add_constraints(self):
         for constraint in self.data.constraints.values():
-            if constraint.con_type == "==":
+            if constraint.con_type == lsf.constraint_eq():
                 constraint.solver_constraint = self.opt_model.add_constraint(
                     sum(
                         coeff * variable.solver_variable
@@ -47,7 +48,7 @@ class MIPModel:
                     == constraint.rhs,
                     name=constraint.name,
                 )
-            elif constraint.con_type == "<=":
+            elif constraint.con_type == lsf.constraint_leq():
                 constraint.solver_constraint = self.opt_model.add_constraint(
                     sum(
                         coeff * variable.solver_variable
@@ -56,7 +57,7 @@ class MIPModel:
                     <= constraint.rhs,
                     name=constraint.name,
                 )
-            elif constraint.con_type == ">=":
+            elif constraint.con_type == lsf.constraint_geq():
                 constraint.solver_constraint = self.opt_model.add_constraint(
                     -sum(
                         coeff * variable.solver_variable
@@ -68,8 +69,8 @@ class MIPModel:
 
     def _add_objective(self):
         self.opt_model.set_objective(
-            self.data.variables["x_-1"].solver_variable,
-            sense="minimize",
+            self.data.variables[lsf.objective_var()].solver_variable,
+            sense=lsf.objective_sense_minimize(),
         )
 
     def _set_parameters(self):

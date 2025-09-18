@@ -10,6 +10,7 @@ import bisect
 
 from alpaca.model_data import variable as var
 from alpaca.expressions import expression as exn
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData
@@ -51,7 +52,9 @@ class MultilinearExpression(exn.Expression):
         self.model_data = model_data
         self.piecewise_constant_relation = {}
         for variable in self.variables:
-            variable.add_nonlinearity_to_occurring_in(f"multilinear{len(variables)}")
+            variable.add_nonlinearity_to_occurring_in(
+                lsf.nonlinearity_type_multilinear(len(variables))
+            )
 
     def extract_mpip_relation(self, approximation: bool = False):
         """Extract the piecewise constant relation for the multilinear expression."""
@@ -136,7 +139,9 @@ class MultilinearExpression(exn.Expression):
         """Reformulate multilinear expression to bilinear expressions."""
         if len(self.variables) > 3:
             sub_bi_multilinear = MultilinearExpression(
-                f"mb_{self.name}_sub",
+                lsf.expression_hash_multilinear(
+                    [variable.name for variable in self.variables[1:]]
+                ),
                 self.model_data,
                 self.variables[1:],
                 self.level + 1,
@@ -144,12 +149,16 @@ class MultilinearExpression(exn.Expression):
             sub_bi_multilinear.reformulate_to_bilinear_expressions()
         else:
             sub_bi_multilinear = self.model_data.add_bilinear_expression(
-                f"mb_{self.name}_sub",
+                lsf.expression_hash_bilinear(
+                    self.variables[1].name, self.variables[2].name
+                ),
                 [self.variables[1], self.variables[2]],
                 self.level + 1,
             )
         self.model_data.add_bilinear_expression(
-            f"mb_{self.name}",
+            lsf.expression_hash_bilinear(
+                self.variables[0].name, sub_bi_multilinear.representative_variable.name
+            ),
             [self.variables[0], sub_bi_multilinear.representative_variable],
             self.level,
             representative_variable=self.representative_variable,

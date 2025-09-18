@@ -7,6 +7,7 @@ from alpaca.expressions import (
     one_dim_expression as ode,
 )
 import alpaca.model_data.constraint as con
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class BilinearExpression(mle.MultilinearExpression):
@@ -27,19 +28,19 @@ class BilinearExpression(mle.MultilinearExpression):
         first_var = self.variables[0]
         second_var = self.variables[1]
         master_linear_expression = self.model_data.add_linear_expression(
-            f"le_{self.name}_master",
+            lsf.linear_expression_bilinear_to_sum_of_squares(self.name),
             self.level,
             representative_variable=self.representative_variable,
         )
 
         # If the first variable is binary, x^2 = x.
         # Otherwise, create a new expression for the squared term.
-        if first_var.var_type == "B":
+        if first_var.var_type == lsf.var_type_binary():
             first_var_squared_rep = first_var
         else:
             square_first_var = self.model_data.add_one_dim_expression(
                 ode.SquareExpression,
-                f"fvs_{self.name}",
+                lsf.expression_hash_square(first_var.name),
                 first_var,
                 self.level + 1,
             )
@@ -47,12 +48,12 @@ class BilinearExpression(mle.MultilinearExpression):
 
         # If the second variable is binary, y^2 = y.
         # Otherwise, create a new expression for the squared term.
-        if second_var.var_type == "B":
+        if second_var.var_type == lsf.var_type_binary():
             second_var_squared_rep = second_var
         else:
             square_second_var = self.model_data.add_one_dim_expression(
                 ode.SquareExpression,
-                f"svs_{self.name}",
+                lsf.expression_hash_square(second_var.name),
                 second_var,
                 self.level + 1,
             )
@@ -60,7 +61,7 @@ class BilinearExpression(mle.MultilinearExpression):
 
         # Create a helper variable p = x - y. This is always needed.
         sub_linear_expression = self.model_data.add_linear_expression(
-            f"le_{self.name}_sub",
+            lsf.linear_expression_bilinear_to_sum_of_squares_helper(self.name),
             self.level + 2,
         )
         sub_linear_expression.variables = [
@@ -71,7 +72,9 @@ class BilinearExpression(mle.MultilinearExpression):
         # The helper variable p is not necessarily binary, so we always square it.
         square_helper_var = self.model_data.add_one_dim_expression(
             ode.SquareExpression,
-            f"hvs_{self.name}",
+            lsf.expression_hash_square(
+                sub_linear_expression.representative_variable.name
+            ),
             sub_linear_expression.representative_variable,
             self.level + 1,
         )
@@ -92,8 +95,8 @@ class BilinearExpression(mle.MultilinearExpression):
         # McCormick envelope constraints
         self.model_data.add_constraint(
             con.Constraint(
-                f"mcclu_{self.name}",
-                con_type="<=",
+                lsf.con_name_mc_cormick_continuous_lb_ub(self.name),
+                con_type=lsf.constraint_leq(),
                 variables=[
                     (1.0, z),
                     (-x.lb, y),
@@ -104,8 +107,8 @@ class BilinearExpression(mle.MultilinearExpression):
         )
         self.model_data.add_constraint(
             con.Constraint(
-                f"mccul_{self.name}",
-                con_type="<=",
+                lsf.con_name_mc_cormick_continuous_ub_lb(self.name),
+                con_type=lsf.constraint_leq(),
                 variables=[
                     (1.0, z),
                     (-x.ub, y),
@@ -116,8 +119,8 @@ class BilinearExpression(mle.MultilinearExpression):
         )
         self.model_data.add_constraint(
             con.Constraint(
-                f"mccll_{self.name}",
-                con_type=">=",
+                lsf.con_name_mc_cormick_continuous_lb_lb(self.name),
+                con_type=lsf.constraint_geq(),
                 variables=[
                     (1.0, z),
                     (-x.lb, y),
@@ -128,8 +131,8 @@ class BilinearExpression(mle.MultilinearExpression):
         )
         self.model_data.add_constraint(
             con.Constraint(
-                f"mccuu_{self.name}",
-                con_type=">=",
+                lsf.con_name_mc_cormick_continuous_ub_ub(self.name),
+                con_type=lsf.constraint_geq(),
                 variables=[
                     (1.0, z),
                     (-x.ub, y),

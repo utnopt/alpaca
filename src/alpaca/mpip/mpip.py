@@ -8,6 +8,7 @@ import pyscipopt as scip
 
 import alpaca.settings as s
 import alpaca.model_data.variable as var
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class MPIP:  # pylint: disable=too-many-instance-attributes
@@ -39,7 +40,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         """Add implied variable information."""
         self.implied_variable = variable
         self.interval_lp_implied_var = self.interval_lp.addVar(
-            f"x_{variable.name}", lb=-s.StaticSettings.infinity
+            lsf.mpip_interval_lp_var_name(variable.name), lb=-s.StaticSettings.infinity
         )
 
     def add_implying_id(
@@ -49,7 +50,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         """Add implying variable information."""
         self.implying_variables.update({variable.name: variable})
         self.interval_lp_implying_vars[variable.name] = self.interval_lp.addVar(
-            f"x_{variable.name}"
+            lsf.mpip_interval_lp_var_name(variable.name)
         )
 
     def _calculate_relation_function(self) -> None:
@@ -98,18 +99,22 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
             self.interval_lp.chgVarLb(implying_var, low)
             self.interval_lp.chgVarUb(implying_var, high)
 
-        self.interval_lp.setObjective(self.interval_lp_implied_var, "minimize")
+        self.interval_lp.setObjective(
+            self.interval_lp_implied_var, lsf.objective_sense_minimize()
+        )
         self.interval_lp.optimize()
-        if self.interval_lp.getStatus() == "infeasible":
+        if self.interval_lp.getStatus() == lsf.opt_model_status_infeasible():
             return False, 0.0, 0.0
         lower_bound = round(
             self.interval_lp.getObjVal(), s.StaticSettings.rounding_precision
         )
         self.interval_lp.freeTransform()
 
-        self.interval_lp.setObjective(self.interval_lp_implied_var, "maximize")
+        self.interval_lp.setObjective(
+            self.interval_lp_implied_var, lsf.objective_sense_maximize()
+        )
         self.interval_lp.optimize()
-        if self.interval_lp.getStatus() == "infeasible":
+        if self.interval_lp.getStatus() == lsf.opt_model_status_infeasible():
             return False, 0.0, 0.0
         upper_bound = round(
             self.interval_lp.getObjVal(), s.StaticSettings.rounding_precision

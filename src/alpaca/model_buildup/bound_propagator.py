@@ -5,12 +5,14 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from alpaca.utils.logger import logger
 import alpaca.model_data.constraint as con
 from alpaca.expressions import (
     one_dim_expression as ode,
     multilinear_expression as mle,
     linear_expression as lie,
 )
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData
@@ -24,9 +26,10 @@ class BoundPropagator:
 
     def propagate_linear_constraints(self):
         """Performs bound propagation on linear equality constraints."""
+        logger.info(lsf.info_propagate_bounds_equations())
         for _ in range(self.model_data.settings.bound_propagation_rounds):
             for constraint in self.model_data.constraints.values():
-                if constraint.con_type == "==":
+                if constraint.con_type == lsf.constraint_eq():
                     self._propagate_bounds_equation(constraint)
 
     @staticmethod
@@ -50,12 +53,12 @@ class BoundPropagator:
                 other_max = total_max - a_i * x_i.lb
 
             # Update bounds for x_i
-            if constraint.con_type in ("<=", "=="):
+            if constraint.con_type in (lsf.constraint_leq(), lsf.constraint_eq()):
                 if a_i > 0:
                     x_i.ub = min(x_i.ub, (constraint.rhs - other_min) / a_i)
                 else:  # a_i < 0
                     x_i.lb = max(x_i.lb, (constraint.rhs - other_min) / a_i)
-            if constraint.con_type in (">=", "=="):
+            if constraint.con_type in (lsf.constraint_geq(), lsf.constraint_eq()):
                 if a_i > 0:
                     x_i.lb = max(x_i.lb, (constraint.rhs - other_max) / a_i)
                 else:  # a_i < 0
@@ -63,6 +66,7 @@ class BoundPropagator:
 
     def propagate_expressions(self):
         """Performs bound propagation on all expressions for a set number of rounds."""
+        logger.info(lsf.info_propagate_bounds_expressions())
         sorted_expressions = sorted(
             self.model_data.expressions.all_low_dim_expressions(),
             key=lambda e: -e.level,

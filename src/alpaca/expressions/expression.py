@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from alpaca.model_data import variable as var
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData
@@ -39,7 +40,9 @@ class Expression:
         self.representative_variable = (
             representative_variable
             if representative_variable
-            else model_data.add_variable(var.Variable(f"r_{name}"))
+            else model_data.add_variable(
+                var.Variable(lsf.representative_variable_name(name))
+            )
         )
         self.level = level
 

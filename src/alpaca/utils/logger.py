@@ -2,9 +2,11 @@
 always use this logger so it's package-wise configurable
 (it's a separate module to avoid circular imports)
 
-@authors: hamm,
+@authors: hamm, kuen
 """
 
 import logging
 
-logger = logging.getLogger("my_project")
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+
+logger = logging.getLogger(lsf.project_name())

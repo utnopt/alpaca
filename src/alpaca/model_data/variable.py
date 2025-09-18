@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import dataclasses
 
 import alpaca.settings as s
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     from alpaca.pwl import pwl_method as pwm
@@ -33,7 +34,7 @@ class Variable:  # pylint: disable=too-many-instance-attributes
         name: str,
         lb: float = -s.StaticSettings.infinity,
         ub: float = s.StaticSettings.infinity,
-        var_type: str = "C",
+        var_type: str = lsf.var_type_continuous(),
     ):
         """Initialize a Variable instance.
 

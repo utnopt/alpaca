@@ -5,13 +5,14 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-import alpaca.utils.datahandling as udh
+import alpaca.utils.data_handling as udh
 from alpaca.model_data import variable as var
 from alpaca.expressions import (
     one_dim_expression as ode,
 )
 from alpaca.utils.logger import logger
 import alpaca.settings as s
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData
@@ -49,7 +50,10 @@ class NonlinearExpression:
         self.model_data = model_data
         self.child_expressions: list = []
         self.representative_variable = model_data.add_variable(
-            var.Variable(f"r_{self.name}", lb=-s.StaticSettings.infinity)
+            var.Variable(
+                lsf.representative_variable_name(self.name),
+                lb=-s.StaticSettings.infinity,
+            )
         )
         self.fragmented = False
 
@@ -62,18 +66,20 @@ class NonlinearExpression:
         """
         for child_expression_tag in self.expression_tag.contents:
             child_expression_tag_name = udh.hash_nonlinearity(str(child_expression_tag))
-            if child_expression_tag.name == "variable":
+            if child_expression_tag.name == lsf.osil_tag_variable():
                 coeff = (
                     1.0
-                    if child_expression_tag.get("coef") is None
-                    else float(child_expression_tag.get("coef"))
+                    if child_expression_tag.get(lsf.osil_attr_coef()) is None
+                    else float(child_expression_tag.get(lsf.osil_attr_coef()))
                 )
                 variable = self.model_data.variables[
-                    f"x_{child_expression_tag.get('idx')}"
+                    lsf.var_name(child_expression_tag.get(lsf.osil_attr_idx()))
                 ]
                 self.child_expressions.append((coeff, variable))
-            elif child_expression_tag.name == "number":
-                self.child_expressions.append(float(child_expression_tag.get("value")))
+            elif child_expression_tag.name == lsf.osil_tag_number():
+                self.child_expressions.append(
+                    float(child_expression_tag.get(lsf.osil_tag_value()))
+                )
             else:
                 self._add_nonlinear_expression_child(
                     child_expression_tag_name, child_expression_tag
@@ -90,39 +96,41 @@ class NonlinearExpression:
 
         The method recursively processes child expressions and marks them as fragmented.
         """
-        if self.expression_type == "product":
+        if self.expression_type == lsf.expression_type_product():
             next_level = self._fragment_product_expression(level)
-        elif self.expression_type == "sum":
+        elif self.expression_type == lsf.expression_type_sum():
             next_level = self._fragment_sum_expression(level)
-        elif self.expression_type == "divide":
+        elif self.expression_type == lsf.expression_type_divide():
             next_level = self._fragment_division_expression(level)
-        elif self.expression_type == "square":
+        elif self.expression_type == lsf.nonlinearity_type_square():
             next_level = self._fragment_one_dim_expression(ode.SquareExpression, level)
-        elif self.expression_type == "exp":
+        elif self.expression_type == lsf.nonlinearity_type_exp():
             next_level = self._fragment_one_dim_expression(
                 ode.ExponentialExpression, level
             )
-        elif self.expression_type == "ln":
+        elif self.expression_type == lsf.nonlinearity_type_ln():
             next_level = self._fragment_one_dim_expression(ode.LnExpression, level)
-        elif self.expression_type == "sqrt":
+        elif self.expression_type == lsf.nonlinearity_type_sqrt():
             next_level = self._fragment_one_dim_expression(
                 ode.SquareRootExpression, level
             )
-        elif self.expression_type == "sin":
+        elif self.expression_type == lsf.nonlinearity_type_sin():
             next_level = self._fragment_one_dim_expression(ode.SineExpression, level)
-        elif self.expression_type == "cos":
+        elif self.expression_type == lsf.nonlinearity_type_cos():
             next_level = self._fragment_one_dim_expression(ode.CosineExpression, level)
-        elif self.expression_type == "log10":
+        elif self.expression_type == lsf.nonlinearity_type_log10():
             next_level = self._fragment_one_dim_expression(ode.LogExpression, level)
-        elif self.expression_type == "tanh":
+        elif self.expression_type == lsf.nonlinearity_type_tanh():
             next_level = self._fragment_one_dim_expression(
                 ode.TangensHExpression, level
             )
-        elif self.expression_type == "min":
-            next_level = logger.warning("Expression type min not supported yet!")
-        elif self.expression_type == "inverse":
+        elif self.expression_type == lsf.nonlinearity_type_min():
+            next_level = logger.warning(
+                lsf.warning_expression_type_not_supported(self.expression_type)
+            )
+        elif self.expression_type == lsf.nonlinearity_type_inverse():
             next_level = self._fragment_one_dim_expression(ode.InverseExpression, level)
-        elif self.expression_type == "power":
+        elif self.expression_type == lsf.nonlinearity_type_power():
             if self.child_expressions[1] == 2.0:
                 next_level = self._fragment_one_dim_expression(
                     ode.SquareExpression, level
@@ -132,13 +140,19 @@ class NonlinearExpression:
                     ode.SquareRootExpression, level
                 )
             else:
-                next_level = logger.warning("Expression type power not supported yet!")
-        elif self.expression_type == "xabsx":
+                next_level = logger.warning(
+                    lsf.warning_expression_type_not_supported(self.expression_type)
+                )
+        elif self.expression_type == lsf.nonlinearity_type_xabsx():
             next_level = self._fragment_one_dim_expression(ode.AbsExpression, level)
-        elif self.expression_type == "negate":
+        elif self.expression_type == lsf.nonlinearity_type_negate():
             next_level = self._fragment_negate_expression(level)
         else:
-            raise KeyError(f"Expression type {self.expression_type} not supported yet!")
+            raise KeyError(
+                logger.warning(
+                    lsf.warning_expression_type_not_supported(self.expression_type)
+                )
+            )
         for child_expression in self.child_expressions:
             if (
                 isinstance(child_expression, NonlinearExpression)
@@ -161,7 +175,7 @@ class NonlinearExpression:
         if product_coeff != 1.0:
             if len(variables_in_product) == 1:
                 lin_expression = self.model_data.add_linear_expression(
-                    f"le_{self.name}",
+                    lsf.expression_hash_linear(self.name),
                     level,
                     representative_variable=self.representative_variable,
                 )
@@ -221,9 +235,11 @@ class NonlinearExpression:
     def _create_coeff_intermediate_expression(
         self, product_coeff: float, level: int
     ) -> var.Variable:
-        helper_variable = self.model_data.add_variable(var.Variable(f"h_{self.name}"))
+        helper_variable = self.model_data.add_variable(
+            var.Variable(lsf.helper_variable_name(self.name))
+        )
         lin_expression = self.model_data.add_linear_expression(
-            f"le_h_{self.name}",
+            lsf.expression_hash_linear(helper_variable.name),
             level,
             representative_variable=self.representative_variable,
         )
@@ -239,15 +255,19 @@ class NonlinearExpression:
         num_vars = len(variables_in_product)
         if num_vars > 2:
             self.model_data.add_multilinear_expression(
-                f"ml_{representative_variable.name}",
+                lsf.expression_hash_multilinear(
+                    [variable.name for variable in variables_in_product]
+                ),
                 variables_in_product,
                 level,
                 representative_variable=representative_variable,
             )
         elif num_vars == 2 and not variables_in_product[0] is variables_in_product[1]:
             self.model_data.add_bilinear_expression(
-                f"bl_{representative_variable.name}",
-                tuple(variables_in_product),
+                lsf.expression_hash_bilinear(
+                    variables_in_product[0].name, variables_in_product[1].name
+                ),
+                variables_in_product,
                 level,
                 representative_variable=representative_variable,
             )
@@ -256,7 +276,7 @@ class NonlinearExpression:
                 variables_in_product, representative_variable, level
             )
         else:
-            raise AssertionError("Product containing 1 variable not allowed!")
+            raise AssertionError(lsf.error_one_variable_in_product())
 
     def _create_square_expression(
         self,
@@ -264,7 +284,7 @@ class NonlinearExpression:
         representative_variable: var.Variable,
         level: int,
     ) -> None:
-        expr_name = f"square_{representative_variable.name}"
+        expr_name = lsf.expression_hash_square(self.representative_variable.name)
         self.model_data.add_one_dim_expression(
             ode.SquareExpression,
             expr_name,
@@ -275,7 +295,7 @@ class NonlinearExpression:
 
     def _fragment_sum_expression(self, level: int) -> int:
         lin_expression = self.model_data.add_linear_expression(
-            f"le_{self.expression_type}_{self.name}",
+            lsf.expression_hash_linear(self.name),
             level,
             representative_variable=self.representative_variable,
         )
@@ -317,16 +337,20 @@ class NonlinearExpression:
                 if isinstance(self.child_expressions[0], tuple)
                 else self.child_expressions[0].representative_variable
             )
-        helper_variable = self.model_data.add_variable(var.Variable(f"h_{self.name}"))
+        helper_variable = self.model_data.add_variable(
+            var.Variable(lsf.helper_variable_name(self.name))
+        )
         lin_expression = self.model_data.add_linear_expression(
-            f"le_{self.name}",
+            lsf.expression_hash_linear(self.name),
             level + 1,
             representative_variable=helper_variable,
         )
         lin_expression.variables.append((coeff, variable))
         self.model_data.add_one_dim_expression(
             expression_class,
-            f"{self.expression_type}_{helper_variable.name}",
+            lsf.expression_hash_generic_nonlinear(
+                helper_variable.name, self.expression_type
+            ),
             helper_variable,
             level,
             representative_variable=self.representative_variable,
@@ -342,7 +366,7 @@ class NonlinearExpression:
         )
         self.model_data.add_one_dim_expression(
             expression_class,
-            f"{self.expression_type}_{variable.name}",
+            lsf.expression_hash_generic_nonlinear(variable.name, self.expression_type),
             variable,
             level,
             representative_variable=self.representative_variable,
@@ -350,7 +374,7 @@ class NonlinearExpression:
 
     def _fragment_negate_expression(self, level: int) -> int:
         lin_expression = self.model_data.add_linear_expression(
-            f"le_{self.name}",
+            lsf.expression_hash_linear(self.name),
             level,
             representative_variable=self.representative_variable,
         )
@@ -371,7 +395,12 @@ class NonlinearExpression:
             else 1 / self.child_expressions[1][0]
         )
         helper_inverse_expression = self.model_data.add_one_dim_expression(
-            ode.InverseExpression, f"iv_{self.name}", denominator_variable, 0
+            ode.InverseExpression,
+            lsf.expression_hash_generic_nonlinear(
+                self.name, lsf.nonlinearity_type_inverse()
+            ),
+            denominator_variable,
+            0,
         )
         if isinstance(self.child_expressions[0], float):
             self._handle_division_float_numerator(
@@ -393,7 +422,7 @@ class NonlinearExpression:
         self, variable: var.Variable, denominator_coeff: float, level: int
     ):
         lin_expression = self.model_data.add_linear_expression(
-            f"le_{self.name}",
+            lsf.expression_hash_linear(self.name),
             level,
             representative_variable=self.representative_variable,
         )
@@ -448,4 +477,4 @@ class NonlinearExpression:
         child_expression.grow_expression_tree()
 
     def __repr__(self) -> str:
-        return self.expression_type + "_" + self.name
+        return lsf.expression_hash_generic_nonlinear(self.name, self.expression_type)

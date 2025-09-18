@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, ANY
 
 from alpaca.model_data.variable import Variable
 from alpaca.expressions.bilinear_expression import BilinearExpression
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 # Mock missing modules and dependencies to make tests self-contained.
 # This allows testing the logic of bilinear_expression.py in isolation.
@@ -141,21 +142,24 @@ class TestBilinearExpression(unittest.TestCase):
 
         self.assertEqual(self.model_data.add_linear_expression.call_count, 2)
         self.model_data.add_linear_expression.assert_any_call(
-            f"le_{self.bilinear_expr.name}_master", 0, representative_variable=self.z
-        )
-        self.model_data.add_linear_expression.assert_any_call(
-            f"le_{self.bilinear_expr.name}_sub", 2
+            lsf.linear_expression_bilinear_to_sum_of_squares_helper(
+                self.bilinear_expr.name
+            ),
+            2,
         )
 
         self.assertEqual(self.model_data.add_one_dim_expression.call_count, 3)
         self.model_data.add_one_dim_expression.assert_any_call(
-            ANY, f"fvs_{self.bilinear_expr.name}", self.x, 1
+            ANY, lsf.expression_hash_square(self.x.name), self.x, 1
         )
         self.model_data.add_one_dim_expression.assert_any_call(
-            ANY, f"svs_{self.bilinear_expr.name}", self.y, 1
+            ANY, lsf.expression_hash_square(self.y.name), self.y, 1
         )
         self.model_data.add_one_dim_expression.assert_any_call(
-            ANY, f"hvs_{self.bilinear_expr.name}", sub_le.representative_variable, 1
+            ANY,
+            lsf.expression_hash_square(sub_le.representative_variable.name),
+            sub_le.representative_variable,
+            1,
         )
 
         self.assertEqual(sub_le.variables, [(1.0, self.x), (-1.0, self.y)])
@@ -186,10 +190,13 @@ class TestBilinearExpression(unittest.TestCase):
         # Only square y and p, not binary x
         self.assertEqual(self.model_data.add_one_dim_expression.call_count, 2)
         self.model_data.add_one_dim_expression.assert_any_call(
-            ANY, f"svs_{self.bilinear_expr.name}", self.y, 1
+            ANY, lsf.expression_hash_square(self.y.name), self.y, 1
         )
         self.model_data.add_one_dim_expression.assert_any_call(
-            ANY, f"hvs_{self.bilinear_expr.name}", sub_le.representative_variable, 1
+            ANY,
+            lsf.expression_hash_square(sub_le.representative_variable.name),
+            sub_le.representative_variable,
+            1,
         )
 
         self.assertCountEqual(
@@ -219,7 +226,10 @@ class TestBilinearExpression(unittest.TestCase):
         # Only square the helper variable p
         self.assertEqual(self.model_data.add_one_dim_expression.call_count, 1)
         self.model_data.add_one_dim_expression.assert_called_once_with(
-            ANY, f"hvs_{self.bilinear_expr.name}", sub_le.representative_variable, 1
+            ANY,
+            lsf.expression_hash_square(sub_le.representative_variable.name),
+            sub_le.representative_variable,
+            1,
         )
 
         self.assertCountEqual(

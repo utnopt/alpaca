@@ -4,6 +4,7 @@
 """
 
 import alpaca.pwl.pwl_method as pwm
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class DeltaMethod(pwm.PWLMethod):
@@ -11,4 +12,4 @@ class DeltaMethod(pwm.PWLMethod):
 
     def _represent_domain(self):
         """Represent the domain of a variable using the delta method."""
-        raise NotImplementedError("Delta method not implemented yet.")
+        raise NotImplementedError(lsf.error_not_implemented_delta_method())

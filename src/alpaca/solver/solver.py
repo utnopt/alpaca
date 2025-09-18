@@ -7,6 +7,7 @@ import time
 from alpaca.external_solvers import mip_model as mm, solver_wrapper as sw
 from alpaca.settings import UserSettings
 from alpaca.utils.logger import logger
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class Solver:
@@ -20,7 +21,7 @@ class Solver:
 
     def solve_instance(self):
         """Solve instance."""
-        logger.info("Solve instance..")
+        logger.info(lsf.info_init_solver())
         self._activate_mpip_features()
         self._attach_event_handlers()
         start_time = time.time()
@@ -29,9 +30,9 @@ class Solver:
         return runtime
 
     def _attach_event_handlers(self):
-        if self.settings.external_solver == "scip":
+        if self.settings.external_solver == lsf.solver_name_scip():
             self._attach_event_handlers_scip()
-        elif self.settings.external_solver == "gurobi":
+        elif self.settings.external_solver == lsf.solver_name_gurobi():
             self._attach_event_handlers_gurobi()
 
     def _activate_mpip_features(self):
@@ -47,8 +48,8 @@ class Solver:
                 mpip.separator.separation_handler = scip_mpip_separation
             self.external_solver.opt_model.model.includeSepa(
                 scip_mpip_separation,
-                "mpip",
-                "generates mpip_cuts",
+                lsf.scip_separator_name_mpip(),
+                lsf.scip_separator_description_mpip(),
                 priority=536870911,
                 freq=1,
             )

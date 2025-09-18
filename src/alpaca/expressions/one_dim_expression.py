@@ -11,6 +11,7 @@ from typing import List, Tuple, TYPE_CHECKING
 from alpaca.model_data import variable as var, constraint as con
 import alpaca.expressions.expression as exn
 import alpaca.settings as s
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData
@@ -67,13 +68,11 @@ class OneDimExpression(exn.Expression):
 
     def f(self, x: float) -> float:
         """Evaluates the function f(x) for the expression."""
-        raise NotImplementedError(
-            "Subclasses must implement the function evaluation _f(x)."
-        )
+        raise NotImplementedError(lsf.error_subclasses_must_implement_method())
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
         """Solves f'(x) = m for x."""
-        raise NotImplementedError("Subclasses must implement the solver for f'(x) = m.")
+        raise NotImplementedError(lsf.error_subclasses_must_implement_method())
 
     def _get_deviation(self, x: float, m: float, t: float) -> float:
         """Helper method to calculate the deviation f(x) - m*x - t."""
@@ -96,7 +95,7 @@ class OneDimExpression(exn.Expression):
                 points_to_check.append(p)
 
         if not points_to_check:
-            return float("inf"), float("-inf")
+            return float(lsf.numpy_infinity()), -float(lsf.numpy_infinity())
 
         deviations = [self._get_deviation(p, m, t) for p in points_to_check]
 
@@ -275,12 +274,15 @@ class AbsExpression(OneDimExpression):
     def handle_abs_expression(self, model_data: ModelData) -> None:
         """Add constraints to model to represent the absolute value function."""
         binary_abs_variable = model_data.add_variable(
-            var.Variable(f"abs_bin_{self.variable.name}", var_type="B")
+            var.Variable(
+                lsf.var_name_binary_abs_reformulation(self.variable.name),
+                var_type=lsf.var_type_binary(),
+            )
         )
         model_data.add_constraint(
             con.Constraint(
-                f"abs_neg_{self.variable.name}",
-                con_type=">=",
+                lsf.con_name_abs_reformulation_negative(self.variable.name),
+                con_type=lsf.constraint_geq(),
                 variables=[
                     (1.0, self.representative_variable),
                     (1.0, self.variable),
@@ -289,8 +291,8 @@ class AbsExpression(OneDimExpression):
         )
         model_data.add_constraint(
             con.Constraint(
-                f"abs_pos_{self.variable.name}",
-                con_type=">=",
+                lsf.con_name_abs_reformulation_positive(self.variable.name),
+                con_type=lsf.constraint_geq(),
                 variables=[
                     (1.0, self.representative_variable),
                     (-1.0, self.variable),
@@ -299,8 +301,8 @@ class AbsExpression(OneDimExpression):
         )
         model_data.add_constraint(
             con.Constraint(
-                f"abs_neg_bigm_{self.variable.name}",
-                con_type="<=",
+                lsf.con_name_abs_reformulation_negative_big_m(self.variable.name),
+                con_type=lsf.constraint_leq(),
                 variables=[
                     (1.0, self.representative_variable),
                     (1.0, self.variable),
@@ -310,8 +312,8 @@ class AbsExpression(OneDimExpression):
         )
         model_data.add_constraint(
             con.Constraint(
-                f"abs_pos_bigm_{self.variable.name}",
-                con_type="<=",
+                lsf.con_name_abs_reformulation_positive_big_m(self.variable.name),
+                con_type=lsf.constraint_leq(),
                 variables=[
                     (1.0, self.representative_variable),
                     (-1.0, self.variable),

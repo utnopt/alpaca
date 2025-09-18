@@ -8,6 +8,7 @@ import os
 import time
 
 from alpaca.utils.logger import logger
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class StaticSettings:
@@ -15,7 +16,7 @@ class StaticSettings:
     Class containing static settings.
     """
 
-    project_name = "bip-pwl"
+    project_name = lsf.project_name()
     # ===== Paths to (static) input files =====
     base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
     data_path = base_path + "/data/"
@@ -52,7 +53,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.solver_thread_limit = int(config_dict.get("solver_thread_limit", 4))
         self.osil_file_name = str(config_dict.get("osil_file_name", "st_e41"))
         self.number_of_breakpoints = int(config_dict.get("number_of_breakpoints", 5))
-        self.pwl_method = str(config_dict.get("pwl_method", "multiple-choice"))
+        self.pwl_method = str(config_dict.get("pwl_method", "multiple_choice"))
         self.approximation = int(config_dict.get("approximation", 0))
         self.external_solver = str(config_dict.get("external_solver", "scip"))
         self.bound_propagation_rounds = int(
@@ -86,7 +87,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         """
         Function that saves the self-object as a dict to json
         """
-        logger.info("The settings are saved as JSON-format to the export folder")
+        logger.info(lsf.info_save_settings_json())
         json_data = self.__dict__
         with open(self.export_path + "config.json", "w", encoding="utf8") as json_file:
             json.dump(json_data, json_file, indent=4)
