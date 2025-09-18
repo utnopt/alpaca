@@ -82,7 +82,7 @@ class BilinearMixedBinaryExpression(mle.MultilinearExpression):
         self.model_data.add_constraint(
             con.Constraint(
                 lsf.con_name_indicator_bilinear_mixed_binary_4(self.name),
-                con_type=lsf.constraint_leq(),
+                con_type=lsf.constraint_geq(),
                 variables=[
                     (-1.0, c_var),
                     (-c_var.ub, b_var),
