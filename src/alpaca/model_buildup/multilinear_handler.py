@@ -5,6 +5,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from alpaca.utils.logger import logger
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
@@ -19,6 +20,7 @@ class MultilinearHandler:
 
     def handle(self):
         """Applies reformulations based on user settings."""
+        logger.info(lsf.info_reformulate_multilinear_expressions())
         if self.model_data.settings.reformulate_multilinear_to_bilinear:
             self._reformulate_multilinear_to_bilinear()
         else:
@@ -31,6 +33,7 @@ class MultilinearHandler:
 
     def add_mccormick_envelopes(self) -> None:
         """Adds McCormick envelope constraints to bilinear expressions."""
+        logger.info(lsf.info_add_mccormick_envelopes())
         for expression in self.model_data.expressions.bilinear_expressions.values():
             expression.add_mccormick_envelope()
 

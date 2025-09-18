@@ -87,7 +87,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         """
         Function that saves the self-object as a dict to json
         """
-        logger.info("The settings are saved as JSON-format to the export folder")
+        logger.info(lsf.info_save_settings_json())
         json_data = self.__dict__
         with open(self.export_path + "config.json", "w", encoding="utf8") as json_file:
             json.dump(json_data, json_file, indent=4)

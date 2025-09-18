@@ -5,6 +5,9 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from alpaca.utils.logger import logger
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData
 
@@ -17,6 +20,7 @@ class ExpressionTree:
 
     def decompose(self):
         """Decomposes complex expression trees into simpler, low-dimensional functions."""
+        logger.info(lsf.info_grow_expression_graphs())
         self.model_data.expressions.first_level_nonlinear_expression_keys = list(
             self.model_data.expressions.nonlinear_expressions.keys()
         )

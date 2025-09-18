@@ -3,6 +3,7 @@
 """
 @authors: kuen,
 """
+import datetime
 
 
 class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
@@ -252,20 +253,68 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         )
 
     @classmethod
+    def _get_timestamp(cls) -> str:
+        """Generates a formatted timestamp string."""
+        return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    @classmethod
     def info_init_mpip_handler(cls) -> str:
-        return "Initializing Multipartite Implication Polytope handler."
+        return (
+            f"[{cls._get_timestamp()}] Extract multipartite implication information..."
+        )
 
     @classmethod
     def info_init_mip_model_buildup(cls) -> str:
-        return "Initializing MIP model build-up."
+        return f"[{cls._get_timestamp()}] Build MIP model..."
 
     @classmethod
     def info_init_solver(cls) -> str:
-        return "Start Solving."
+        return f"[{cls._get_timestamp()}] Solve MIP ..."
 
     @classmethod
-    def info_optimization_finished(cls, runtime: int) -> str:
-        return f"Optimization finished in {runtime:.2f} seconds."
+    def info_optimization_finished(cls, runtime: float) -> str:
+        return (
+            f"[{cls._get_timestamp()}] Optimization finished in {runtime:.2f} seconds."
+        )
+
+    @classmethod
+    def info_read_osil_data(cls) -> str:
+        return f"[{cls._get_timestamp()}] Read osil data..."
+
+    @classmethod
+    def info_propagate_bounds_equations(cls) -> str:
+        return f"[{cls._get_timestamp()}] Propagate bounds equations..."
+
+    @classmethod
+    def info_propagate_bounds_expressions(cls) -> str:
+        return f"[{cls._get_timestamp()}] Propagate bounds expressions..."
+
+    @classmethod
+    def info_create_piecewise_linear_relaxation(cls) -> str:
+        return f"[{cls._get_timestamp()}] Create piecewise linear relaxation..."
+
+    @classmethod
+    def info_generate_breakpoints(cls) -> str:
+        return f"[{cls._get_timestamp()}] Generate breakpoints..."
+
+    @classmethod
+    def info_grow_expression_graphs(cls) -> str:
+        return f"[{cls._get_timestamp()}] Grow expression graphs..."
+
+    @classmethod
+    def info_reformulate_multilinear_expressions(cls) -> str:
+        return f"[{cls._get_timestamp()}] Reformulate multilinear expressions..."
+
+    @classmethod
+    def info_add_mccormick_envelopes(cls) -> str:
+        return f"[{cls._get_timestamp()}] Add McCormick envelopes..."
+
+    @classmethod
+    def info_save_settings_json(cls) -> str:
+        return (
+            f"[{cls._get_timestamp()}]"
+            f" The settings are saved as JSON-format to the export folder"
+        )
 
     # --- Solvers ---
 

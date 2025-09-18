@@ -5,6 +5,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from alpaca.utils.logger import logger
 import alpaca.model_data.constraint as con
 from alpaca.expressions import (
     one_dim_expression as ode,
@@ -25,6 +26,7 @@ class BoundPropagator:
 
     def propagate_linear_constraints(self):
         """Performs bound propagation on linear equality constraints."""
+        logger.info(lsf.info_propagate_bounds_equations())
         for _ in range(self.model_data.settings.bound_propagation_rounds):
             for constraint in self.model_data.constraints.values():
                 if constraint.con_type == lsf.constraint_eq():
@@ -64,6 +66,7 @@ class BoundPropagator:
 
     def propagate_expressions(self):
         """Performs bound propagation on all expressions for a set number of rounds."""
+        logger.info(lsf.info_propagate_bounds_expressions())
         sorted_expressions = sorted(
             self.model_data.expressions.all_low_dim_expressions(),
             key=lambda e: -e.level,

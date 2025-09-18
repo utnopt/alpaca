@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from bs4 import BeautifulSoup
 
+from alpaca.utils.logger import logger
 from alpaca.settings import StaticSettings
 import alpaca.utils.data_handling as udh
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
@@ -27,6 +28,7 @@ class OsilReader:
 
     def build_from_osil(self):
         """Reads the OSiL file and builds the initial model structure."""
+        logger.info(lsf.info_read_osil_data())
         osil_data = self._read_osil_file()
         self._add_variables_from_osil_data(osil_data)
         self._add_objective_from_osil_data(osil_data)

@@ -5,6 +5,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from alpaca.utils.logger import logger
 from alpaca.pwl import multiple_choice_method as mcm, delta_method as dem
 import alpaca.expressions.one_dim_expression as ode
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
@@ -21,6 +22,7 @@ class PWLHandler:
 
     def apply_relaxations(self):
         """Applies all PWL relaxations based on model settings."""
+        logger.info(lsf.info_create_piecewise_linear_relaxation())
         self._discretize_variable_domains()
         self._apply_piecewise_linear_relaxation_for_one_dim_expressions()
         self._apply_piecewise_constant_relaxation_for_multilinear_expressions()

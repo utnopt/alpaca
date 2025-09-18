@@ -2,6 +2,8 @@
 """
 @authors: kuen,
 """
+import os
+import sys
 import traceback
 
 import alpaca.model_data.model_data as mda
@@ -52,4 +54,6 @@ def run_optimization():
 
 
 if __name__ == "__main__":
-    run_optimization()
+    with open(os.devnull, "w", encoding="utf-8") as devnull:
+        sys.stdout = devnull
+        run_optimization()
