@@ -4,11 +4,17 @@
 """
 @authors: kuen,
 """
+from __future__ import annotations
 import math
-from typing import List, Tuple
+from typing import List, Tuple, TYPE_CHECKING
 
 from alpaca.model_data import variable as var, constraint as con
 import alpaca.expressions.expression as exn
+import alpaca.settings as s
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+
+if TYPE_CHECKING:
+    from alpaca.model_data.model_data import ModelData
 
 
 class OneDimExpression(exn.Expression):
@@ -27,7 +33,7 @@ class OneDimExpression(exn.Expression):
     def __init__(
         self,
         name: str,
-        model_data: "ModelData",
+        model_data: ModelData,
         variable: var.Variable,
         level: int,
         representative_variable: var.Variable | None = None,
@@ -36,95 +42,21 @@ class OneDimExpression(exn.Expression):
 
         Args:
             name: Unique identifier for the expression.
-            model_data: Reference to the containing model data object.
             level: Level of expression in expression tree.
             representative_variable: Optional existing variable to represent the expression result.
                 If None, a new variable will be created.
         """
         super().__init__(name, model_data, level, representative_variable)
-        self.model_data = model_data
         self.variable: var.Variable = variable
+        self.variable.add_nonlinearity_to_occurring_in(self.__class__.__name__)
 
-    def apply_piecewise_linear_relaxation(self, approximation=False) -> None:
-        """Apply piecewise linear relaxation to the expression.
-        If approximation is True, the approximation error term is set to 0
-        """
-        if self.model_data.settings.pwl_method == "multiple-choice":
-            if approximation:
-                self._apply_multiple_choice_method_approximation()
-            else:
-                self._apply_multiple_choice_method_relaxation()
-
-    def _apply_multiple_choice_method_approximation(self):
-        variables_in_constraint = [(-1.0, self.representative_variable)]
-        for i, bp in enumerate(self.variable.breakpoints[:-1]):
-            slope, intercept = (
-                self._get_linear_approximation_function_parameters_for_segment(
-                    bp, self.variable.breakpoints[i + 1]
-                )
-            )
-            variables_in_constraint.append(
-                (slope, self.variable.pwl_variables_continuous[i])
-            )
-            variables_in_constraint.append(
-                (intercept, self.variable.pwl_variables_binary[i])
-            )
-        self.model_data.add_constraint(
-            con.Constraint(
-                f"mc_{self.name}",
-                con_type="==",
-                variables=variables_in_constraint,
-            )
-        )
-
-    def _apply_multiple_choice_method_relaxation(self):
-        continuous_variables_in_constraint = [(-1.0, self.representative_variable)]
-        binary_variables_in_underestimating_constraint = []
-        binary_variables_in_overestimating_constraint = []
-        for i, bp in enumerate(self.variable.breakpoints[:-1]):
-            slope, intercept = (
-                self._get_linear_approximation_function_parameters_for_segment(
-                    bp, self.variable.breakpoints[i + 1]
-                )
-            )
-            min_deviation, max_deviation = self._get_min_max_deviation(
-                bp, self.variable.breakpoints[i + 1], slope, intercept
-            )
-            continuous_variables_in_constraint.append(
-                (slope, self.variable.pwl_variables_continuous[i])
-            )
-            binary_variables_in_underestimating_constraint.append(
-                (intercept + min_deviation, self.variable.pwl_variables_binary[i])
-            )
-            binary_variables_in_overestimating_constraint.append(
-                (intercept + max_deviation, self.variable.pwl_variables_binary[i])
-            )
-        self.model_data.add_constraint(
-            con.Constraint(
-                f"mc_under_{self.name}",
-                con_type="<=",
-                variables=continuous_variables_in_constraint
-                + binary_variables_in_underestimating_constraint,
-            )
-        )
-        self.model_data.add_constraint(
-            con.Constraint(
-                f"mc_over_{self.name}",
-                con_type=">=",
-                variables=continuous_variables_in_constraint
-                + binary_variables_in_overestimating_constraint,
-            )
-        )
-
-    def _get_linear_approximation_function_parameters_for_segment(
+    def get_linear_approximation_function_parameters_for_segment(
         self, var_lb: float, var_ub: float
     ) -> tuple[float, float]:
-        slope = (self._f(var_ub) - self._f(var_lb)) / (var_ub - var_lb)
-        intercept = self._f(var_lb) - slope * var_lb
+        """Calculate slope and intercept of the linear approximation over [var_lb, var_ub]."""
+        slope = (self.f(var_ub) - self.f(var_lb)) / (var_ub - var_lb)
+        intercept = self.f(var_lb) - slope * var_lb
         return slope, intercept
-
-    def _get_reference_points_multiple_choice(self) -> list[float]:
-        return [self._f(bp) for bp in self.variable.breakpoints]
 
     def __repr__(self) -> str:
         """Return string representation of the expression.
@@ -134,21 +66,19 @@ class OneDimExpression(exn.Expression):
         """
         return self.name
 
-    def _f(self, x: float) -> float:
+    def f(self, x: float) -> float:
         """Evaluates the function f(x) for the expression."""
-        raise NotImplementedError(
-            "Subclasses must implement the function evaluation _f(x)."
-        )
+        raise NotImplementedError(lsf.error_subclasses_must_implement_method())
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
         """Solves f'(x) = m for x."""
-        raise NotImplementedError("Subclasses must implement the solver for f'(x) = m.")
+        raise NotImplementedError(lsf.error_subclasses_must_implement_method())
 
     def _get_deviation(self, x: float, m: float, t: float) -> float:
         """Helper method to calculate the deviation f(x) - m*x - t."""
-        return self._f(x) - m * x - t
+        return self.f(x) - m * x - t
 
-    def _get_min_max_deviation(
+    def get_min_max_deviation(
         self, var_lb: float, var_ub: float, m: float, t: float
     ) -> Tuple[float, float]:
         """
@@ -165,7 +95,7 @@ class OneDimExpression(exn.Expression):
                 points_to_check.append(p)
 
         if not points_to_check:
-            return float("inf"), float("-inf")
+            return float(lsf.numpy_infinity()), -float(lsf.numpy_infinity())
 
         deviations = [self._get_deviation(p, m, t) for p in points_to_check]
 
@@ -177,46 +107,14 @@ class SquareExpression(OneDimExpression):
 
     A one-dimensional expression where the representative variable equals
     the square of the input variable.
-
-    Attributes:
-        name: Unique identifier for the expression.
-        variable: Input variable being squared.
-        representative_variable: Variable representing the result of the expression.
     """
 
-    def __init__(
-        self,
-        name: str,
-        model_data: "ModelData",
-        variable: var.Variable,
-        level: int,
-        representative_variable: var.Variable | None = None,
-    ):
-        """Initialize a square expression.
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for square expression."""
+        return lsf.nonlinearity_type_square()
 
-        Args:
-            name: Unique identifier for the expression.
-            model_data: Reference to the containing model data object.
-            variable: Input variable to be squared.
-            representative_variable: Optional existing variable to represent the result.
-                If None, a new variable will be created.
-        """
-        super().__init__(name, model_data, variable, level, representative_variable)
-        self.variable.add_nonlinearity_to_occurring_in("square")
-
-    def propagate_variable_bounds(self) -> None:
-        """Propagates bounds for r = x^2.
-
-        The lower bound of r is 0 if the interval for x contains 0, otherwise
-        it's the minimum of x.lb^2 and x.ub^2. The upper bound is the maximum
-        of x.lb^2 and x.ub^2.
-        """
-        ub = max(self.variable.ub, -self.variable.lb) ** 2
-        lb = self.variable.lb**2 if self.variable.lb >= 0 else 0.0
-        self.representative_variable.lb = max(lb, self.representative_variable.lb)
-        self.representative_variable.ub = min(ub, self.representative_variable.ub)
-
-    def _f(self, x: float) -> float:
+    def f(self, x: float) -> float:
         return x**2
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
@@ -229,48 +127,14 @@ class ExponentialExpression(OneDimExpression):
 
     A one-dimensional expression where the representative variable equals
     the exponential function (e raised to the power) of the input variable.
-
-    Attributes:
-        name: Unique identifier for the expression.
-        variable: Input variable in the exponent.
-        representative_variable: Variable representing the result of the expression.
     """
 
-    def __init__(
-        self,
-        name: str,
-        model_data: "ModelData",
-        variable: var.Variable,
-        level: int,
-        representative_variable: var.Variable | None = None,
-    ):
-        """Initialize an exponential expression.
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for exponential expression."""
+        return lsf.nonlinearity_type_exp()
 
-        Args:
-            name: Unique identifier for the expression.
-            model_data: Reference to the containing model data object.
-            variable: Input variable to be used in the exponent.
-            representative_variable: Optional existing variable to represent the result.
-                If None, a new variable will be created.
-        """
-        super().__init__(name, model_data, variable, level, representative_variable)
-        self.variable.add_nonlinearity_to_occurring_in("exp")
-
-    def propagate_variable_bounds(self) -> None:
-        """Propagates bounds for r = e^x.
-
-        Since e^x is monotonically increasing, the new bounds for r are
-        [e^(x.lb), e^(x.ub)]. Handles potential OverflowError during calculation.
-        """
-        try:
-            lb = math.exp(self.variable.lb)
-            ub = math.exp(self.variable.ub)
-        except OverflowError:
-            return
-        self.representative_variable.lb = max(lb, self.representative_variable.lb)
-        self.representative_variable.ub = min(ub, self.representative_variable.ub)
-
-    def _f(self, x: float) -> float:
+    def f(self, x: float) -> float:
         return math.exp(x)
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
@@ -285,48 +149,16 @@ class LnExpression(OneDimExpression):
 
     A one-dimensional expression where the representative variable equals
     the natural logarithm of the input variable.
-
-    Attributes:
-        name: Unique identifier for the expression.
-        variable: Input variable to which logarithm is applied.
-        representative_variable: Variable representing the result of the expression.
     """
 
-    def __init__(
-        self,
-        name: str,
-        model_data: "ModelData",
-        variable: var.Variable,
-        level: int,
-        representative_variable: var.Variable | None = None,
-    ):
-        """Initialize a natural logarithm expression.
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for natural logarithm expression."""
+        return lsf.nonlinearity_type_ln()
 
-        Args:
-            name: Unique identifier for the expression.
-            model_data: Reference to the containing model data object.
-            variable: Input variable to which logarithm is applied.
-            representative_variable: Optional existing variable to represent the result.
-                If None, a new variable will be created.
-        """
-        super().__init__(name, model_data, variable, level, representative_variable)
-        self.variable.add_nonlinearity_to_occurring_in("ln")
-
-    def propagate_variable_bounds(self) -> None:
-        """Propagates bounds for r = ln(x).
-
-        The natural logarithm is only defined for x > 0. If this condition
-        is met, the new bounds for r are [ln(x.lb), ln(x.ub)] because
-        ln(x) is monotonically increasing.
-        """
-        if self.variable.lb <= 0:
-            return
-        lb = math.log(self.variable.lb)
-        ub = math.log(self.variable.ub)
-        self.representative_variable.lb = max(lb, self.representative_variable.lb)
-        self.representative_variable.ub = min(ub, self.representative_variable.ub)
-
-    def _f(self, x: float) -> float:
+    def f(self, x: float) -> float:
+        if x == 0:
+            return -s.StaticSettings.infinity
         return math.log(x)
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
@@ -341,48 +173,14 @@ class SquareRootExpression(OneDimExpression):
 
     A one-dimensional expression where the representative variable equals
     the square root of the input variable.
-
-    Attributes:
-        name: Unique identifier for the expression.
-        variable: Input variable to which square root is applied.
-        representative_variable: Variable representing the result of the expression.
     """
 
-    def __init__(
-        self,
-        name: str,
-        model_data: "ModelData",
-        variable: var.Variable,
-        level: int,
-        representative_variable: var.Variable | None = None,
-    ):
-        """Initialize a square root expression.
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for square root expression."""
+        return lsf.nonlinearity_type_sqrt()
 
-        Args:
-            name: Unique identifier for the expression.
-            model_data: Reference to the containing model data object.
-            variable: Input variable to which square root is applied.
-            representative_variable: Optional existing variable to represent the result.
-                If None, a new variable will be created.
-        """
-        super().__init__(name, model_data, variable, level, representative_variable)
-        self.variable.add_nonlinearity_to_occurring_in("sqrt")
-
-    def propagate_variable_bounds(self) -> None:
-        """Propagates bounds for r = sqrt(x).
-
-        The square root is only defined for x >= 0. If this condition is met,
-        the new bounds for r are [sqrt(x.lb), sqrt(x.ub)] because sqrt(x)
-        is monotonically increasing.
-        """
-        if self.variable.lb < 0:
-            return
-        lb = math.sqrt(self.variable.lb)
-        ub = math.sqrt(self.variable.ub)
-        self.representative_variable.lb = max(lb, self.representative_variable.lb)
-        self.representative_variable.ub = min(ub, self.representative_variable.ub)
-
-    def _f(self, x: float) -> float:
+    def f(self, x: float) -> float:
         return math.sqrt(x)
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
@@ -397,47 +195,14 @@ class SineExpression(OneDimExpression):
 
     A one-dimensional expression where the representative variable equals
     the sine of the input variable (in radians).
-
-    Attributes:
-        name: Unique identifier for the expression.
-        variable: Input variable to which sine function is applied.
-        representative_variable: Variable representing the result of the expression.
     """
 
-    def __init__(
-        self,
-        name: str,
-        model_data: "ModelData",
-        variable: var.Variable,
-        level: int,
-        representative_variable: var.Variable | None = None,
-    ):
-        """Initialize a sine expression.
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for sine expression."""
+        return lsf.nonlinearity_type_sin()
 
-        Args:
-            name: Unique identifier for the expression.
-            model_data: Reference to the containing model data object.
-            variable: Input variable to which sine function is applied.
-            representative_variable: Optional existing variable to represent the result.
-                If None, a new variable will be created.
-        """
-        super().__init__(name, model_data, variable, level, representative_variable)
-        self.variable.add_nonlinearity_to_occurring_in("sin")
-
-    def propagate_variable_bounds(self) -> None:
-        """Propagates bounds for r = sin(x).
-
-        The range of sin(x) is [-1, 1]. This method tightens the bounds of the
-        representative variable to be within this range. A more precise
-        propagation would consider the specific interval of x, but this
-        provides a simple and correct outer approximation.
-        """
-        lb = -1.0
-        ub = 1.0
-        self.representative_variable.lb = max(lb, self.representative_variable.lb)
-        self.representative_variable.ub = min(ub, self.representative_variable.ub)
-
-    def _f(self, x: float) -> float:
+    def f(self, x: float) -> float:
         return math.sin(x)
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
@@ -472,47 +237,14 @@ class CosineExpression(OneDimExpression):
 
     A one-dimensional expression where the representative variable equals
     the cosine of the input variable (in radians).
-
-    Attributes:
-        name: Unique identifier for the expression.
-        variable: Input variable to which cosine function is applied.
-        representative_variable: Variable representing the result of the expression.
     """
 
-    def __init__(
-        self,
-        name: str,
-        model_data: "ModelData",
-        variable: var.Variable,
-        level: int,
-        representative_variable: var.Variable | None = None,
-    ):
-        """Initialize a cosine expression.
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for cosine expression."""
+        return lsf.nonlinearity_type_cos()
 
-        Args:
-            name: Unique identifier for the expression.
-            model_data: Reference to the containing model data object.
-            variable: Input variable to which cosine function is applied.
-            representative_variable: Optional existing variable to represent the result.
-                If None, a new variable will be created.
-        """
-        super().__init__(name, model_data, variable, level, representative_variable)
-        self.variable.add_nonlinearity_to_occurring_in("cos")
-
-    def propagate_variable_bounds(self) -> None:
-        """Propagates bounds for r = cos(x).
-
-        The range of cos(x) is [-1, 1]. This method tightens the bounds of the
-        representative variable to be within this range. A more precise
-        propagation would consider the specific interval of x, but this
-        provides a simple and correct outer approximation.
-        """
-        lb = -1.0
-        ub = 1.0
-        self.representative_variable.lb = max(lb, self.representative_variable.lb)
-        self.representative_variable.ub = min(ub, self.representative_variable.ub)
-
-    def _f(self, x: float) -> float:
+    def f(self, x: float) -> float:
         return math.cos(x)
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
@@ -548,48 +280,16 @@ class LogExpression(OneDimExpression):
 
     A one-dimensional expression where the representative variable equals
     the base-10 logarithm of the input variable.
-
-    Attributes:
-        name: Unique identifier for the expression.
-        variable: Input variable to which logarithm is applied.
-        representative_variable: Variable representing the result of the expression.
     """
 
-    def __init__(
-        self,
-        name: str,
-        model_data: "ModelData",
-        variable: var.Variable,
-        level: int,
-        representative_variable: var.Variable | None = None,
-    ):
-        """Initialize a base-10 logarithm expression.
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for base-10 logarithm expression."""
+        return lsf.nonlinearity_type_log10()
 
-        Args:
-            name: Unique identifier for the expression.
-            model_data: Reference to the containing model data object.
-            variable: Input variable to which logarithm is applied.
-            representative_variable: Optional existing variable to represent the result.
-                If None, a new variable will be created.
-        """
-        super().__init__(name, model_data, variable, level, representative_variable)
-        self.variable.add_nonlinearity_to_occurring_in("log10")
-
-    def propagate_variable_bounds(self) -> None:
-        """Propagates bounds for r = log10(x).
-
-        The base-10 logarithm is only defined for x > 0. If this holds,
-        the new bounds for r are [log10(x.lb), log10(x.ub)] because log10(x)
-        is monotonically increasing.
-        """
-        if self.variable.lb <= 0:
-            return
-        lb = math.log10(self.variable.lb)
-        ub = math.log10(self.variable.ub)
-        self.representative_variable.lb = max(lb, self.representative_variable.lb)
-        self.representative_variable.ub = min(ub, self.representative_variable.ub)
-
-    def _f(self, x: float) -> float:
+    def f(self, x: float) -> float:
+        if x == 0:
+            return -s.StaticSettings.infinity
         return math.log10(x)
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
@@ -604,41 +304,45 @@ class AbsExpression(OneDimExpression):
 
     A one-dimensional expression where the representative variable equals
     the absolute value of the input variable.
-
-    Attributes:
-        name: Unique identifier for the expression.
-        variable: Input variable to which absolute value is applied.
-        representative_variable: Variable representing the result of the expression.
     """
 
-    def apply_piecewise_linear_relaxation(self, approximation=False) -> None:
-        binary_abs_variable = self.model_data.add_variable(
-            var.Variable(f"abs_bin_{self.variable.name}", var_type="B")
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for absolute value expression."""
+        return lsf.nonlinearity_type_xabsx()
+
+    def handle_abs_expression(self, model_data: ModelData) -> None:
+        """Add constraints to model to represent the absolute value function."""
+        binary_abs_variable = model_data.add_variable(
+            var.Variable(
+                lsf.var_name_binary_abs_reformulation(self.variable.name),
+                var_type=lsf.var_type_binary(),
+            )
         )
-        self.model_data.add_constraint(
-            con.Constraint(
-                f"abs_neg_{self.variable.name}",
-                con_type=">=",
+        model_data.add_constraint(
+            con.LinearConstraint(
+                lsf.con_name_abs_reformulation_negative(self.variable.name),
+                con_type=lsf.constraint_geq(),
                 variables=[
                     (1.0, self.representative_variable),
                     (1.0, self.variable),
                 ],
             )
         )
-        self.model_data.add_constraint(
-            con.Constraint(
-                f"abs_pos_{self.variable.name}",
-                con_type=">=",
+        model_data.add_constraint(
+            con.LinearConstraint(
+                lsf.con_name_abs_reformulation_positive(self.variable.name),
+                con_type=lsf.constraint_geq(),
                 variables=[
                     (1.0, self.representative_variable),
                     (-1.0, self.variable),
                 ],
             )
         )
-        self.model_data.add_constraint(
-            con.Constraint(
-                f"abs_neg_bigm_{self.variable.name}",
-                con_type="<=",
+        model_data.add_constraint(
+            con.LinearConstraint(
+                lsf.con_name_abs_reformulation_negative_big_m(self.variable.name),
+                con_type=lsf.constraint_leq(),
                 variables=[
                     (1.0, self.representative_variable),
                     (1.0, self.variable),
@@ -646,10 +350,10 @@ class AbsExpression(OneDimExpression):
                 ],
             )
         )
-        self.model_data.add_constraint(
-            con.Constraint(
-                f"abs_pos_bigm_{self.variable.name}",
-                con_type="<=",
+        model_data.add_constraint(
+            con.LinearConstraint(
+                lsf.con_name_abs_reformulation_positive_big_m(self.variable.name),
+                con_type=lsf.constraint_leq(),
                 variables=[
                     (1.0, self.representative_variable),
                     (-1.0, self.variable),
@@ -659,26 +363,10 @@ class AbsExpression(OneDimExpression):
             )
         )
 
-    def propagate_variable_bounds(self) -> None:
-        """Propagates bounds for r = |x|.
-
-        If the interval for x contains 0, the lower bound of r is 0.
-        Otherwise, the lower bound is min(|x.lb|, |x.ub|). The upper
-        bound is always max(|x.lb|, |x.ub|).
-        """
-        lb = (
-            min(abs(self.variable.lb), abs(self.variable.ub))
-            if self.variable.lb * self.variable.ub >= 0
-            else 0
-        )
-        ub = max(abs(self.variable.lb), abs(self.variable.ub))
-        self.representative_variable.lb = max(lb, self.representative_variable.lb)
-        self.representative_variable.ub = min(ub, self.representative_variable.ub)
-
-    def _f(self, x: float) -> float:
+    def f(self, x: float) -> float:
         return abs(x)
 
-    def _get_min_max_deviation(
+    def get_min_max_deviation(
         self, var_lb: float, var_ub: float, m: float, t: float
     ) -> Tuple[float, float]:
         """
@@ -702,45 +390,14 @@ class TangensHExpression(OneDimExpression):
 
     A one-dimensional expression where the representative variable equals
     the hyperbolic tangent of the input variable.
-
-    Attributes:
-        name: Unique identifier for the expression.
-        variable: Input variable to which hyperbolic tangent is applied.
-        representative_variable: Variable representing the result of the expression.
     """
 
-    def __init__(
-        self,
-        name: str,
-        model_data: "ModelData",
-        variable: var.Variable,
-        level: int,
-        representative_variable: var.Variable | None = None,
-    ):
-        """Initialize a hyperbolic tangent expression.
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for hyperbolic tangent expression."""
+        return lsf.nonlinearity_type_tanh()
 
-        Args:
-            name: Unique identifier for the expression.
-            model_data: Reference to the containing model data object.
-            variable: Input variable to which hyperbolic tangent is applied.
-            representative_variable: Optional existing variable to represent the result.
-                If None, a new variable will be created.
-        """
-        super().__init__(name, model_data, variable, level, representative_variable)
-        self.variable.add_nonlinearity_to_occurring_in("tanh")
-
-    def propagate_variable_bounds(self) -> None:
-        """Propagates bounds for r = tanh(x).
-
-        Since tanh(x) is monotonically increasing, the new bounds for r are
-        [tanh(x.lb), tanh(x.ub)].
-        """
-        lb = math.tanh(self.variable.lb)
-        ub = math.tanh(self.variable.ub)
-        self.representative_variable.lb = max(lb, self.representative_variable.lb)
-        self.representative_variable.ub = min(ub, self.representative_variable.ub)
-
-    def _f(self, x: float) -> float:
+    def f(self, x: float) -> float:
         return math.tanh(x)
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
@@ -763,52 +420,16 @@ class InverseExpression(OneDimExpression):
 
     A one-dimensional expression where the representative variable equals
     the inverse of the input variable.
-
-    Attributes:
-        name: Unique identifier for the expression.
-        variable: Input variable to which inverse is applied.
-        representative_variable: Variable representing the result of the expression.
     """
 
-    def __init__(
-        self,
-        name: str,
-        model_data: "ModelData",
-        variable: var.Variable,
-        level: int,
-        representative_variable: var.Variable | None = None,
-    ):
-        """Initialize a inverse expression.
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for inverse expression."""
+        return lsf.nonlinearity_type_inverse()
 
-        Args:
-            name: Unique identifier for the expression.
-            model_data: Reference to the containing model data object.
-            variable: Input variable to which inverse is applied.
-            representative_variable: Optional existing variable to represent the result.
-                If None, a new variable will be created.
-        """
-        super().__init__(name, model_data, variable, level, representative_variable)
-        self.variable.add_nonlinearity_to_occurring_in("inverse")
-
-    def propagate_variable_bounds(self) -> None:
-        """Propagates bounds for r = 1/x.
-
-        The inverse function is only defined if the interval for x does not
-        contain 0. If the interval is strictly positive or strictly negative,
-        the function is monotonically decreasing, so the new bounds for r
-        are [1/x.ub, 1/x.lb].
-        """
-        if not (
-            (self.variable.lb < 0 and self.variable.ub < 0)
-            or (self.variable.lb > 0 and self.variable.ub > 0)
-        ):
-            return
-        lb = 1 / self.variable.ub
-        ub = 1 / self.variable.lb
-        self.representative_variable.lb = max(lb, self.representative_variable.lb)
-        self.representative_variable.ub = min(ub, self.representative_variable.ub)
-
-    def _f(self, x: float) -> float:
+    def f(self, x: float) -> float:
+        if x == 0:
+            return s.StaticSettings.infinity
         return 1.0 / x
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:

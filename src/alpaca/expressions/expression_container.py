@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from alpaca.expressions import (
     linear_expression as lie,
     bilinear_expression as ble,
+    bilinear_binary_expression as bbe,
+    bilinear_mixed_binary_expression as bme,
     multilinear_expression as mle,
     one_dim_expression as ode,
     nonlinear_expression as nle,
@@ -14,7 +16,7 @@ from alpaca.expressions import (
 
 
 @dataclass
-class ExpressionContainer:
+class ExpressionContainer:  # pylint: disable=too-many-instance-attributes
     """Container class for expressions."""
 
     nonlinear_expressions: dict[str, nle.NonlinearExpression] = field(
@@ -25,6 +27,13 @@ class ExpressionContainer:
     linear_expressions: dict[str, lie.LinearExpression] = field(default_factory=dict)
     bilinear_expressions: dict[str, ble.BilinearExpression] = field(
         default_factory=dict
+    )
+    bilinear_binary_expressions: dict[str, bbe.BilinearBinaryExpression] = field(
+        default_factory=dict
+    )
+    # noinspection PyDataclass
+    bilinear_mixed_binary_expressions: dict[str, bme.BilinearMixedBinaryExpression] = (
+        field(default_factory=dict)
     )
     multilinear_expressions: dict[str, mle.MultilinearExpression] = field(
         default_factory=dict
@@ -37,4 +46,5 @@ class ExpressionContainer:
             + list(self.linear_expressions.values())
             + list(self.bilinear_expressions.values())
             + list(self.multilinear_expressions.values())
+            + list(self.bilinear_mixed_binary_expressions.values())
         )

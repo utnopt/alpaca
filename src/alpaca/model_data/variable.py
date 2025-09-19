@@ -2,11 +2,15 @@
 """
 @authors: kuen,
 """
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import dataclasses
-import numpy as np
 
 import alpaca.settings as s
-import alpaca.model_data.constraint as con  # pylint: disable=cyclic-import
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+
+if TYPE_CHECKING:
+    from alpaca.pwl import pwl_method as pwm
 
 
 @dataclasses.dataclass
@@ -30,7 +34,7 @@ class Variable:  # pylint: disable=too-many-instance-attributes
         name: str,
         lb: float = -s.StaticSettings.infinity,
         ub: float = s.StaticSettings.infinity,
-        var_type: str = "C",
+        var_type: str = lsf.var_type_continuous(),
     ):
         """Initialize a Variable instance.
 
@@ -48,104 +52,15 @@ class Variable:  # pylint: disable=too-many-instance-attributes
         self.is_discretized = False
         self.breakpoints: list[float] = []
         self.occurring_in: list[str] = []
-        self.pwl_variables_binary = []
-        self.pwl_variables_continuous = []
-        self.pwl_constraints = []
+        self.pwl: pwm.PWLMethod | None = None
 
     def add_nonlinearity_to_occurring_in(self, nonlinearity_type: str) -> None:
         """Save in which types of nonlinearities the variable occurs.
-        To determine the optimal breakpoint locations.
+        To determine the optimal breakpoint locations later in breakpoint_generator.py.
         """
         if nonlinearity_type not in self.occurring_in:
             self.occurring_in.append(nonlinearity_type)
             self.is_discretized = True
-
-    def set_breakpoints(self, number_of_breakpoints: int, pwl_method: str) -> None:
-        """Discretize the variable into breakpoints.
-
-        Creates a set of points between the lower and upper bounds
-        of the variable. These breakpoints are used for piecewise linear approximations
-        of nonlinear functions involving this variable.
-
-        Args:
-            number_of_breakpoints: Number of discretization points to create.
-            pwl_method: PWL method to use.
-        """
-        self.breakpoints = np.linspace(self.lb, self.ub, number_of_breakpoints)
-        if pwl_method == "multiple-choice":
-            self._add_pwl_approximation_multiple_choice()
-
-    def _add_pwl_approximation_multiple_choice(self):
-        self._add_pwl_variables_multiple_choice()
-        self._add_pwl_constraints_multiple_choice()
-
-    def _add_pwl_variables_multiple_choice(self) -> None:
-        self._add_binaries_multiple_choice()
-        self._add_continuous_variables_multiple_choice()
-
-    def _add_binaries_multiple_choice(self) -> None:
-        for breakpoint_index in range(len(self.breakpoints) - 1):
-            self.pwl_variables_binary.append(
-                Variable(f"{self.name}_bp_{breakpoint_index}", var_type="B")
-            )
-
-    def _add_continuous_variables_multiple_choice(self) -> None:
-        for breakpoint_index in range(len(self.breakpoints) - 1):
-            self.pwl_variables_continuous.append(
-                Variable(
-                    f"{self.name}_c_{breakpoint_index}",
-                    var_type="C",
-                    lb=min(0.0, self.lb),
-                    ub=max(0.0, self.ub),
-                )
-            )
-
-    def _add_pwl_constraints_multiple_choice(self) -> None:
-        self.pwl_constraints.append(
-            con.Constraint(
-                f"mc_varlink_cont_{self.name}",
-                con_type="==",
-                variables=[
-                    (1.0, variable) for variable in self.pwl_variables_continuous
-                ]
-                + [(-1.0, self)],
-            )
-        )
-        self.pwl_constraints.append(
-            con.Constraint(
-                f"mc_varlink_{self.name}",
-                con_type="==",
-                variables=[(1.0, variable) for variable in self.pwl_variables_binary],
-                rhs=1.0,
-            )
-        )
-        for breakpoint_index in range(len(self.breakpoints) - 1):
-            self.pwl_constraints.append(
-                con.Constraint(
-                    f"mc_lb_{self.name}_{breakpoint_index}",
-                    con_type="<=",
-                    variables=[
-                        (
-                            self.breakpoints[breakpoint_index],
-                            self.pwl_variables_binary[breakpoint_index],
-                        ),
-                        (-1.0, self.pwl_variables_continuous[breakpoint_index]),
-                    ],
-                )
-            )
-            self.pwl_constraints.append(
-                con.Constraint(
-                    f"mc_ub_{self.name}_{breakpoint_index}",
-                    con_type=">=",
-                    variables=[
-                        (
-                            self.breakpoints[breakpoint_index + 1],
-                            self.pwl_variables_binary[breakpoint_index],
-                        ),
-                        (-1.0, self.pwl_variables_continuous[breakpoint_index]),
-                    ],
-                )
-            )
 
     def __repr__(self) -> str:
         return self.name

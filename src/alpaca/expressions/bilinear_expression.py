@@ -2,98 +2,142 @@
 """
 @authors: kuen,
 """
-import bisect
+from alpaca.expressions import (
+    multilinear_expression as mle,
+    one_dim_expression as ode,
+)
+import alpaca.model_data.constraint as con
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
-from alpaca.model_data import variable as var, constraint as con
-import alpaca.expressions.expression as exn
 
-
-class BilinearExpression(exn.Expression):
+class BilinearExpression(mle.MultilinearExpression):
     """Represents a bilinear expression z = x * y.
 
     Attributes:
         name: Identifier for the expression
-        first_var: First variable (x) in the expression
-        second_var: Second variable (y) in the expression
+        variables: List of variables involved in the multilinear expression
         level: Level of expression in expression tree
-        representative_variable: Variable representing the product (z)
+        representative_variable: Variable representing the result of the expression
     """
 
-    def __init__(
-        self,
-        name: str,
-        model_data,
-        variables: tuple[var.Variable, var.Variable],
-        level: int,
-        representative_variable: var.Variable | None = None,
-    ):
-        # pylint: disable=too-many-arguments
-        # pylint: disable=too-many-positional-arguments
-        """Initialize bilinear expression.
-
-        Args:
-            name: Expression identifier
-            model_data: Container for model components
-            variables: Tuple containing the two input variables (x, y)
-            level: Level of expression in expression tree
-            representative_variable: Optional existing variable to represent product
+    def reformulate_to_sum_of_squares(self):
+        """Reformulate bilinear expression to sum of squares.
+        xy = 0.5 * (x² + y² - p²), where p = x - y.
+        If a variable is binary (B), its square is equal to the variable itself.
         """
-        super().__init__(name, model_data, level, representative_variable)
-        self.first_var, self.second_var = variables
-        self.model_data = model_data
-        self.representative_variable.add_nonlinearity_to_occurring_in("bilinear")
-        self.first_var.add_nonlinearity_to_occurring_in("bilinear")
-        self.second_var.add_nonlinearity_to_occurring_in("bilinear")
-        self.piecewise_constant_relation = {}
-
-    def apply_piecewise_constant_approximation(self):
-        """Apply piecewise constant approximation."""
-        mid_values_first = [
-            (self.first_var.breakpoints[i + 1] + breakpoint_first) / 2
-            for i, breakpoint_first in enumerate(self.first_var.breakpoints[:-1])
-        ]
-        mid_values_second = [
-            (self.second_var.breakpoints[i + 1] + breakpoint_second) / 2
-            for i, breakpoint_second in enumerate(self.second_var.breakpoints[:-1])
-        ]
-        for i, mid_value_first in enumerate(mid_values_first):
-            for j, mid_value_second in enumerate(mid_values_second):
-                implied_value = mid_value_first * mid_value_second
-                implied_index = min(
-                    bisect.bisect_left(
-                        self.representative_variable.breakpoints, implied_value
-                    )
-                    - 1,
-                    len(self.representative_variable.breakpoints) - 2,
-                )
-                self.piecewise_constant_relation[(i, j)] = (implied_index,)
-                self.model_data.add_constraint(
-                    con.Constraint(
-                        f"mc_{self.name}_{i}_{j}",
-                        con_type="<=",
-                        variables=[
-                            (
-                                -1.0,
-                                self.representative_variable.pwl_variables_binary[
-                                    implied_index
-                                ],
-                            ),
-                            (1.0, self.first_var.pwl_variables_binary[i]),
-                            (1.0, self.second_var.pwl_variables_binary[j]),
-                        ],
-                        rhs=1.0,
-                    )
-                )
-
-    def propagate_variable_bounds(self):
-        """Propagate variable bounds for bilinear expression."""
-        p1 = self.first_var.lb * self.second_var.lb
-        p2 = self.first_var.lb * self.second_var.ub
-        p3 = self.first_var.ub * self.second_var.lb
-        p4 = self.first_var.ub * self.second_var.ub
-        self.representative_variable.lb = max(
-            self.representative_variable.lb, min(p1, p2, p3, p4)
+        first_var = self.variables[0]
+        second_var = self.variables[1]
+        master_linear_expression = self.model_data.add_linear_expression(
+            lsf.linear_expression_bilinear_to_sum_of_squares(self.name),
+            self.level,
+            representative_variable=self.representative_variable,
         )
-        self.representative_variable.ub = min(
-            self.representative_variable.ub, max(p1, p2, p3, p4)
+
+        # If the first variable is binary, x^2 = x.
+        # Otherwise, create a new expression for the squared term.
+        if first_var.var_type == lsf.var_type_binary():
+            first_var_squared_rep = first_var
+        else:
+            square_first_var = self.model_data.add_one_dim_expression(
+                ode.SquareExpression,
+                lsf.expression_hash_square(first_var.name),
+                first_var,
+                self.level + 1,
+            )
+            first_var_squared_rep = square_first_var.representative_variable
+
+        # If the second variable is binary, y^2 = y.
+        # Otherwise, create a new expression for the squared term.
+        if second_var.var_type == lsf.var_type_binary():
+            second_var_squared_rep = second_var
+        else:
+            square_second_var = self.model_data.add_one_dim_expression(
+                ode.SquareExpression,
+                lsf.expression_hash_square(second_var.name),
+                second_var,
+                self.level + 1,
+            )
+            second_var_squared_rep = square_second_var.representative_variable
+
+        # Create a helper variable p = x - y. This is always needed.
+        sub_linear_expression = self.model_data.add_linear_expression(
+            lsf.linear_expression_bilinear_to_sum_of_squares_helper(self.name),
+            self.level + 2,
+        )
+        sub_linear_expression.variables = [
+            (1.0, first_var),
+            (-1.0, second_var),
+        ]
+
+        # The helper variable p is not necessarily binary, so we always square it.
+        square_helper_var = self.model_data.add_one_dim_expression(
+            ode.SquareExpression,
+            lsf.expression_hash_square(
+                sub_linear_expression.representative_variable.name
+            ),
+            sub_linear_expression.representative_variable,
+            self.level + 1,
+        )
+
+        # The master expression becomes: z = 0.5 * (x^2_rep + y^2_rep - p^2)
+        master_linear_expression.variables = [
+            (0.5, first_var_squared_rep),
+            (0.5, second_var_squared_rep),
+            (-0.5, square_helper_var.representative_variable),
+        ]
+
+    def add_mccormick_envelope(self):
+        """Add McCormick envelope constraints for bilinear expression."""
+        x = self.variables[0]
+        y = self.variables[1]
+        z = self.representative_variable
+
+        # McCormick envelope constraints
+        self.model_data.add_constraint(
+            con.LinearConstraint(
+                lsf.con_name_mc_cormick_continuous_lb_ub(self.name),
+                con_type=lsf.constraint_leq(),
+                variables=[
+                    (1.0, z),
+                    (-x.lb, y),
+                    (-y.ub, x),
+                ],
+                rhs=-x.lb * y.ub,
+            )
+        )
+        self.model_data.add_constraint(
+            con.LinearConstraint(
+                lsf.con_name_mc_cormick_continuous_ub_lb(self.name),
+                con_type=lsf.constraint_leq(),
+                variables=[
+                    (1.0, z),
+                    (-x.ub, y),
+                    (-y.lb, x),
+                ],
+                rhs=-x.ub * y.lb,
+            )
+        )
+        self.model_data.add_constraint(
+            con.LinearConstraint(
+                lsf.con_name_mc_cormick_continuous_lb_lb(self.name),
+                con_type=lsf.constraint_geq(),
+                variables=[
+                    (1.0, z),
+                    (-x.lb, y),
+                    (-y.lb, x),
+                ],
+                rhs=-x.lb * y.lb,
+            )
+        )
+        self.model_data.add_constraint(
+            con.LinearConstraint(
+                lsf.con_name_mc_cormick_continuous_ub_ub(self.name),
+                con_type=lsf.constraint_geq(),
+                variables=[
+                    (1.0, z),
+                    (-x.ub, y),
+                    (-y.ub, x),
+                ],
+                rhs=-x.ub * y.ub,
+            )
         )

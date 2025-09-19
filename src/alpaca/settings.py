@@ -8,6 +8,7 @@ import os
 import time
 
 from alpaca.utils.logger import logger
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class StaticSettings:
@@ -15,7 +16,7 @@ class StaticSettings:
     Class containing static settings.
     """
 
-    project_name = "bip-pwl"
+    project_name = lsf.project_name()
     # ===== Paths to (static) input files =====
     base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
     data_path = base_path + "/data/"
@@ -31,13 +32,14 @@ class StaticSettings:
     log_rotation_type = "size"  # use "size", "time" or "none"
 
     # ===== Data settings =====
-    infinity = 1e4
+    infinity = 1e7
     feasibility_tolerance = 1e-3
 
     # ===== MPIP settings =====
     max_violation_relation = 1e-2
-    min_cut_violation = 1e-2
+    min_cut_violation = 1e-3
     rounding_precision = 5
+    mpip_sparsity = 0.45
 
 
 class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance-attributes
@@ -46,12 +48,13 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
     """
 
     def __init__(self, config_dict):
+        self.seed = int(config_dict.get("seed", 42))
         self.solver_time_limit = int(config_dict.get("solver_time_limit", 7200))
+        self.solver_thread_limit = int(config_dict.get("solver_thread_limit", 4))
         self.osil_file_name = str(config_dict.get("osil_file_name", "st_e41"))
         self.number_of_breakpoints = int(config_dict.get("number_of_breakpoints", 5))
-        self.feature_mpip = int(config_dict.get("feature_mpip", 0))
-        self.pwl_method = str(config_dict.get("pwl_method", "multiple-choice"))
-        self.approximation = str(config_dict.get("approximation", "False")) == "True"
+        self.pwl_method = str(config_dict.get("pwl_method", "multiple_choice"))
+        self.approximation = int(config_dict.get("approximation", 0))
         self.external_solver = str(config_dict.get("external_solver", "scip"))
         self.bound_propagation_rounds = int(
             config_dict.get("bound_propagation_rounds", 3)
@@ -61,12 +64,30 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             + f"/data/export/{time.strftime('%Y-%m-%d_%H-%M-%S')}_"
             f"Result_{StaticSettings.project_name}/"
         )
+        self.reformulate_multilinear_to_bilinear = int(
+            config_dict.get("reformulate_multilinear_to_bilinear", 1)
+        )
+        self.bilinear_handling = int(
+            config_dict.get("bilinear_handling", 0)
+        )  # 0: mccormick, 1: reformulate to sum of squares, 2: piecewise constant
+        self.feature_mpip_separation = int(
+            config_dict.get("feature/mpip/separation", 0)
+        )
+        self.feature_mpip_mccormick = int(config_dict.get("feature/mpip/mccormick", 0))
+        self.feature_mpip_stair = int(config_dict.get("feature/mpip/stair", 0))
+        self.feature_mpip_stripe = int(config_dict.get("feature/mpip/stripe", 0))
+        self.feature_mpip = (
+            self.feature_mpip_separation
+            or self.feature_mpip_mccormick
+            or self.feature_mpip_stair
+            or self.feature_mpip_stripe
+        )
 
     def save_to_json(self):
         """
         Function that saves the self-object as a dict to json
         """
-        logger.info("The settings are saved as JSON-format to the export folder")
+        logger.info(lsf.info_save_settings_json())
         json_data = self.__dict__
         with open(self.export_path + "config.json", "w", encoding="utf8") as json_file:
             json.dump(json_data, json_file, indent=4)

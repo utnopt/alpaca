@@ -4,7 +4,16 @@ Code to ALPACA: Adaptive Linear Piecewise Approximation with Combinatorial Augme
 
 
 ## Features
-[...]
+PWL relaxation methods:
+- multiple-choice method
+
+Bilinear handling:
+- McCormick envelopes
+- reformulation to sum of squares
+- piecewise constant relaxations
+
+Separators:
+- multipartite implication polytope
 
 ## Installation
 
@@ -15,11 +24,11 @@ create conda env with all required packages
 
 ## Usage
 
-- download osil files from www.minlplib.org/download
+- download osil files from www.minlplib.org/download.html
 - put the files into data/import/instances
 - adjust data/import/config.json
 - run run.py
 - get logs and results from export/
 
 ## Authors and acknowledgment
-Code and model by: Tobias Kuen, ...
+Code and model by: Robert Burlacu, Tobias Kuen, ...

@@ -5,22 +5,34 @@
 import itertools
 import bisect
 import pyscipopt as scip
-import gurobipy as gp
 
 import alpaca.settings as s
+import alpaca.model_data.variable as var
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class MPIP:  # pylint: disable=too-many-instance-attributes
-    """Multipartite Implication Polytope."""
+    """
+    Multipartite Implication Polytope (MPIP) structure.
+    The underlying mathematical structure for the logical conditions introduced
+     in this class can be described by implication polytopes. When a
+    continuous variable's domain is discretized, a set of binary variables is
+    introduced to represent which interval the continuous variable falls into.
+    The constraints that dictate that exactly one binary variable can be active
+    (an SOS1 constraint) and the subsequent implications on the model's
+    functions and other variables form a system of conditional relations.
+    For a deeper theoretical understanding of the polytopes governing such
+    conditional relationships between sets of binary variables, see:
+    Burlacu, Gemander and Kuen (2024): The Bipartite Implication Polytope:
+    Conditional Relations over Multiple Sets of Binary Variables.
+    Link: https://optimization-online.org/?p=26208
+    """
 
     def __init__(self, mpip_id: str) -> None:
         """Initialize MPIP instance."""
         self.mpip_id = mpip_id
-        self.implying_breakpoints: dict[str, list[float]] = {}
-        self.implied_breakpoints: list[float] = []
-        self.implied_id = ""
-        self.implying_variables: dict[str, list[scip.Variable | gp.Var]] = {}
-        self.implied_variables: list[scip.Variable | gp.Var] = []
+        self.implying_variables: dict[str, var.Variable] = {}
+        self.implied_variable: var.Variable | None = None
         self.relation = {}
         self.implying_function = scip.Expr()
         self.interval_lp = scip.Model()
@@ -37,40 +49,35 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
 
     def add_implied_id(
         self,
-        implied_id: str,
-        breakpoints: list[float],
-        pwl_variables_binary: list[scip.Variable | gp.Var],
+        variable: var.Variable,
     ) -> None:
         """Add implied variable information."""
-        self.implied_id = implied_id
-        self.implied_breakpoints = breakpoints
-        self.implied_variables = pwl_variables_binary
+        self.implied_variable = variable
         self.interval_lp_implied_var = self.interval_lp.addVar(
-            f"x_{self.implied_id}", lb=-s.StaticSettings.infinity
+            lsf.mpip_interval_lp_var_name(variable.name), lb=-s.StaticSettings.infinity
         )
 
     def add_implying_id(
         self,
-        implying_id: str,
-        breakpoints: list[float],
-        pwl_variables_binary: list[scip.Variable | gp.Var],
+        variable: var.Variable,
     ) -> None:
         """Add implying variable information."""
-        self.implying_variables.update({implying_id: pwl_variables_binary})
-        self.implying_breakpoints[implying_id] = breakpoints
-        var_name = f"x_{implying_id}"
-        self.interval_lp_implying_vars[implying_id] = self.interval_lp.addVar(var_name)
+        self.implying_variables.update({variable.name: variable})
+        self.interval_lp_implying_vars[variable.name] = self.interval_lp.addVar(
+            lsf.mpip_interval_lp_var_name(variable.name)
+        )
 
     def _calculate_relation_function(self) -> None:
         breakpoint_ranges = []
-        for bp in self.implying_breakpoints.values():
+        for variable in self.implying_variables.values():
+            bp = variable.breakpoints
             intervals = [(i, (bp[i], bp[i + 1])) for i in range(len(bp) - 1)]
             breakpoint_ranges.append(intervals)
 
         for combo in itertools.product(*breakpoint_ranges):
             key = tuple(implying_index for implying_index, _ in combo)
             intervals = tuple(interval for _, interval in combo)
-            interval_dict = dict(zip(list(self.implying_breakpoints.keys()), intervals))
+            interval_dict = dict(zip(list(self.implying_variables.keys()), intervals))
             feasible, lb, ub = self._implied_interval_scip(interval_dict)
             if feasible:
                 self.relation[key] = self._calculate_implied_relation_from_interval(
@@ -80,14 +87,17 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
                 self.relation[key] = ()
 
     def _calculate_implied_relation_from_interval(self, lb: float, ub: float) -> tuple:
-        if self.implied_breakpoints[0] == ub:
-            return (ub,)
-        if self.implied_breakpoints[0] > ub or self.implied_breakpoints[-1] < lb:
+        if self.implied_variable.breakpoints[0] == ub:
+            return (len(self.implied_variable.breakpoints) - 2,)
+        if (
+            self.implied_variable.breakpoints[0] > ub
+            or self.implied_variable.breakpoints[-1] < lb
+        ):
             return ()
-        idx1 = max(0, bisect.bisect_left(self.implied_breakpoints, lb) - 1)
+        idx1 = max(0, bisect.bisect_left(self.implied_variable.breakpoints, lb) - 1)
         idx2 = min(
-            bisect.bisect_left(self.implied_breakpoints, ub) - 1,
-            len(self.implied_breakpoints) - 2,
+            bisect.bisect_left(self.implied_variable.breakpoints, ub) - 1,
+            len(self.implied_variable.breakpoints) - 2,
         )
         return tuple(range(idx1, idx2 + 1))
 
@@ -103,18 +113,22 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
             self.interval_lp.chgVarLb(implying_var, low)
             self.interval_lp.chgVarUb(implying_var, high)
 
-        self.interval_lp.setObjective(self.interval_lp_implied_var, "minimize")
+        self.interval_lp.setObjective(
+            self.interval_lp_implied_var, lsf.objective_sense_minimize()
+        )
         self.interval_lp.optimize()
-        if self.interval_lp.getStatus() == "infeasible":
+        if self.interval_lp.getStatus() == lsf.opt_model_status_infeasible():
             return False, 0.0, 0.0
         lower_bound = round(
             self.interval_lp.getObjVal(), s.StaticSettings.rounding_precision
         )
         self.interval_lp.freeTransform()
 
-        self.interval_lp.setObjective(self.interval_lp_implied_var, "maximize")
+        self.interval_lp.setObjective(
+            self.interval_lp_implied_var, lsf.objective_sense_maximize()
+        )
         self.interval_lp.optimize()
-        if self.interval_lp.getStatus() == "infeasible":
+        if self.interval_lp.getStatus() == lsf.opt_model_status_infeasible():
             return False, 0.0, 0.0
         upper_bound = round(
             self.interval_lp.getObjVal(), s.StaticSettings.rounding_precision

@@ -1,271 +1,227 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=duplicate-code
 """
-Unit tests for MultilinearExpression class
+Unit tests for the MultilinearExpression class.
 """
+# pylint: disable=protected-access
 import unittest
-from unittest.mock import MagicMock
-import itertools
-from operator import mul
-from functools import reduce
-import bisect
+from unittest.mock import MagicMock, call, patch
 
-import alpaca.settings as s
-from alpaca.model_data import variable as var
-from alpaca.expressions import multilinear_expression as mle
+from alpaca.model_data.variable import Variable
+from alpaca.expressions.multilinear_expression import MultilinearExpression
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+
+# Mock missing modules and dependencies to make tests self-contained.
+MOCK_SETTINGS = MagicMock()
+MOCK_SETTINGS.StaticSettings.infinity = float("inf")
+
+MOCK_EXPRESSION_MODULE = MagicMock()
+
+
+class MockExpression:
+    """A mock base class for any expression."""
+
+    def __init__(self, name, model_data, level, representative_variable=None):
+        self.name = name
+        self.model_data = model_data
+        self.level = level
+        if representative_variable is None:
+            representative_variable = Variable(f"rep_{name}")
+        self.representative_variable = representative_variable
+        self.variables = []
+
+
+MOCK_EXPRESSION_MODULE.Expression = MockExpression
 
 
 class TestMultilinearExpression(unittest.TestCase):
-    """Unit test for MultilinearExpression class."""
+    """Test suite for the MultilinearExpression class."""
 
     def setUp(self):
-        """Set up test environment."""
-        self.config_dict = {"osil_file_name": "alkyl"}
-        self.user_settings = s.UserSettings(self.config_dict)
-
-        # Create mock model_data with proper mock setup
+        """Set up test fixtures for each test method."""
         self.model_data = MagicMock()
-        self.model_data.variables = {}
-        # Ensure model_data.constraints is a dictionary for testing updates
-        self.model_data.constraints = {}
+        self.v = Variable(name="v", lb=0.1, ub=0.5)
+        self.w = Variable(name="w", lb=-1, ub=2)
+        self.x = Variable(name="x", lb=1, ub=5)
+        self.y = Variable(name="y", lb=-2, ub=8)
+        self.z = Variable(name="z", lb=0, ub=4)
+        self.rep_var = Variable(name="rep_var")
 
-        # Configure the mock add_constraint method to actually add to the dictionary
-        def mock_add_constraint(constraint):
-            self.model_data.constraints[constraint.name] = constraint
-            return constraint
-
-        self.model_data.add_constraint.side_effect = mock_add_constraint
-
-        # Configure the mock add_variable method to actually add to the dictionary
-        def mock_add_variable(variable):
-            self.model_data.variables[variable.name] = variable
-            return variable
-
-        self.model_data.add_variable.side_effect = mock_add_variable
-
-        # Create variables with occurring_in attribute
-        self.var_x = var.Variable("x_1", lb=1.0, ub=5.0)
-        self.var_y = var.Variable("x_2", lb=2.0, ub=7.0)
-        self.var_z = var.Variable("x_3", lb=-3.0, ub=4.0)
-
-        # Initialize occurring_in sets
-        self.var_x.occurring_in = []
-        self.var_y.occurring_in = []
-        self.var_z.occurring_in = []
-
-        self.model_data.variables["x_1"] = self.var_x
-        self.model_data.variables["x_2"] = self.var_y
-        self.model_data.variables["x_3"] = self.var_z
-
-    def test_initialization(self):
-        """Test initialization of MultilinearExpression."""
-        variables = [self.var_x, self.var_y, self.var_z]
-        multilinear_expr = mle.MultilinearExpression(
-            "test_multilinear", self.model_data, variables, 1
+    def test_init(self):
+        """Test the __init__ method for variable registration."""
+        variables = [self.x, self.y, self.z]
+        expr = MultilinearExpression(
+            name="test_init_expr",
+            model_data=self.model_data,
+            variables=variables,
+            level=0,
         )
-
-        # Check basic attributes
-        self.assertEqual(multilinear_expr.name, "test_multilinear")
-        self.assertEqual(multilinear_expr.variables, variables)
-        self.assertEqual(multilinear_expr.level, 1)
-
-        # Check representative variable
-        self.assertIsNotNone(multilinear_expr.representative_variable)
+        self.assertEqual(expr.level, 0)
+        for var in variables:
+            self.assertIn(lsf.nonlinearity_type_multilinear(3), var.occurring_in)
+            self.assertTrue(var.is_discretized)
+        # Test idempotency of occurring_in
+        MultilinearExpression("test_init_expr_2", self.model_data, [self.x], 0)
         self.assertEqual(
-            multilinear_expr.representative_variable.name, "r_test_multilinear"
+            self.x.occurring_in.count(lsf.nonlinearity_type_multilinear(1)), 1
         )
+
+    def test_get_implied_lb_and_ub(self):
+        """Test the static method get_implied_lb_and_ub."""
+        # Case 1: All positive ranges
+        res = MultilinearExpression.get_implied_lb_and_ub([(1, 2), (3, 4)])
+        self.assertEqual(res, (3, 8))
+
+        # Case 2: Mixed positive and negative ranges
+        res = MultilinearExpression.get_implied_lb_and_ub([(-2, 3), (1, 5)])
+        self.assertEqual(res, (-10, 15))
+
+        # Case 3: All negative ranges
+        res = MultilinearExpression.get_implied_lb_and_ub([(-4, -2), (-3, -1)])
+        self.assertEqual(res, (2, 12))
+
+        # Case 4: Range includes zero
+        res = MultilinearExpression.get_implied_lb_and_ub([(-5, 5), (-10, 2)])
+        self.assertEqual(res, (-50, 50))
+
+        # Case 5: Creative case with five variables
+        res = MultilinearExpression.get_implied_lb_and_ub(
+            [(-1, 1), (-2, 2), (-3, 3), (-0.5, 4), (1, 10)]
+        )
+        # Max positive product: 1*2*3*4*10 = 240
+        # Max negative product: 1*2*3*(-0.5)*10 = -30, or -1*2*3*4*10 = -240
+        self.assertEqual(res, (-240, 240))
+
+    def test_reformulate_to_bilinear_trilinear(self):
+        """Test reformulation of a 3-variable expression."""
+        sub_bilinear = MagicMock()
+        sub_bilinear.representative_variable = Variable("sub_rep")
+        self.model_data.add_bilinear_expression.return_value = sub_bilinear
+
+        expr = MultilinearExpression(
+            "tri_expr", self.model_data, [self.x, self.y, self.z], 0, self.rep_var
+        )
+        expr.reformulate_to_bilinear_expressions()
+
+        self.assertEqual(self.model_data.add_bilinear_expression.call_count, 2)
+        expected_calls = [
+            call(
+                lsf.expression_hash_bilinear(self.y.name, self.z.name),
+                [self.y, self.z],
+                1,
+            ),
+            call(
+                lsf.expression_hash_bilinear(
+                    self.x.name, sub_bilinear.representative_variable.name
+                ),
+                [self.x, sub_bilinear.representative_variable],
+                0,
+                representative_variable=self.rep_var,
+            ),
+        ]
+        self.model_data.add_bilinear_expression.assert_has_calls(
+            expected_calls, any_order=True
+        )
+
+    @patch("alpaca.expressions.multilinear_expression.MultilinearExpression")
+    def test_reformulate_to_bilinear_pentalinear(self, mock_mle_class):
+        """Test recursive reformulation of a 5-variable expression."""
+        mock_sub_mle = mock_mle_class.return_value
+        mock_sub_mle.representative_variable = Variable("sub_mle_rep")
+
+        expr = MultilinearExpression(
+            "penta_expr",
+            self.model_data,
+            [self.v, self.w, self.x, self.y, self.z],
+            0,
+            self.rep_var,
+        )
+        expr.reformulate_to_bilinear_expressions()
+
+        # Check that a sub-multilinear expression was created for (w*x*y*z)
+        mock_mle_class.assert_called_once_with(
+            lsf.expression_hash_multilinear(
+                [self.w.name, self.x.name, self.y.name, self.z.name]
+            ),
+            self.model_data,
+            [self.w, self.x, self.y, self.z],
+            1,
+        )
+        # Check that the sub-expression's reformulation was called
+        mock_sub_mle.reformulate_to_bilinear_expressions.assert_called_once()
+        # Check that the final bilinear expression for v*(wxyz) was created
+        self.model_data.add_bilinear_expression.assert_called_once_with(
+            lsf.expression_hash_bilinear(
+                self.v.name, mock_sub_mle.representative_variable.name
+            ),
+            [self.v, mock_sub_mle.representative_variable],
+            0,
+            representative_variable=self.rep_var,
+        )
+
+    def test_extract_mpip_relation_not_discretized(self):
+        """Test that extract_mpip_relation exits early if rep_var is not discretized."""
+        expr = MultilinearExpression(
+            "early_exit", self.model_data, [self.x, self.y], 0, self.rep_var
+        )
+        self.rep_var.is_discretized = False
+        expr.extract_mpip_relation()
+        self.assertFalse(expr.piecewise_constant_relation)  # Should be empty dict
+
+    def test_mpip_helpers(self):
+        """Test helper methods for MPIP relation extraction."""
+        self.x.breakpoints = [0, 1, 2.5, 5]  # Non-uniform
+        self.y.breakpoints = [10, 15, 20]
+        self.rep_var.breakpoints = [0, 15, 30, 45, 100]  # Non-uniform
+
+        expr = MultilinearExpression(
+            "mpip_expr", self.model_data, [self.x, self.y], 0, self.rep_var
+        )
+
+        mid_vals = expr.get_all_variables_mid_values_with_indices()
         self.assertEqual(
-            multilinear_expr.representative_variable.lb, -s.StaticSettings.infinity
+            mid_vals, [[(0.5, 0), (1.75, 1), (3.75, 2)], [(12.5, 0), (17.5, 1)]]
         )
+
+        self.assertEqual(expr._get_implied_index_from_implied_value(-10), 0)
+        self.assertEqual(expr._get_implied_index_from_implied_value(14.9), 0)
         self.assertEqual(
-            multilinear_expr.representative_variable.ub, s.StaticSettings.infinity
-        )
-
-        # Check nonlinearity tracking
-        for variable in variables:
-            self.assertIn("multilinear", variable.occurring_in)
-        self.assertIn(
-            "multilinear", multilinear_expr.representative_variable.occurring_in
-        )
-
-    def test_bound_propagation_positive_variables(self):
-        """Test bound propagation with positive variable bounds."""
-        variables = [
-            self.var_x,
-            self.var_y,
-        ]  # Just use two positive variables for simplicity
-        multilinear_expr = mle.MultilinearExpression(
-            "test_positive", self.model_data, variables, 1
-        )
-
-        # Call bound propagation
-        multilinear_expr.propagate_variable_bounds()
-
-        # Calculate expected bounds (product of all combinations of bounds)
-        bounds = [(variable.lb, variable.ub) for variable in variables]
-        products = list(reduce(mul, product) for product in itertools.product(*bounds))
-        expected_lb = min(products)
-        expected_ub = max(products)
-
-        # Check both bounds are updated
-        self.assertEqual(multilinear_expr.representative_variable.lb, expected_lb)
-        self.assertEqual(multilinear_expr.representative_variable.ub, expected_ub)
-
-    def test_bound_propagation_mixed_bounds(self):
-        """Test bound propagation with variables that have mixed bounds."""
-        variables = [self.var_x, self.var_z]  # One positive, one with negative bounds
-        multilinear_expr = mle.MultilinearExpression(
-            "test_mixed", self.model_data, variables, 1
-        )
-
-        multilinear_expr.propagate_variable_bounds()
-
-        # Calculate expected bounds
-        bounds = [(variable.lb, variable.ub) for variable in variables]
-        products = list(reduce(mul, product) for product in itertools.product(*bounds))
-        expected_lb = min(products)
-        expected_ub = max(products)
-
-        self.assertEqual(multilinear_expr.representative_variable.lb, expected_lb)
-        self.assertEqual(multilinear_expr.representative_variable.ub, expected_ub)
-
-    def test_bound_propagation_three_variables(self):
-        """Test bound propagation with three variables."""
-        variables = [self.var_x, self.var_y, self.var_z]
-        multilinear_expr = mle.MultilinearExpression(
-            "test_three_vars", self.model_data, variables, 1
-        )
-
-        multilinear_expr.propagate_variable_bounds()
-
-        # Calculate expected bounds
-        bounds = [(variable.lb, variable.ub) for variable in variables]
-        products = list(reduce(mul, product) for product in itertools.product(*bounds))
-        expected_lb = max(-s.StaticSettings.infinity, min(products))
-        expected_ub = min(s.StaticSettings.infinity, max(products))
-
-        self.assertEqual(multilinear_expr.representative_variable.lb, expected_lb)
-        self.assertEqual(multilinear_expr.representative_variable.ub, expected_ub)
-
-    def test_initialization_with_single_variable(self):
-        """Test initialization with single variable (should work)."""
-        multilinear_expr = mle.MultilinearExpression(
-            "test_single", self.model_data, [self.var_x], 1
-        )
-
-        self.assertEqual(len(multilinear_expr.variables), 1)
-        self.assertEqual(multilinear_expr.variables[0], self.var_x)
-
-    def test_apply_piecewise_constant_approximation(
-        self,
-    ):  # pylint: disable=too-many-locals
-        """Test apply_piecewise_constant_approximation for MultilinearExpression."""
-        # Set up breakpoints for variables
-        self.var_x.breakpoints = [1.0, 3.0, 5.0]  # Two intervals
-        self.var_y.breakpoints = [2.0, 4.0, 7.0]  # Two intervals
-        self.var_z.breakpoints = [-3.0, 0.0, 4.0]  # Two intervals
-
-        # Mock binary variables for PWL
-        self.var_x.pwl_variables_binary = [MagicMock(), MagicMock()]
-        self.var_y.pwl_variables_binary = [MagicMock(), MagicMock()]
-        self.var_z.pwl_variables_binary = [MagicMock(), MagicMock()]
-
-        # Initialize representative variable with breakpoints
-        rep_var = var.Variable("r_test_multilinear_pwl", lb=-100.0, ub=100.0)
-        rep_var.breakpoints = [-50.0, 0.0, 10.0, 20.0, 30.0, 40.0]
-        rep_var.pwl_variables_binary = [
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
-        ]
-
-        variables = [self.var_x, self.var_y, self.var_z]
-        multilinear_expr = mle.MultilinearExpression(
-            "test_multilinear_pwl", self.model_data, variables, 1, rep_var
-        )
-
-        # Ensure model_data.constraints is a dictionary to check updates
-        self.model_data.constraints = {}
-
-        multilinear_expr.apply_piecewise_constant_approximation()
-
-        # Expected mid-values:
-        # x: (1+3)/2=2, (3+5)/2=4
-        # y: (2+4)/2=3, (4+7)/2=5.5
-        # z: (-3+0)/2=-1.5, (0+4)/2=2
-
-        # There will be 2*2*2 = 8 combinations
-        # Let's calculate some expected implied_values and indices
-        # rep_var.breakpoints = [-50.0, 0.0, 10.0, 20.0, 30.0, 40.0]
-        # len = 6, len - 2 = 4. So implied_index will be min(bisect_left_result, 4).
-
-        expected_piecewise_constant_relation = {}
-        expected_constraints_count = 0
-
-        x_mid_values = [
-            (self.var_x.breakpoints[i + 1] + bp) / 2
-            for i, bp in enumerate(self.var_x.breakpoints[:-1])
-        ]
-        y_mid_values = [
-            (self.var_y.breakpoints[i + 1] + bp) / 2
-            for i, bp in enumerate(self.var_y.breakpoints[:-1])
-        ]
-        z_mid_values = [
-            (self.var_z.breakpoints[i + 1] + bp) / 2
-            for i, bp in enumerate(self.var_z.breakpoints[:-1])
-        ]
-
-        all_mid_values_with_indices = [
-            [(val, i) for i, val in enumerate(x_mid_values)],
-            [(val, i) for i, val in enumerate(y_mid_values)],
-            [(val, i) for i, val in enumerate(z_mid_values)],
-        ]
-        for combination_with_indices in itertools.product(*all_mid_values_with_indices):
-            implied_value = 1.0
-            current_variable_indices = []
-            for mid_value, index in combination_with_indices:
-                implied_value *= mid_value
-                current_variable_indices.append(index)
-
-            implied_index = min(
-                bisect.bisect_left(rep_var.breakpoints, implied_value) - 1,
-                len(rep_var.breakpoints) - 2,
-            )
-            expected_piecewise_constant_relation[tuple(current_variable_indices)] = (
-                implied_index,
-            )
-            expected_constraints_count += 1
-
-            # Verify a few specific constraints
-            constraint_name = (
-                f"mc_{multilinear_expr.name}_"
-                f"{'_'.join(map(str, current_variable_indices))}"
-            )
-            self.assertIn(constraint_name, self.model_data.constraints)
-            c = self.model_data.constraints[constraint_name]
-            self.assertEqual(c.name, constraint_name)
-            self.assertEqual(c.con_type, "<=")
-            self.assertEqual(c.rhs, len(variables) - 1)
-
-            expected_vars = [(-1.0, rep_var.pwl_variables_binary[implied_index])]
-            for var_idx, index_in_combination in enumerate(current_variable_indices):
-                expected_vars.append(
-                    (
-                        1.0,
-                        multilinear_expr.variables[var_idx].pwl_variables_binary[
-                            index_in_combination
-                        ],
-                    )
-                )
-            self.assertEqual(set(c.variables), set(expected_vars))
-
+            expr._get_implied_index_from_implied_value(15), 0
+        )  # Exactly on breakpoint
+        self.assertEqual(expr._get_implied_index_from_implied_value(45), 2)
         self.assertEqual(
-            multilinear_expr.piecewise_constant_relation,
-            expected_piecewise_constant_relation,
+            expr._get_implied_index_from_implied_value(100), 3
+        )  # Upper bound
+        self.assertEqual(
+            expr._get_implied_index_from_implied_value(200), 3
+        )  # Beyond upper bound
+
+    def test_extract_mpip_relation_3_vars(self):
+        """Test the main MPIP relation extraction method with three variables."""
+        self.x.breakpoints = [0, 1]
+        self.y.breakpoints = [10, 12]
+        self.z.breakpoints = [2, 3]
+        self.rep_var.breakpoints = [0, 22, 40]
+        self.rep_var.is_discretized = True
+
+        expr = MultilinearExpression(
+            "mpip_3var", self.model_data, [self.x, self.y, self.z], 0, self.rep_var
         )
-        self.assertEqual(len(self.model_data.constraints), expected_constraints_count)
+
+        # Test with approximation = False (exact interval)
+        expr.extract_mpip_relation(approximation=False)
+        expected_exact = {
+            # Only one combination possible for each var
+            (0, 0, 0): (0, 1),  # x[0,1],y[10,12],z[2,3] -> prod[0, 36] -> indices(0,1)
+        }
+        self.assertDictEqual(expr.piecewise_constant_relation, expected_exact)
+
+        # Test with approximation = True
+        expr.extract_mpip_relation(approximation=True)
+        expected_approx = {
+            # Mid values (0.5, 11, 2.5) -> prod 13.75 -> index 0
+            (0, 0, 0): (0,)
+        }
+        self.assertDictEqual(expr.piecewise_constant_relation, expected_approx)
 
 
 if __name__ == "__main__":
