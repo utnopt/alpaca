@@ -14,7 +14,7 @@ class PWLMethod:
         self.variable = variable
         self.pwl_variables_binary: list[var.Variable] = []
         self.pwl_variables_continuous: list[var.Variable] = []
-        self.pwl_constraints: list[con.Constraint] = []
+        self.pwl_constraints: list[con.LinearConstraint] = []
         self._represent_domain()
 
     def _represent_domain(self):
@@ -22,5 +22,5 @@ class PWLMethod:
 
     def couple_domain_to_function_value_one_dim(
         self, expression: ode.OneDimExpression, approximation=False
-    ) -> list[con.Constraint]:
+    ) -> list[con.LinearConstraint]:
         """Couple the domain representation to the function value representation."""

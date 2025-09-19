@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 class LinearExpression(exn.Expression):
-    """Represents a linear expression z = ax + t.
+    """Represents a linear expression z = a^T x + t.
 
     Attributes:
         name: Identifier for the expression
@@ -48,7 +48,7 @@ class LinearExpression(exn.Expression):
     def add_constraint_from_linear_expression(self):
         """Add constraint from linear expression."""
         self.model_data.add_constraint(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name(self.name),
                 con_type=lsf.constraint_eq(),
                 rhs=-self.constant,

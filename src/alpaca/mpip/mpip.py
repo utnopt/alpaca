@@ -12,7 +12,21 @@ from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class MPIP:  # pylint: disable=too-many-instance-attributes
-    """Multipartite Implication Polytope."""
+    """
+    Multipartite Implication Polytope (MPIP) structure.
+    The underlying mathematical structure for the logical conditions introduced
+     in this class can be described by implication polytopes. When a
+    continuous variable's domain is discretized, a set of binary variables is
+    introduced to represent which interval the continuous variable falls into.
+    The constraints that dictate that exactly one binary variable can be active
+    (an SOS1 constraint) and the subsequent implications on the model's
+    functions and other variables form a system of conditional relations.
+    For a deeper theoretical understanding of the polytopes governing such
+    conditional relationships between sets of binary variables, see:
+    Burlacu, Gemander and Kuen (2024): The Bipartite Implication Polytope:
+    Conditional Relations over Multiple Sets of Binary Variables.
+    Link: https://optimization-online.org/?p=26208
+    """
 
     def __init__(self, mpip_id: str) -> None:
         """Initialize MPIP instance."""

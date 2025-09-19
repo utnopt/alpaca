@@ -14,7 +14,7 @@ import math
 # Import the actual classes being tested or needed for the tests
 from alpaca.model_buildup.bound_propagator import BoundPropagator
 from alpaca.model_data.variable import Variable
-from alpaca.model_data.constraint import Constraint
+from alpaca.model_data.constraint import LinearConstraint
 from alpaca.expressions.linear_expression import LinearExpression
 from alpaca.expressions.multilinear_expression import MultilinearExpression
 from alpaca.expressions.one_dim_expression import (
@@ -81,7 +81,7 @@ class TestBoundPropagator(unittest.TestCase):
         x_var = Variable("x", lb=0, ub=10)
         y_var = Variable("y", lb=0, ub=10)
         self.model_data.variables = {"x": x_var, "y": y_var}
-        constraint = Constraint(
+        constraint = LinearConstraint(
             "c1", con_type="==", rhs=10, variables=[(1.0, x_var), (1.0, y_var)]
         )
         self.model_data.constraints = {"c1": constraint}
@@ -93,7 +93,7 @@ class TestBoundPropagator(unittest.TestCase):
         self.assertEqual(y_var.ub, 10)
 
         # Propagate bounds
-        self.propagator.propagate_linear_constraints()
+        self.propagator._propagate_linear_constraints()
 
         # Bounds should not change in this symmetric case
         self.assertEqual(x_var.lb, 0)
@@ -104,7 +104,7 @@ class TestBoundPropagator(unittest.TestCase):
         # Now, tighten one variable's bounds and re-propagate
         x_var.lb = 2
         x_var.ub = 5
-        self.propagator.propagate_linear_constraints()
+        self.propagator._propagate_linear_constraints()
 
         # The bounds of y should tighten
         self.assertEqual(y_var.lb, 5)  # 10 (rhs) - 5 (x.ub) = 5
@@ -115,12 +115,12 @@ class TestBoundPropagator(unittest.TestCase):
         x_var = Variable("x", lb=0, ub=10)
         y_var = Variable("y", lb=0, ub=5)
         self.model_data.variables = {"x": x_var, "y": y_var}
-        constraint = Constraint(
+        constraint = LinearConstraint(
             "c1", con_type="==", rhs=5, variables=[(2.0, x_var), (-3.0, y_var)]
         )
         self.model_data.constraints = {"c1": constraint}
 
-        self.propagator.propagate_linear_constraints()
+        self.propagator._propagate_linear_constraints()
 
         # Expected bounds for x after one pass:
         # From 2x = 5 + 3y:
@@ -151,7 +151,7 @@ class TestBoundPropagator(unittest.TestCase):
         lin_expr.constant = 5.0
         self.model_data.expressions.linear_expressions["le1"] = lin_expr
 
-        self.propagator.propagate_expressions()
+        self.propagator._propagate_expressions()
 
         # Calculate expected bounds for z
         # lb = 5 + (2 * 1) + (-1 * 4) = 5 + 2 - 4 = 3
@@ -175,7 +175,7 @@ class TestBoundPropagator(unittest.TestCase):
         )
         self.model_data.expressions.multilinear_expressions["ml1"] = ml_expr
 
-        self.propagator.propagate_expressions()
+        self.propagator._propagate_expressions()
 
         # Expected: min/max of {-2*-4, -2*5, 3*-4, 3*5} = {8, -10, -12, 15}
         self.assertEqual(z_var.lb, -12)
@@ -225,7 +225,7 @@ class TestBoundPropagator(unittest.TestCase):
             "cos1": cos_expr,
         }
 
-        self.propagator.propagate_expressions()
+        self.propagator._propagate_expressions()
 
         # Sine and Cosine bounds should always be tightened to [-1, 1]
         self.assertEqual(y_sin.lb, -1)

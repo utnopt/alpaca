@@ -83,7 +83,7 @@ class OsilReader:
             return
         for c in cons_tags:
             constraint = self.model_data.add_constraint(
-                con.Constraint(lsf.con_name(len(self.model_data.constraints) - 1))
+                con.LinearConstraint(lsf.con_name(len(self.model_data.constraints) - 1))
             )
             lb = c.get(lsf.osil_attr_lb())
             ub = c.get(lsf.osil_attr_ub())
@@ -100,7 +100,7 @@ class OsilReader:
             lsf.osil_tag_obj()
         )[0]
         constraint = self.model_data.add_constraint(
-            con.Constraint(lsf.obj_con_name(), con_type=lsf.constraint_leq())
+            con.LinearConstraint(lsf.obj_con_name(), con_type=lsf.constraint_leq())
         )
         constraint.variables.append(
             (-1.0, self.model_data.variables[lsf.objective_var()])

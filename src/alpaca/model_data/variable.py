@@ -56,7 +56,7 @@ class Variable:  # pylint: disable=too-many-instance-attributes
 
     def add_nonlinearity_to_occurring_in(self, nonlinearity_type: str) -> None:
         """Save in which types of nonlinearities the variable occurs.
-        To determine the optimal breakpoint locations.
+        To determine the optimal breakpoint locations later in breakpoint_generator.py.
         """
         if nonlinearity_type not in self.occurring_in:
             self.occurring_in.append(nonlinearity_type)

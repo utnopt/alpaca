@@ -24,16 +24,21 @@ class BoundPropagator:
     def __init__(self, model_data: ModelData):
         self.model_data = model_data
 
-    def propagate_linear_constraints(self):
-        """Performs bound propagation on linear equality constraints."""
-        logger.info(lsf.info_propagate_bounds_equations())
+    def propagate_bounds(self):
+        """Performs bound propagation on constraints and expressions."""
+        logger.info(lsf.info_propagate_bounds())
         for _ in range(self.model_data.settings.bound_propagation_rounds):
-            for constraint in self.model_data.constraints.values():
-                if constraint.con_type == lsf.constraint_eq():
-                    self._propagate_bounds_equation(constraint)
+            self._propagate_linear_constraints()
+            self._propagate_expressions()
+
+    def _propagate_linear_constraints(self):
+        """Performs bound propagation on linear equality constraints."""
+        for constraint in self.model_data.constraints.values():
+            if constraint.con_type == lsf.constraint_eq():
+                self._propagate_bounds_equation(constraint)
 
     @staticmethod
-    def _propagate_bounds_equation(constraint: con.Constraint):
+    def _propagate_bounds_equation(constraint: con.LinearConstraint):
         total_min = total_max = 0
         for a_j, x_j in constraint.variables:
             if a_j > 0:
@@ -64,21 +69,19 @@ class BoundPropagator:
                 else:  # a_i < 0
                     x_i.ub = min(x_i.ub, (constraint.rhs - other_max) / a_i)
 
-    def propagate_expressions(self):
+    def _propagate_expressions(self):
         """Performs bound propagation on all expressions for a set number of rounds."""
-        logger.info(lsf.info_propagate_bounds_expressions())
         sorted_expressions = sorted(
             self.model_data.expressions.all_low_dim_expressions(),
             key=lambda e: -e.level,
         )
-        for _ in range(self.model_data.settings.bound_propagation_rounds):
-            for expression in sorted_expressions:
-                if isinstance(expression, ode.OneDimExpression):
-                    self._propagate_bounds_one_dim_expression(expression)
-                elif isinstance(expression, lie.LinearExpression):
-                    self._propagate_bounds_linear_expressions(expression)
-                else:
-                    self._propagate_bounds_multilinear_expressions(expression)
+        for expression in sorted_expressions:
+            if isinstance(expression, ode.OneDimExpression):
+                self._propagate_bounds_one_dim_expression(expression)
+            elif isinstance(expression, lie.LinearExpression):
+                self._propagate_bounds_linear_expressions(expression)
+            else:
+                self._propagate_bounds_multilinear_expressions(expression)
 
     @staticmethod
     def _propagate_bounds_one_dim_expression(expression: ode.OneDimExpression):

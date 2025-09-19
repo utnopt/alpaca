@@ -293,12 +293,8 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return f"[{cls._get_timestamp()}] Read osil data..."
 
     @classmethod
-    def info_propagate_bounds_equations(cls) -> str:
-        return f"[{cls._get_timestamp()}] Propagate bounds equations..."
-
-    @classmethod
-    def info_propagate_bounds_expressions(cls) -> str:
-        return f"[{cls._get_timestamp()}] Propagate bounds expressions..."
+    def info_propagate_bounds(cls) -> str:
+        return f"[{cls._get_timestamp()}] Propagate bounds..."
 
     @classmethod
     def info_create_piecewise_linear_relaxation(cls) -> str:

@@ -46,7 +46,7 @@ class BilinearMixedBinaryExpression(mle.MultilinearExpression):
         """Add indicator constraints for bilinear mixed binary expressions."""
         b_var, c_var = tuple(self.variables)
         self.model_data.add_constraint(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_indicator_bilinear_mixed_binary_1(self.name),
                 con_type=lsf.constraint_leq(),
                 variables=[
@@ -57,7 +57,7 @@ class BilinearMixedBinaryExpression(mle.MultilinearExpression):
             )
         )
         self.model_data.add_constraint(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_indicator_bilinear_mixed_binary_2(self.name),
                 con_type=lsf.constraint_geq(),
                 variables=[
@@ -68,7 +68,7 @@ class BilinearMixedBinaryExpression(mle.MultilinearExpression):
             )
         )
         self.model_data.add_constraint(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_indicator_bilinear_mixed_binary_3(self.name),
                 con_type=lsf.constraint_leq(),
                 variables=[
@@ -80,7 +80,7 @@ class BilinearMixedBinaryExpression(mle.MultilinearExpression):
             )
         )
         self.model_data.add_constraint(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_indicator_bilinear_mixed_binary_4(self.name),
                 con_type=lsf.constraint_geq(),
                 variables=[
