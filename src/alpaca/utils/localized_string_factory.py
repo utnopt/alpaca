@@ -240,6 +240,10 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return "Subclass must implement method."
 
     @classmethod
+    def error_nonlinearity_not_implemented(cls, nonlinearity_type: str) -> str:
+        return f"Nonlinearity '{nonlinearity_type}' not implemented."
+
+    @classmethod
     def warning_expression_type_not_supported(cls, expr_type: str) -> str:
         return f"Expression type '{expr_type}' is not supported."
 
@@ -250,6 +254,13 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return (
             f"Couldn't remove previous log file handler with"
             f" files {handler} due to error {ex}"
+        )
+
+    @classmethod
+    def warning_mpip_features_disabled_for_pwl_method_none(cls):
+        return (
+            "MPIP features are disabled when pwl_method is set to 'none'. "
+            "Set pwl_method to 'multiple_choice' or 'delta' to enable MPIP features."
         )
 
     @classmethod
@@ -385,6 +396,10 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
     @classmethod
     def pwl_method_delta(cls) -> str:
         return "delta"
+
+    @classmethod
+    def pwl_method_none(cls) -> str:
+        return "none"
 
     @classmethod
     def var_name_pwl_multiple_choice_binary(

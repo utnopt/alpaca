@@ -37,12 +37,21 @@ class Solver:
 
     def _activate_mpip_features(self):
         if self.settings.feature_mpip_mccormick:
+            if self.settings.pwl_method == lsf.pwl_method_none():
+                logger.warning(lsf.warning_mpip_features_disabled_for_pwl_method_none())
+                return
             self.mpip_separation_handler.add_mc_cormick_constraints()
         if self.settings.feature_mpip_stripe:
+            if self.settings.pwl_method == lsf.pwl_method_none():
+                logger.warning(lsf.warning_mpip_features_disabled_for_pwl_method_none())
+                return
             self.mpip_separation_handler.add_stripe_constraints()
 
     def _attach_event_handlers_scip(self):
         if self.settings.feature_mpip_separation:
+            if self.settings.pwl_method == lsf.pwl_method_none():
+                logger.warning(lsf.warning_mpip_features_disabled_for_pwl_method_none())
+                return
             scip_mpip_separation = sw.ScipSeparation(self.mpip_separation_handler)
             for mpip in self.mpip_separation_handler.mpip_handler.mpip_dict.values():
                 mpip.separator.separation_handler = scip_mpip_separation
@@ -56,6 +65,9 @@ class Solver:
 
     def _attach_event_handlers_gurobi(self):
         if self.settings.feature_mpip_separation:
+            if self.settings.pwl_method == lsf.pwl_method_none():
+                logger.warning(lsf.warning_mpip_features_disabled_for_pwl_method_none())
+                return
             # pylint: disable=protected-access
             self.external_solver.opt_model.model._mpip_separation_handler = (
                 self.mpip_separation_handler

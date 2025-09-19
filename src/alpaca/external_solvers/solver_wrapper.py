@@ -4,6 +4,7 @@
 """
 from typing import Any
 import gurobipy as gp
+from gurobipy import nlfunc
 import pyscipopt as scip
 from pyscipopt import SCIP_RESULT
 
@@ -38,6 +39,14 @@ class SolverWrapper:
         if self.mip_solver == lsf.solver_name_gurobi():
             return self.model.addConstr(expression, name=name)
         return self.model.addCons(expression, name=name)
+
+    def add_nonlinear_constraint(
+        self, res_var: Any, expression: Any, name: str = ""
+    ) -> Any:
+        """Add a nonlinear constraint to the model."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            return self.model.addGenConstrNL(res_var, expression, name)
+        return self.model.addCons(res_var == expression, name=name)
 
     def add_variable(  # pylint: disable=too-many-arguments, too-many-positional-arguments
         self,
@@ -167,6 +176,12 @@ class SolverWrapper:
             lsf.mip_solver_parameter_thread_limit(self.mip_solver), thread_limit
         )
 
+    def get_nonlinear_function(self, nonlinearity_type: str) -> Any:
+        """Get nonlinear function based on solver type."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            return get_nonlinear_function_gurobi(nonlinearity_type)
+        return get_nonlinear_function_scip(nonlinearity_type)
+
 
 class GurobiCut:
     """A class representing a cut in Gurobi."""
@@ -210,3 +225,64 @@ def gurobi_separation_callback(grb_model, where):
     if where == gp.GRB.Callback.MIPNODE:
         if grb_model.cbGet(gp.GRB.Callback.MIPNODE_STATUS) == gp.GRB.Status.OPTIMAL:
             grb_model._mpip_separation_handler.separate_solution()  # pylint: disable=protected-access
+
+
+def get_nonlinear_function_scip(  # pylint: disable=too-many-return-statements
+    nonlinearity_type: str,
+) -> Any:
+    """Get scip nonlinear function."""
+
+    if nonlinearity_type == lsf.nonlinearity_type_square():
+        return lambda x: x**2
+    if nonlinearity_type == lsf.nonlinearity_type_exp():
+        return scip.exp
+    if nonlinearity_type == lsf.nonlinearity_type_ln():
+        return scip.log
+    if nonlinearity_type == lsf.nonlinearity_type_sqrt():
+        return scip.sqrt
+    if nonlinearity_type == lsf.nonlinearity_type_sin():
+        return scip.sin
+    if nonlinearity_type == lsf.nonlinearity_type_cos():
+        return scip.cos
+    if nonlinearity_type == lsf.nonlinearity_type_log10():
+        return lambda x: scip.log(x) / scip.log(10)
+    if nonlinearity_type == lsf.nonlinearity_type_tanh():
+        return lambda x: (1 - scip.exp(-2 * x)) / (1 + scip.exp(-2 * x))
+    if nonlinearity_type == lsf.nonlinearity_type_inverse():
+        return lambda x: x**-1
+    if nonlinearity_type == lsf.nonlinearity_type_xabsx():
+        return lambda x: x * abs(x)
+    if nonlinearity_type == lsf.nonlinearity_type_negate():
+        return lambda x: -x
+
+    raise NotImplementedError(lsf.error_nonlinearity_not_implemented(nonlinearity_type))
+
+
+def get_nonlinear_function_gurobi(  # pylint: disable=too-many-return-statements
+    nonlinearity_type: str,
+) -> Any:
+    """Get gurobi nonlinear function."""
+    if nonlinearity_type == lsf.nonlinearity_type_square():
+        return nlfunc.square
+    if nonlinearity_type == lsf.nonlinearity_type_exp():
+        return nlfunc.exp
+    if nonlinearity_type == lsf.nonlinearity_type_ln():
+        return nlfunc.log
+    if nonlinearity_type == lsf.nonlinearity_type_sqrt():
+        return nlfunc.sqrt
+    if nonlinearity_type == lsf.nonlinearity_type_sin():
+        return nlfunc.sin
+    if nonlinearity_type == lsf.nonlinearity_type_cos():
+        return nlfunc.cos
+    if nonlinearity_type == lsf.nonlinearity_type_log10():
+        return nlfunc.log10
+    if nonlinearity_type == lsf.nonlinearity_type_tanh():
+        return lambda x: (1 - nlfunc.exp(-2 * x)) / (1 + nlfunc.exp(-2 * x))
+    if nonlinearity_type == lsf.nonlinearity_type_inverse():
+        return lambda x: 1 / x
+    if nonlinearity_type == lsf.nonlinearity_type_xabsx():
+        return lambda x: x * gp.abs_(x)
+    if nonlinearity_type == lsf.nonlinearity_type_negate():
+        return lambda x: -x
+
+    raise NotImplementedError(lsf.error_nonlinearity_not_implemented(nonlinearity_type))

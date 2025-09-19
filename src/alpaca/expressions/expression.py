@@ -45,6 +45,7 @@ class Expression:
             )
         )
         self.level = level
+        self.solver_constraint = None
 
     def __repr__(self):
         return self.name
