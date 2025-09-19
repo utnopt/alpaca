@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 class MultilinearExpression(exn.Expression):
-    """Represents a multilinear expression with multiple variables.
+    """Represents a multilinear expression with multiple variables z = x_1 * x_2 * x_3 * x_n.
 
     A multilinear expression is a product of multiple variables where each variable appears
     with degree at most 1. The expression is represented by a set of variables and a

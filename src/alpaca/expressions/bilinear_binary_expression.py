@@ -55,7 +55,7 @@ class BilinearBinaryExpression:
     def _add_mc_cormick_constraints(self):
         """Add McCormick constraints for bilinear binary expressions."""
         self.model_data.add_constraint(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_mc_cormick_binary_ub_ub(self.name),
                 con_type=lsf.constraint_geq(),
                 variables=[
@@ -67,7 +67,7 @@ class BilinearBinaryExpression:
             )
         )
         self.model_data.add_constraint(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_mc_cormick_binary_ub_lb(self.name),
                 con_type=lsf.constraint_geq(),
                 variables=[(1.0, self.first_var), (-1.0, self.representative_variable)],
@@ -75,7 +75,7 @@ class BilinearBinaryExpression:
             )
         )
         self.model_data.add_constraint(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_mc_cormick_binary_lb_ub(self.name),
                 con_type=lsf.constraint_geq(),
                 variables=[

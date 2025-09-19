@@ -320,7 +320,7 @@ class AbsExpression(OneDimExpression):
             )
         )
         model_data.add_constraint(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_abs_reformulation_negative(self.variable.name),
                 con_type=lsf.constraint_geq(),
                 variables=[
@@ -330,7 +330,7 @@ class AbsExpression(OneDimExpression):
             )
         )
         model_data.add_constraint(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_abs_reformulation_positive(self.variable.name),
                 con_type=lsf.constraint_geq(),
                 variables=[
@@ -340,7 +340,7 @@ class AbsExpression(OneDimExpression):
             )
         )
         model_data.add_constraint(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_abs_reformulation_negative_big_m(self.variable.name),
                 con_type=lsf.constraint_leq(),
                 variables=[
@@ -351,7 +351,7 @@ class AbsExpression(OneDimExpression):
             )
         )
         model_data.add_constraint(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_abs_reformulation_positive_big_m(self.variable.name),
                 con_type=lsf.constraint_leq(),
                 variables=[

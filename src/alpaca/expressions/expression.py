@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 class Expression:
     """Represents an expression z = ...
+    The expression can be linear, bilinear, multilinear or one-dimensional.
 
     Attributes:
         name: Identifier for the expression

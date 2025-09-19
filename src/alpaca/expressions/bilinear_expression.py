@@ -94,7 +94,7 @@ class BilinearExpression(mle.MultilinearExpression):
 
         # McCormick envelope constraints
         self.model_data.add_constraint(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_mc_cormick_continuous_lb_ub(self.name),
                 con_type=lsf.constraint_leq(),
                 variables=[
@@ -106,7 +106,7 @@ class BilinearExpression(mle.MultilinearExpression):
             )
         )
         self.model_data.add_constraint(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_mc_cormick_continuous_ub_lb(self.name),
                 con_type=lsf.constraint_leq(),
                 variables=[
@@ -118,7 +118,7 @@ class BilinearExpression(mle.MultilinearExpression):
             )
         )
         self.model_data.add_constraint(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_mc_cormick_continuous_lb_lb(self.name),
                 con_type=lsf.constraint_geq(),
                 variables=[
@@ -130,7 +130,7 @@ class BilinearExpression(mle.MultilinearExpression):
             )
         )
         self.model_data.add_constraint(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_mc_cormick_continuous_ub_ub(self.name),
                 con_type=lsf.constraint_geq(),
                 variables=[

@@ -6,7 +6,7 @@ from alpaca.model_data import variable as var
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
-class Constraint:
+class LinearConstraint:
     """Represents a linear constraint in an optimization model.
 
     Constraints are defined by their name, type (e.g., inequality/equality),

@@ -46,11 +46,11 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         self.variables: dict[str, var.Variable] = {
             lsf.objective_var(): var.Variable(lsf.objective_var())
         }
-        self.constraints: dict[str, con.Constraint] = {}
+        self.constraints: dict[str, con.LinearConstraint] = {}
         self.expressions = eco.ExpressionContainer()
         self._build_model_from_osil_data()
 
-    def add_constraint(self, constraint: con.Constraint) -> con.Constraint:
+    def add_constraint(self, constraint: con.LinearConstraint) -> con.LinearConstraint:
         """Add a constraint to the model.
 
         Args:
@@ -283,11 +283,6 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         # This includes variables, objective, constraints, and all expressions.
         osr.OsilReader(self).build_from_osil()
 
-        # Step 2: Propagate bounds through the linear part of the model.
-        # This helps tighten variable bounds before handling nonlinearities.
-        bound_propagator = bpr.BoundPropagator(self)
-        bound_propagator.propagate_linear_constraints()
-
         # Step 3: Decompose complex nonlinear expression trees.
         etr.ExpressionTree(self).decompose()
 
@@ -295,8 +290,8 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         multilinear_handler = mlh.MultilinearHandler(self)
         multilinear_handler.handle()
 
-        # Step 5: Propagate bounds again, now through the expression structures.
-        bound_propagator.propagate_expressions()
+        # Step 5: Propagate variable bounds through the expression structures.
+        bpr.BoundPropagator(self).propagate_bounds()
 
         if self.settings.pwl_method == lsf.pwl_method_none():
             self._translate_linear_expressions_to_constraints()

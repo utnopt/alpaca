@@ -31,7 +31,7 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         self.multilinear_expressions = model_data.expressions.multilinear_expressions
         self.mpip_dict: dict[str, mp.MPIP] = {}
         self.mpip_counter: int = 0
-        self._find_mpip_instances_in_nonlinear_expressions()
+        self._extract_mpip_instances_in_nonlinear_expressions()
         self._find_mpip_instances_in_multilinear_and_bilinear_expressions()
         self._build_mpip_instances()
 
@@ -40,7 +40,7 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
             if not mpip.relation:
                 mpip.build_mpip()
 
-    def _find_mpip_instances_in_nonlinear_expressions(self) -> None:
+    def _extract_mpip_instances_in_nonlinear_expressions(self) -> None:
         """Extract mpip instances from nonlinear expression trees."""
         for nonlinear_expression in self.first_level_nonlinear_expression_values:
             self._process_expression_tree(nonlinear_expression)

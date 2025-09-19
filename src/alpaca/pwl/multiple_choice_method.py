@@ -49,7 +49,7 @@ class MultipleChoiceMethod(pwm.PWLMethod):
 
     def _add_pwl_constraints_multiple_choice(self) -> None:
         self.pwl_constraints.append(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_pwl_multiple_choice_variable_link_continuous(
                     self.variable.name
                 ),
@@ -61,7 +61,7 @@ class MultipleChoiceMethod(pwm.PWLMethod):
             )
         )
         self.pwl_constraints.append(
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_pwl_multiple_choice_sos(self.variable.name),
                 con_type=lsf.constraint_eq(),
                 variables=[(1.0, variable) for variable in self.pwl_variables_binary],
@@ -70,7 +70,7 @@ class MultipleChoiceMethod(pwm.PWLMethod):
         )
         for breakpoint_index in range(len(self.variable.breakpoints) - 1):
             self.pwl_constraints.append(
-                con.Constraint(
+                con.LinearConstraint(
                     lsf.con_name_pwl_multiple_choice_interval_lb(
                         self.variable.name, breakpoint_index
                     ),
@@ -85,7 +85,7 @@ class MultipleChoiceMethod(pwm.PWLMethod):
                 )
             )
             self.pwl_constraints.append(
-                con.Constraint(
+                con.LinearConstraint(
                     lsf.con_name_pwl_multiple_choice_interval_ub(
                         self.variable.name, breakpoint_index
                     ),
@@ -102,7 +102,7 @@ class MultipleChoiceMethod(pwm.PWLMethod):
 
     def couple_domain_to_function_value_one_dim(
         self, expression: ode.OneDimExpression, approximation=False
-    ) -> list[con.Constraint]:
+    ) -> list[con.LinearConstraint]:
         """Apply piecewise linear relaxation to the expression.
         If approximation is True, the approximation error term is set to 0
         """
@@ -125,7 +125,7 @@ class MultipleChoiceMethod(pwm.PWLMethod):
             variables_in_constraint.append((slope, self.pwl_variables_continuous[i]))
             variables_in_constraint.append((intercept, self.pwl_variables_binary[i]))
         return [
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_pwl_multiple_choice_approximation(expression.name),
                 con_type=lsf.constraint_eq(),
                 variables=variables_in_constraint,
@@ -159,13 +159,13 @@ class MultipleChoiceMethod(pwm.PWLMethod):
                 (intercept + max_deviation, self.pwl_variables_binary[i])
             )
         return [
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_pwl_multiple_choice_underestimation(expression.name),
                 con_type=lsf.constraint_leq(),
                 variables=continuous_variables_in_constraint
                 + binary_variables_in_underestimating_constraint,
             ),
-            con.Constraint(
+            con.LinearConstraint(
                 lsf.con_name_pwl_multiple_choice_overestimation(expression.name),
                 con_type=lsf.constraint_geq(),
                 variables=continuous_variables_in_constraint
@@ -227,7 +227,7 @@ class MultipleChoiceMethod(pwm.PWLMethod):
             )
             for var_idx, index_in_combination in enumerate(implying_variable_indices)
         ]
-        constraint = con.Constraint(
+        constraint = con.LinearConstraint(
             name=lsf.con_name_pwc_multiple_choice_multilinear(
                 expression.name, implying_variable_indices
             ),
