@@ -27,7 +27,7 @@ class MIPModel:
         """
         self._add_variables()
         self._add_constraints()
-        if self.settings.pwl_method == "none":
+        if self.settings.pwl_method == lsf.pwl_method_none():
             self._add_nonlinear_constraints()
         self._add_objective()
         self._set_parameters()
