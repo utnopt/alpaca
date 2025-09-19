@@ -109,6 +109,11 @@ class SquareExpression(OneDimExpression):
     the square of the input variable.
     """
 
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for square expression."""
+        return lsf.nonlinearity_type_square()
+
     def f(self, x: float) -> float:
         return x**2
 
@@ -123,6 +128,11 @@ class ExponentialExpression(OneDimExpression):
     A one-dimensional expression where the representative variable equals
     the exponential function (e raised to the power) of the input variable.
     """
+
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for exponential expression."""
+        return lsf.nonlinearity_type_exp()
 
     def f(self, x: float) -> float:
         return math.exp(x)
@@ -140,6 +150,11 @@ class LnExpression(OneDimExpression):
     A one-dimensional expression where the representative variable equals
     the natural logarithm of the input variable.
     """
+
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for natural logarithm expression."""
+        return lsf.nonlinearity_type_ln()
 
     def f(self, x: float) -> float:
         if x == 0:
@@ -160,6 +175,11 @@ class SquareRootExpression(OneDimExpression):
     the square root of the input variable.
     """
 
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for square root expression."""
+        return lsf.nonlinearity_type_sqrt()
+
     def f(self, x: float) -> float:
         return math.sqrt(x)
 
@@ -176,6 +196,11 @@ class SineExpression(OneDimExpression):
     A one-dimensional expression where the representative variable equals
     the sine of the input variable (in radians).
     """
+
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for sine expression."""
+        return lsf.nonlinearity_type_sin()
 
     def f(self, x: float) -> float:
         return math.sin(x)
@@ -213,6 +238,11 @@ class CosineExpression(OneDimExpression):
     A one-dimensional expression where the representative variable equals
     the cosine of the input variable (in radians).
     """
+
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for cosine expression."""
+        return lsf.nonlinearity_type_cos()
 
     def f(self, x: float) -> float:
         return math.cos(x)
@@ -252,6 +282,11 @@ class LogExpression(OneDimExpression):
     the base-10 logarithm of the input variable.
     """
 
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for base-10 logarithm expression."""
+        return lsf.nonlinearity_type_log10()
+
     def f(self, x: float) -> float:
         if x == 0:
             return -s.StaticSettings.infinity
@@ -270,6 +305,11 @@ class AbsExpression(OneDimExpression):
     A one-dimensional expression where the representative variable equals
     the absolute value of the input variable.
     """
+
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for absolute value expression."""
+        return lsf.nonlinearity_type_xabsx()
 
     def handle_abs_expression(self, model_data: ModelData) -> None:
         """Add constraints to model to represent the absolute value function."""
@@ -352,6 +392,11 @@ class TangensHExpression(OneDimExpression):
     the hyperbolic tangent of the input variable.
     """
 
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for hyperbolic tangent expression."""
+        return lsf.nonlinearity_type_tanh()
+
     def f(self, x: float) -> float:
         return math.tanh(x)
 
@@ -376,6 +421,11 @@ class InverseExpression(OneDimExpression):
     A one-dimensional expression where the representative variable equals
     the inverse of the input variable.
     """
+
+    @classmethod
+    def nonlinearity_type(cls) -> str:
+        """Return the nonlinearity type for inverse expression."""
+        return lsf.nonlinearity_type_inverse()
 
     def f(self, x: float) -> float:
         if x == 0:

@@ -5,7 +5,7 @@
 import pyscipopt as scip
 
 from alpaca.utils.logger import logger
-import alpaca.utils.data_handling as udh
+import alpaca.external_solvers.solver_wrapper as sw
 import alpaca.model_data.model_data as mda
 from alpaca.expressions import (
     nonlinear_expression as nle,
@@ -134,7 +134,9 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
             ) / self._continue_mpip_instance(
                 nonlinear_expression.child_expressions[1], mpip
             )
-        scip_function = udh.pyscipopt_nonlinearity(nonlinear_expression.expression_type)
+        scip_function = sw.get_nonlinear_function_scip(
+            nonlinear_expression.expression_type
+        )
         return scip_function(
             self._continue_mpip_instance(
                 nonlinear_expression.child_expressions[0], mpip

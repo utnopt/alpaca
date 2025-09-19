@@ -40,11 +40,14 @@ def run_optimization():
         solver = slv.Solver(external_solver, user_settings)
 
         if user_settings.feature_mpip:
-            mpip_handler = mph.MPIPHandler(model_data)
-            mpip_separation_handler = msh.MPIPSeparationHandler(
-                mpip_handler, external_solver.opt_model
-            )
-            solver.mpip_separation_handler = mpip_separation_handler
+            if user_settings.pwl_method == lsf.pwl_method_none():
+                logger.warning(lsf.warning_mpip_features_disabled_for_pwl_method_none())
+            else:
+                mpip_handler = mph.MPIPHandler(model_data)
+                mpip_separation_handler = msh.MPIPSeparationHandler(
+                    mpip_handler, external_solver.opt_model
+                )
+                solver.mpip_separation_handler = mpip_separation_handler
         runtime = solver.solve_instance()
 
         logger.info(lsf.info_optimization_finished(runtime))

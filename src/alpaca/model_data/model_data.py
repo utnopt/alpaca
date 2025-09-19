@@ -298,6 +298,10 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         # Step 5: Propagate bounds again, now through the expression structures.
         bound_propagator.propagate_expressions()
 
+        if self.settings.pwl_method == lsf.pwl_method_none():
+            self._translate_linear_expressions_to_constraints()
+            return
+
         # Step 6: Add McCormick envelopes for bilinear terms if specified.
         multilinear_handler.add_mccormick_envelopes()
 
