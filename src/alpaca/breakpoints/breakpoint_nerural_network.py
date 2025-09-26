@@ -4,6 +4,9 @@
 """
 import dataclasses
 import random
+import copy
+import io
+import imageio
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -13,18 +16,18 @@ import alpaca.model_data.variable as var
 
 class BreakpointNeuralNetwork:
     """Generates breakpoints using a neural network approach."""
-
     def __init__(
-        self,
-        variable: var.Variable,
-        nr_of_breakpoints: int,
-        learning_rate=0.0001,
-        epochs=20,
+            self,
+            variable: var.Variable,
+            nr_of_breakpoints: int,
+            learning_rate=0.007,
+            epochs=300,
     ):
         self.number_of_breakpoints = nr_of_breakpoints
         self.variable = variable
         self.learning_rate = learning_rate
         self.epochs = epochs
+        self.minimum_distance_from_zero = 0.0
 
         # Network architecture
         # One input neuron, one output neuron, and a hidden layer
@@ -34,28 +37,43 @@ class BreakpointNeuralNetwork:
         self._build_and_train_model()
 
     @staticmethod
-    def _relu(x):
+    def _relu(x, negative_slope=False):
         """ReLU activation function."""
+        if negative_slope:
+            return np.minimum(0, x)
         return np.maximum(0, x)
 
     @staticmethod
-    def _relu_derivative(x):
+    def _relu_derivative(x, negative_slope=False):
         """Derivative of the ReLU function."""
+        if negative_slope:
+            return np.where(x < 0, 1, 0)
         return np.where(x > 0, 1, 0)
 
-    def _forward_pass(self, x):
-        """Performs a forward pass through the network."""
+    def _forward_pass(self, x, weights_and_biases=None):
+        """
+        Performs a forward pass through the network.
+        Accepts an optional weights_and_biases object to plot historical states.
+        """
+        wb = weights_and_biases if weights_and_biases is not None else self.weights_and_biases
+
         # Hidden layer
         hidden_layer_input = (
-            np.dot(x, self.weights_and_biases.weights_hidden)
-            + self.weights_and_biases.bias_hidden
+                np.dot(x, wb.weights_hidden) + wb.bias_hidden
         )
-        hidden_layer_output = self._relu(hidden_layer_input)
+
+        # For columns where the corresponding hidden weight is negative, use the
+        # negative slope ReLU. Otherwise, use the standard ReLU.
+        hidden_layer_output = np.where(
+            wb.weights_hidden < 0,
+            self._relu(hidden_layer_input, negative_slope=True),
+            self._relu(hidden_layer_input, negative_slope=False),
+        )
 
         # Output layer
         output_layer_input = (
-            np.dot(hidden_layer_output, self.weights_and_biases.weights_output)
-            + self.weights_and_biases.bias_output
+                np.dot(hidden_layer_output, wb.weights_output)
+                + wb.bias_output
         )
 
         return output_layer_input, hidden_layer_output
@@ -65,61 +83,102 @@ class BreakpointNeuralNetwork:
         error = y - y_pred
 
         # Gradients for output layer
-        d_weights_output = np.dot(hidden_layer_output.T, error)
         d_bias_output = np.sum(error, axis=0, keepdims=True)
 
         # Gradients for hidden layer
+        # Apply the ReLU derivative conditionally based on the hidden weights
+        relu_derivative_output = np.where(
+            self.weights_and_biases.weights_hidden < 0,
+            self._relu_derivative(hidden_layer_output, negative_slope=True),
+            self._relu_derivative(hidden_layer_output, negative_slope=False),
+        )
         error_hidden = np.dot(
             error, self.weights_and_biases.weights_output.T
-        ) * self._relu_derivative(hidden_layer_output)
+        ) * relu_derivative_output
         d_weights_hidden = np.dot(x.T, error_hidden)
         d_bias_hidden = np.sum(error_hidden, axis=0, keepdims=True)
-
         # Update weights and biases
-        self.weights_and_biases.weights_output += self.learning_rate * d_weights_output
-        self.weights_and_biases.bias_output += self.learning_rate * d_bias_output
-        self.weights_and_biases.weights_hidden += self.learning_rate * d_weights_hidden
-        self.weights_and_biases.bias_hidden += self.learning_rate * d_bias_hidden
+        learning_rate = self.learning_rate / abs(sum(d_bias_hidden[0]))
+        self.weights_and_biases.bias_output += learning_rate * d_bias_output
+        self.weights_and_biases.weights_hidden += learning_rate * d_weights_hidden
+        self.push_weights_from_zero(self.weights_and_biases.weights_hidden)
+        self.weights_and_biases.bias_hidden += learning_rate * d_bias_hidden
 
-    def _plot_pwl_function(self, epoch, x_train, y_train):
-        """Plots the current PWL function approximated by the network."""
-        plt.clf()
+    def push_weights_from_zero(self, weights):
+        """
+        Pushes weights away from zero if they are within a certain threshold.
+        """
+        close_to_zero_mask = np.abs(weights) < self.minimum_distance_from_zero
+        signs = np.sign(weights)
+        signs[signs == 0] = 1
+        new_values = signs * self.minimum_distance_from_zero
+        np.copyto(weights, new_values, where=close_to_zero_mask)
+
+    def _plot_frame(self, epoch, x_train, y_train, weights_and_biases):
+        """Plots a single frame for the animation."""
+        fig, ax = plt.subplots()
 
         # Plot training data
-        plt.scatter(x_train, y_train, s=10, alpha=0.5, label="Training Data")
+        ax.scatter(x_train, y_train, s=10, alpha=0.5, label="Training Data")
 
         # Create a range of x values for plotting the learned function
         x_range = np.linspace(self.variable.lb, self.variable.ub, 200).reshape(-1, 1)
-        y_pred, _ = self._forward_pass(x_range)
+        y_pred, _ = self._forward_pass(x_range, weights_and_biases=weights_and_biases)
 
-        plt.plot(
+        ax.plot(
             x_range, y_pred, color="red", linewidth=2, label="NN Approximation (PWL)"
         )
 
-        # Plot original functions
+        # Plot first original function
         for name, func in self.variable.occurring_in.items():
             y_func = np.vectorize(func)(x_range)
-            plt.plot(x_range, y_func, linestyle="--", label=f"Original: {name}")
+            ax.plot(x_range, y_func, linestyle="--", label=f"Original: {name}")
+            break
 
-        plt.title(f"Epoch {epoch + 1}/{self.epochs}")
-        plt.xlabel("Input")
-        plt.ylabel("Output")
-        plt.legend()
-        plt.grid(True)
-        plt.ylim(np.min(y_train) - 1, np.max(y_train) + 1)  # Adjust y-axis limits
-        plt.pause(0.01)
+        ax.set_title(f"Epoch {epoch + 1}/{self.epochs}")
+        ax.set_xlabel("Input")
+        ax.set_ylabel("Output")
+        ax.legend()
+        ax.grid(True)
+        ax.set_ylim(np.min(y_train) - 1, np.max(y_train) + 1)
+
+        return fig
+
+    def _save_training_animation(self, history, x_train, y_train):
+        """Creates and saves a video from the training history."""
+        logger.info("Creating training animation video...")
+
+        # Limit frames for very long trainings to keep video size reasonable
+        num_frames = min(self.epochs, 200)
+        frame_indices = np.linspace(0, self.epochs - 1, num_frames, dtype=int)
+
+        with imageio.get_writer("training_animation.mp4", fps=50) as writer:
+            for i, epoch_idx in enumerate(frame_indices):
+                wb = history[epoch_idx]
+                fig = self._plot_frame(epoch_idx, x_train, y_train, wb)
+
+                # Save plot to an in-memory buffer
+                buf = io.BytesIO()
+                fig.savefig(buf, format='png')
+                buf.seek(0)
+                image = imageio.imread(buf)
+                writer.append_data(image)
+                plt.close(fig)  # Close the figure to free memory
+
+                logger.info(f"Generated frame {i + 1}/{num_frames}")
+
+        logger.info("Training animation saved")
 
     def _initialize_weights_and_biases(self):
-        """Initializes weights and biases for the neural network.
-        This is the piecewise linear approximation for uniformly distributed breakpoints."""
+        """Initializes weights and biases for the neural network."""
         initial_function = list(self.variable.occurring_in.values())[0]
-        initial_breakpoints = np.linspace(
-            self.variable.lb, self.variable.ub, self.number_of_breakpoints
+        initial_breakpoints = nonlinear_space(
+            self.variable.lb, self.variable.ub, num=self.number_of_breakpoints
         )
         initial_slopes = [
             (
-                initial_function(initial_breakpoints[i + 1])
-                - initial_function(initial_breakpoints[i])
+                    initial_function(initial_breakpoints[i + 1])
+                    - initial_function(initial_breakpoints[i])
             )
             / (initial_breakpoints[i + 1] - initial_breakpoints[i])
             for i in range(len(initial_breakpoints) - 1)
@@ -129,6 +188,7 @@ class BreakpointNeuralNetwork:
             weights_output.append(
                 np.sign(slope - pre_slope) if slope - pre_slope != 0 else 1
             )
+        weights_output = [1 for _ in initial_slopes]
         bias_output = initial_function(initial_breakpoints[0])
         weights_hidden = []
         bias_hidden = []
@@ -161,17 +221,18 @@ class BreakpointNeuralNetwork:
             y_train_list.append(random_func(x_val[0]))
         y_train = np.array(y_train_list).reshape(-1, 1)
 
-        plt.ion()  # Turn on interactive mode for plotting
+        history = []
         logger.info(self.weights_and_biases)
+
         # Training loop
         for epoch in range(self.epochs):
-            # Forward pass on the entire batch
             y_pred, hidden_layer_output = self._forward_pass(x_train)
-            # Calculate loss for logging
-            self._plot_pwl_function(epoch, x_train, y_train)
+
+            # Store a deep copy of the weights and biases for animation creation
+            history.append(copy.deepcopy(self.weights_and_biases))
+
             total_loss = np.mean((y_train - y_pred) ** 2)
 
-            # Backward pass and weight update on the entire batch
             self._backward_pass(x_train, y_train, y_pred, hidden_layer_output)
             logger.info(
                 "Epoch %d/%d, Average Loss: %.4f",
@@ -180,13 +241,12 @@ class BreakpointNeuralNetwork:
                 total_loss,
             )
 
-        plt.ioff()
-        plt.show()
+        # After training, create and save the animation if requested
+        self._save_training_animation(history, x_train, y_train)
 
     def generate_breakpoints(self) -> list[float]:
         """
         Generates breakpoints using the trained neural network.
-        The breakpoints of a ReLU network are where the input to a neuron is zero.
         """
         breakpoints = set()
         for i in range(self.number_of_breakpoints - 1):
@@ -197,7 +257,6 @@ class BreakpointNeuralNetwork:
                 if self.variable.lb <= breakpoint_val <= self.variable.ub:
                     breakpoints.add(breakpoint_val)
 
-        # Add the bounds of the variable as breakpoints
         breakpoints.add(self.variable.lb)
         breakpoints.add(self.variable.ub)
 
@@ -213,3 +272,25 @@ class WeightsAndBiases:
     bias_hidden: np.ndarray | None
     weights_output: np.ndarray | None
     bias_output: np.ndarray | None
+
+
+def nonlinear_space(start, stop, num=50, method='quadratic', power=2):
+    """
+    Similar to np.linspace, but distributes points unevenly over [start, stop].
+    """
+    t = np.linspace(0, 1, num)
+
+    if method == 'quadratic':
+        t = t ** 2
+    elif method == 'sqrt':
+        t = np.sqrt(t)
+    elif method == 'power':
+        t = t ** power
+    elif method == 'log':
+        if start <= 0 or stop <= 0:
+            raise ValueError("Log spacing requires start, stop > 0")
+        return np.logspace(np.log10(start), np.log10(stop), num)
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+    return start + (stop - start) * t
