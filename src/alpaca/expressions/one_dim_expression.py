@@ -48,7 +48,7 @@ class OneDimExpression(exn.Expression):
         """
         super().__init__(name, model_data, level, representative_variable)
         self.variable: var.Variable = variable
-        self.variable.add_nonlinearity_to_occurring_in(self.__class__.__name__)
+        self.variable.add_nonlinearity_to_occurring_in(self.__class__.__name__, self.f)
 
     def get_linear_approximation_function_parameters_for_segment(
         self, var_lb: float, var_ub: float
@@ -66,7 +66,8 @@ class OneDimExpression(exn.Expression):
         """
         return self.name
 
-    def f(self, x: float) -> float:
+    @staticmethod
+    def f(x: float) -> float:
         """Evaluates the function f(x) for the expression."""
         raise NotImplementedError(lsf.error_subclasses_must_implement_method())
 
@@ -109,12 +110,13 @@ class SquareExpression(OneDimExpression):
     the square of the input variable.
     """
 
-    @classmethod
-    def nonlinearity_type(cls) -> str:
+    @staticmethod
+    def nonlinearity_type() -> str:
         """Return the nonlinearity type for square expression."""
         return lsf.nonlinearity_type_square()
 
-    def f(self, x: float) -> float:
+    @staticmethod
+    def f(x: float) -> float:
         return x**2
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
@@ -129,12 +131,13 @@ class ExponentialExpression(OneDimExpression):
     the exponential function (e raised to the power) of the input variable.
     """
 
-    @classmethod
-    def nonlinearity_type(cls) -> str:
+    @staticmethod
+    def nonlinearity_type() -> str:
         """Return the nonlinearity type for exponential expression."""
         return lsf.nonlinearity_type_exp()
 
-    def f(self, x: float) -> float:
+    @staticmethod
+    def f(x: float) -> float:
         return math.exp(x)
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
@@ -151,12 +154,13 @@ class LnExpression(OneDimExpression):
     the natural logarithm of the input variable.
     """
 
-    @classmethod
-    def nonlinearity_type(cls) -> str:
+    @staticmethod
+    def nonlinearity_type() -> str:
         """Return the nonlinearity type for natural logarithm expression."""
         return lsf.nonlinearity_type_ln()
 
-    def f(self, x: float) -> float:
+    @staticmethod
+    def f(x: float) -> float:
         if x == 0:
             return -s.StaticSettings.infinity
         return math.log(x)
@@ -175,12 +179,13 @@ class SquareRootExpression(OneDimExpression):
     the square root of the input variable.
     """
 
-    @classmethod
-    def nonlinearity_type(cls) -> str:
+    @staticmethod
+    def nonlinearity_type() -> str:
         """Return the nonlinearity type for square root expression."""
         return lsf.nonlinearity_type_sqrt()
 
-    def f(self, x: float) -> float:
+    @staticmethod
+    def f(x: float) -> float:
         return math.sqrt(x)
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
@@ -197,12 +202,13 @@ class SineExpression(OneDimExpression):
     the sine of the input variable (in radians).
     """
 
-    @classmethod
-    def nonlinearity_type(cls) -> str:
+    @staticmethod
+    def nonlinearity_type() -> str:
         """Return the nonlinearity type for sine expression."""
         return lsf.nonlinearity_type_sin()
 
-    def f(self, x: float) -> float:
+    @staticmethod
+    def f(x: float) -> float:
         return math.sin(x)
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
@@ -239,12 +245,13 @@ class CosineExpression(OneDimExpression):
     the cosine of the input variable (in radians).
     """
 
-    @classmethod
-    def nonlinearity_type(cls) -> str:
+    @staticmethod
+    def nonlinearity_type() -> str:
         """Return the nonlinearity type for cosine expression."""
         return lsf.nonlinearity_type_cos()
 
-    def f(self, x: float) -> float:
+    @staticmethod
+    def f(x: float) -> float:
         return math.cos(x)
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
@@ -282,12 +289,13 @@ class LogExpression(OneDimExpression):
     the base-10 logarithm of the input variable.
     """
 
-    @classmethod
-    def nonlinearity_type(cls) -> str:
+    @staticmethod
+    def nonlinearity_type() -> str:
         """Return the nonlinearity type for base-10 logarithm expression."""
         return lsf.nonlinearity_type_log10()
 
-    def f(self, x: float) -> float:
+    @staticmethod
+    def f(x: float) -> float:
         if x == 0:
             return -s.StaticSettings.infinity
         return math.log10(x)
@@ -306,8 +314,8 @@ class AbsExpression(OneDimExpression):
     the absolute value of the input variable.
     """
 
-    @classmethod
-    def nonlinearity_type(cls) -> str:
+    @staticmethod
+    def nonlinearity_type() -> str:
         """Return the nonlinearity type for absolute value expression."""
         return lsf.nonlinearity_type_xabsx()
 
@@ -363,7 +371,8 @@ class AbsExpression(OneDimExpression):
             )
         )
 
-    def f(self, x: float) -> float:
+    @staticmethod
+    def f(x: float) -> float:
         return abs(x)
 
     def get_min_max_deviation(
@@ -392,12 +401,13 @@ class TangensHExpression(OneDimExpression):
     the hyperbolic tangent of the input variable.
     """
 
-    @classmethod
-    def nonlinearity_type(cls) -> str:
+    @staticmethod
+    def nonlinearity_type() -> str:
         """Return the nonlinearity type for hyperbolic tangent expression."""
         return lsf.nonlinearity_type_tanh()
 
-    def f(self, x: float) -> float:
+    @staticmethod
+    def f(x: float) -> float:
         return math.tanh(x)
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
@@ -422,12 +432,13 @@ class InverseExpression(OneDimExpression):
     the inverse of the input variable.
     """
 
-    @classmethod
-    def nonlinearity_type(cls) -> str:
+    @staticmethod
+    def nonlinearity_type() -> str:
         """Return the nonlinearity type for inverse expression."""
         return lsf.nonlinearity_type_inverse()
 
-    def f(self, x: float) -> float:
+    @staticmethod
+    def f(x: float) -> float:
         if x == 0:
             return s.StaticSettings.infinity
         return 1.0 / x

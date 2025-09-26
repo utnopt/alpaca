@@ -51,15 +51,17 @@ class Variable:  # pylint: disable=too-many-instance-attributes
         self.solver_variable = None
         self.is_discretized = False
         self.breakpoints: list[float] = []
-        self.occurring_in: list[str] = []
+        self.occurring_in: dict = {}
         self.pwl: pwm.PWLMethod | None = None
 
-    def add_nonlinearity_to_occurring_in(self, nonlinearity_type: str) -> None:
+    def add_nonlinearity_to_occurring_in(
+        self, nonlinearity_type, nonlinearity_function
+    ) -> None:
         """Save in which types of nonlinearities the variable occurs.
         To determine the optimal breakpoint locations later in breakpoint_generator.py.
         """
         if nonlinearity_type not in self.occurring_in:
-            self.occurring_in.append(nonlinearity_type)
+            self.occurring_in[nonlinearity_type] = nonlinearity_function
             self.is_discretized = True
 
     def __repr__(self) -> str:
