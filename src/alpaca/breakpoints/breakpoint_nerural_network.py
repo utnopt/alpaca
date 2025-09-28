@@ -145,14 +145,14 @@ class BreakpointNeuralNetwork:
         return fig
 
     def _save_training_animation(self, history, x_train, y_train):
-        """Creates and saves a video from the training history."""
-        logger.info("Creating training animation video...")
+        """Creates and saves a GIF from the training history."""
+        logger.info("Creating training animation GIF...")
 
-        # Limit frames for very long trainings to keep video size reasonable
+        # Limit frames for very long trainings to keep GIF size reasonable
         num_frames = min(self.epochs, 200)
         frame_indices = np.linspace(0, self.epochs - 1, num_frames, dtype=int)
 
-        with imageio.get_writer("training_animation.mp4", fps=50) as writer:
+        with imageio.get_writer("training_animation.gif", fps=10) as writer:
             for i, epoch_idx in enumerate(frame_indices):
                 wb = history[epoch_idx]
                 fig = self._plot_frame(epoch_idx, x_train, y_train, wb)
@@ -167,7 +167,7 @@ class BreakpointNeuralNetwork:
 
                 logger.info(f"Generated frame {i + 1}/{num_frames}")
 
-        logger.info("Training animation saved")
+        logger.info("Training animation saved as training_animation.gif")
 
     def _initialize_weights_and_biases(self):
         """Initializes weights and biases for the neural network."""
