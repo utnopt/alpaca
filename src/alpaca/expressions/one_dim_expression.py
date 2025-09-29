@@ -124,7 +124,7 @@ class SquareExpression(OneDimExpression):
         return lsf.nonlinearity_type_square()
 
     @classmethod
-    def f(cls, x: float | np.ndarray) -> float:
+    def f(cls, x: float | np.ndarray) -> float | np.ndarray:
         return x**2
 
     @classmethod
@@ -149,7 +149,7 @@ class ExponentialExpression(OneDimExpression):
         return lsf.nonlinearity_type_exp()
 
     @classmethod
-    def f(cls, x: float | np.ndarray) -> float:
+    def f(cls, x: float | np.ndarray) -> float | np.ndarray:
         return math.exp(x)
 
     @classmethod
@@ -176,7 +176,7 @@ class LnExpression(OneDimExpression):
         return lsf.nonlinearity_type_ln()
 
     @classmethod
-    def f(cls, x: float | np.ndarray) -> float:
+    def f(cls, x: float | np.ndarray) -> float | np.ndarray:
         if x == 0:
             return -s.StaticSettings.infinity
         return math.log(x)
@@ -205,7 +205,7 @@ class SquareRootExpression(OneDimExpression):
         return lsf.nonlinearity_type_sqrt()
 
     @classmethod
-    def f(cls, x: float | np.ndarray) -> float:
+    def f(cls, x: float | np.ndarray) -> float | np.ndarray:
         return math.sqrt(x)
 
     @classmethod
@@ -232,7 +232,7 @@ class SineExpression(OneDimExpression):
         return lsf.nonlinearity_type_sin()
 
     @classmethod
-    def f(cls, x: float | np.ndarray) -> float:
+    def f(cls, x: float | np.ndarray) -> float | np.ndarray:
         return math.sin(x)
 
     @classmethod
@@ -279,7 +279,7 @@ class CosineExpression(OneDimExpression):
         return lsf.nonlinearity_type_cos()
 
     @classmethod
-    def f(cls, x: float | np.ndarray) -> float:
+    def f(cls, x: float | np.ndarray) -> float | np.ndarray:
         return math.cos(x)
 
     @classmethod
@@ -327,7 +327,7 @@ class LogExpression(OneDimExpression):
         return lsf.nonlinearity_type_log10()
 
     @classmethod
-    def f(cls, x: float | np.ndarray) -> float:
+    def f(cls, x: float | np.ndarray) -> float | np.ndarray:
         if x == 0:
             return -s.StaticSettings.infinity
         return math.log10(x)
@@ -408,7 +408,7 @@ class AbsExpression(OneDimExpression):
         )
 
     @classmethod
-    def f(cls, x: float | np.ndarray) -> float:
+    def f(cls, x: float | np.ndarray) -> float | np.ndarray:
         return abs(x)
 
     @classmethod
@@ -447,7 +447,7 @@ class TangensHExpression(OneDimExpression):
         return lsf.nonlinearity_type_tanh()
 
     @classmethod
-    def f(cls, x: float | np.ndarray) -> float:
+    def f(cls, x: float | np.ndarray) -> float | np.ndarray:
         return math.tanh(x)
 
     @classmethod
@@ -482,7 +482,7 @@ class InverseExpression(OneDimExpression):
         return lsf.nonlinearity_type_inverse()
 
     @classmethod
-    def f(cls, x: float | np.ndarray) -> float:
+    def f(cls, x: float | np.ndarray) -> float | np.ndarray:
         if x == 0:
             return s.StaticSettings.infinity
         return 1.0 / x
