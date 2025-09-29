@@ -226,7 +226,7 @@ class BreakpointNeuralNetwork:
                 y_prediction, hidden_layer_output = self._forward_pass(x_train)
                 total_loss.append(
                     np.mean(
-                        (y_train[epoch % len(function_classes)] - y_prediction) ** 2
+                        (y_train[function_index] - y_prediction) ** 2
                     )
                 )
                 error: np.ndarray = y_train[function_index] - y_prediction
