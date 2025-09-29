@@ -334,7 +334,7 @@ class LogExpression(OneDimExpression):
 
     @classmethod
     def f_derivative(cls, x: float) -> float:
-        return 1 / x
+        return 1 / (x * math.log(10))
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
         # f'(x) = 1/(x*ln(10)). 1/(x*ln(10)) = m => x = 1/(m*ln(10)).
