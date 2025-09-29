@@ -70,7 +70,7 @@ class OneDimExpression(exn.Expression):
         return self.name
 
     @classmethod
-    def f(cls, x: float | np.ndarray) -> float:
+    def f(cls, x: float | np.ndarray) -> float | np.ndarray:
         """Evaluates the function f(x) for the expression."""
         raise NotImplementedError(lsf.error_subclasses_must_implement_method())
 
