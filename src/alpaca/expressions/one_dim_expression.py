@@ -48,7 +48,9 @@ class OneDimExpression(exn.Expression):
         """
         super().__init__(name, model_data, level, representative_variable)
         self.variable: var.Variable = variable
-        self.variable.add_nonlinearity_to_occurring_in(self.__class__.__name__, self.f)
+        self.variable.add_nonlinearity_to_occurring_in(
+            self.__class__.__name__, self.__class__
+        )
 
     def get_linear_approximation_function_parameters_for_segment(
         self, var_lb: float, var_ub: float
@@ -66,9 +68,14 @@ class OneDimExpression(exn.Expression):
         """
         return self.name
 
-    @staticmethod
-    def f(x: float) -> float:
+    @classmethod
+    def f(cls, x: float) -> float:
         """Evaluates the function f(x) for the expression."""
+        raise NotImplementedError(lsf.error_subclasses_must_implement_method())
+
+    @classmethod
+    def f_derivative(cls, x: float) -> float:
+        """Evaluates the function f'(x) for the expression."""
         raise NotImplementedError(lsf.error_subclasses_must_implement_method())
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
@@ -115,9 +122,13 @@ class SquareExpression(OneDimExpression):
         """Return the nonlinearity type for square expression."""
         return lsf.nonlinearity_type_square()
 
-    @staticmethod
-    def f(x: float) -> float:
+    @classmethod
+    def f(cls, x: float) -> float:
         return x**2
+
+    @classmethod
+    def f_derivative(cls, x: float) -> float:
+        return 2 * x
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
         # f'(x) = 2x.  2x = m => x = m/2
@@ -136,8 +147,12 @@ class ExponentialExpression(OneDimExpression):
         """Return the nonlinearity type for exponential expression."""
         return lsf.nonlinearity_type_exp()
 
-    @staticmethod
-    def f(x: float) -> float:
+    @classmethod
+    def f(cls, x: float) -> float:
+        return math.exp(x)
+
+    @classmethod
+    def f_derivative(cls, x: float) -> float:
         return math.exp(x)
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
@@ -159,11 +174,15 @@ class LnExpression(OneDimExpression):
         """Return the nonlinearity type for natural logarithm expression."""
         return lsf.nonlinearity_type_ln()
 
-    @staticmethod
-    def f(x: float) -> float:
+    @classmethod
+    def f(cls, x: float) -> float:
         if x == 0:
             return -s.StaticSettings.infinity
         return math.log(x)
+
+    @classmethod
+    def f_derivative(cls, x: float) -> float:
+        return 1 / x
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
         # f'(x) = 1/x. 1/x = m => x = 1/m. Requires m != 0.
@@ -184,9 +203,13 @@ class SquareRootExpression(OneDimExpression):
         """Return the nonlinearity type for square root expression."""
         return lsf.nonlinearity_type_sqrt()
 
-    @staticmethod
-    def f(x: float) -> float:
+    @classmethod
+    def f(cls, x: float) -> float:
         return math.sqrt(x)
+
+    @classmethod
+    def f_derivative(cls, x: float) -> float:
+        return 0 if x == 0 else 1 / (2 * math.sqrt(x))
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
         # f'(x) = 1/(2*sqrt(x)). 1/(2*sqrt(x)) = m => x = (1/(2m))^2. Requires m > 0.
@@ -207,9 +230,13 @@ class SineExpression(OneDimExpression):
         """Return the nonlinearity type for sine expression."""
         return lsf.nonlinearity_type_sin()
 
-    @staticmethod
-    def f(x: float) -> float:
+    @classmethod
+    def f(cls, x: float) -> float:
         return math.sin(x)
+
+    @classmethod
+    def f_derivative(cls, x: float) -> float:
+        return math.cos(x)
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
         # f'(x) = cos(x). cos(x) = m. Requires |m| <= 1.
@@ -250,9 +277,13 @@ class CosineExpression(OneDimExpression):
         """Return the nonlinearity type for cosine expression."""
         return lsf.nonlinearity_type_cos()
 
-    @staticmethod
-    def f(x: float) -> float:
+    @classmethod
+    def f(cls, x: float) -> float:
         return math.cos(x)
+
+    @classmethod
+    def f_derivative(cls, x: float) -> float:
+        return -math.sin(x)
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
         # f'(x) = -sin(x). -sin(x) = m => sin(x) = -m. Requires |m| <= 1.
@@ -294,11 +325,15 @@ class LogExpression(OneDimExpression):
         """Return the nonlinearity type for base-10 logarithm expression."""
         return lsf.nonlinearity_type_log10()
 
-    @staticmethod
-    def f(x: float) -> float:
+    @classmethod
+    def f(cls, x: float) -> float:
         if x == 0:
             return -s.StaticSettings.infinity
         return math.log10(x)
+
+    @classmethod
+    def f_derivative(cls, x: float) -> float:
+        return 1 / x
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
         # f'(x) = 1/(x*ln(10)). 1/(x*ln(10)) = m => x = 1/(m*ln(10)).
@@ -371,9 +406,13 @@ class AbsExpression(OneDimExpression):
             )
         )
 
-    @staticmethod
-    def f(x: float) -> float:
+    @classmethod
+    def f(cls, x: float) -> float:
         return abs(x)
+
+    @classmethod
+    def f_derivative(cls, x: float) -> float:
+        return 1.0 if x > 0 else -1.0 if x < 0 else 0.0
 
     def get_min_max_deviation(
         self, var_lb: float, var_ub: float, m: float, t: float
@@ -406,9 +445,13 @@ class TangensHExpression(OneDimExpression):
         """Return the nonlinearity type for hyperbolic tangent expression."""
         return lsf.nonlinearity_type_tanh()
 
-    @staticmethod
-    def f(x: float) -> float:
+    @classmethod
+    def f(cls, x: float) -> float:
         return math.tanh(x)
+
+    @classmethod
+    def f_derivative(cls, x: float) -> float:
+        return 1 - math.tanh(x) ** 2
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
         # f'(x) = 1 - tanh^2(x). 1 - tanh^2(x) = m => tanh^2(x) = 1 - m.
@@ -437,11 +480,15 @@ class InverseExpression(OneDimExpression):
         """Return the nonlinearity type for inverse expression."""
         return lsf.nonlinearity_type_inverse()
 
-    @staticmethod
-    def f(x: float) -> float:
+    @classmethod
+    def f(cls, x: float) -> float:
         if x == 0:
             return s.StaticSettings.infinity
         return 1.0 / x
+
+    @classmethod
+    def f_derivative(cls, x: float) -> float:
+        return -1.0 / (x**2)
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
         # f'(x) = -1/x^2. -1/x^2 = m => x^2 = -1/m. Requires m < 0.
