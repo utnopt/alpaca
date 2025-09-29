@@ -12,7 +12,7 @@ from alpaca.utils.logger import logger
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
-def config_console_logger(log_level=logging.DEBUG):
+def config_console_logger(log_level=logging.INFO):
     """
     function that configures a logger:
     ->for the console

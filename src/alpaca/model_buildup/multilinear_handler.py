@@ -47,18 +47,14 @@ class MultilinearHandler:
     ) -> None:
         """Marks representative variables of multilinear expressions for discretization."""
         for expression in self.model_data.expressions.multilinear_expressions.values():
-            expression.representative_variable.add_nonlinearity_to_occurring_in(
-                lsf.nonlinearity_type_multilinear_implied(len(expression.variables))
-            )
+            expression.representative_variable.is_discretized = True
 
     def _mark_representative_variables_of_bilinear_expressions_as_discretized(
         self,
     ) -> None:
         """Marks representative variables of bilinear expressions for discretization."""
         for expression in self.model_data.expressions.bilinear_expressions.values():
-            expression.representative_variable.add_nonlinearity_to_occurring_in(
-                lsf.nonlinearity_type_multilinear_implied(2)
-            )
+            expression.representative_variable.is_discretized = True
 
     def _reformulate_bilinear_to_sum_of_squares(self) -> None:
         """Reformulates bilinear expressions into a sum of squares."""

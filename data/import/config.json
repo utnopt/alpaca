@@ -1,6 +1,6 @@
 {
 "solver_time_limit": 7200,
-  "osil_file_name": "ex6_2_12",
+  "osil_file_name": "polygon25",
   "external_solver": "gurobi",
   "number_of_breakpoints": 5,
   "feature/mpip/separation": 1,
