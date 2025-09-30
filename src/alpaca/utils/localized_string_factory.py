@@ -404,14 +404,26 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return f"mcm_breakpoint_{name}_{breakpoint_index}"
 
     @classmethod
+    def var_name_pwl_delta_binary(cls, name: str, breakpoint_index: int) -> str:
+        return f"dm_breakpoint_{name}_{breakpoint_index}"
+
+    @classmethod
     def var_name_pwl_multiple_choice_continuous(
         cls, name: str, breakpoint_index: int
     ) -> str:
         return f"mcm_continuous_{name}_{breakpoint_index}"
 
     @classmethod
+    def var_name_pwl_delta_continuous(cls, name: str, breakpoint_index: int) -> str:
+        return f"dm_continuous_{name}_{breakpoint_index}"
+
+    @classmethod
     def con_name_pwl_multiple_choice_variable_link_continuous(cls, name: str) -> str:
         return f"mcm_varlink_cont_{name}"
+
+    @classmethod
+    def con_name_pwl_delta_variable_link_continuous(cls, name: str) -> str:
+        return f"dm_varlink_cont_{name}"
 
     @classmethod
     def con_name_pwl_multiple_choice_sos(cls, name: str) -> str:
@@ -430,8 +442,20 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return f"mcm_interval_ub_{name}_{breakpoint_index}"
 
     @classmethod
+    def con_name_pwl_delta_interval_lb(cls, name: str, breakpoint_index: int) -> str:
+        return f"dm_interval_lb_{name}_{breakpoint_index}"
+
+    @classmethod
+    def con_name_pwl_delta_interval_ub(cls, name: str, breakpoint_index: int) -> str:
+        return f"dm_interval_ub_{name}_{breakpoint_index}"
+
+    @classmethod
     def con_name_pwl_multiple_choice_approximation(cls, name: str) -> str:
         return f"mcm_approx_{name}"
+
+    @classmethod
+    def con_name_pwl_delta_approximation(cls, name: str) -> str:
+        return f"dm_approx_{name}"
 
     @classmethod
     def con_name_pwl_multiple_choice_underestimation(cls, name: str) -> str:
@@ -440,6 +464,14 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
     @classmethod
     def con_name_pwl_multiple_choice_overestimation(cls, name: str) -> str:
         return f"mcm_over_{name}"
+
+    @classmethod
+    def con_name_pwl_delta_underestimation(cls, name: str) -> str:
+        return f"dm_under_{name}"
+
+    @classmethod
+    def con_name_pwl_delta_overestimation(cls, name: str) -> str:
+        return f"dm_over_{name}"
 
     @classmethod
     def con_name_pwc_multiple_choice_multilinear(

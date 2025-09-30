@@ -225,9 +225,7 @@ class BreakpointNeuralNetwork:
                 self._configure_network_from_breakpoints(function_class.f)
                 y_prediction, hidden_layer_output = self._forward_pass(x_train)
                 total_loss.append(
-                    np.mean(
-                        (y_train[function_index] - y_prediction) ** 2
-                    )
+                    np.mean((y_train[function_index] - y_prediction) ** 2)
                 )
                 error: np.ndarray = y_train[function_index] - y_prediction
                 self._backward_pass(

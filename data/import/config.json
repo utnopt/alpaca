@@ -1,13 +1,14 @@
 {
 "solver_time_limit": 7200,
-  "osil_file_name": "polygon25",
+  "osil_file_name": "chem",
   "external_solver": "gurobi",
   "number_of_breakpoints": 5,
-  "feature/mpip/separation": 1,
+  "feature/mpip/separation": 0,
   "feature/mpip/mccormick": 0,
   "feature/mpip/stair": 0,
   "feature/mpip/stripe": 0,
-  "approximation": 0,
+  "approximation": 1,
   "reformulate_multilinear_to_bilinear": 1,
-  "bilinear_handling": 0
+  "bilinear_handling": 0,
+  "pwl_method": "delta"
 }
