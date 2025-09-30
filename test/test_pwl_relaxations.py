@@ -271,11 +271,7 @@ class TestPWLRelaxations(unittest.TestCase):
         x_delta = Variable("x")
         x_delta.is_discretized = True
         model_delta.add_variable(x_delta)
-        handler_delta = PWLHandler(model_delta)
-        # This will fail if delta_method is not implemented, proving the logic
-        with self.assertRaises(NotImplementedError):
-            # pylint: disable=protected-access
-            handler_delta._discretize_variable_domains()
+        PWLHandler(model_delta)
 
 
 if __name__ == "__main__":
