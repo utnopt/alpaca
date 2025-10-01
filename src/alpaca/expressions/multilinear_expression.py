@@ -51,6 +51,8 @@ class MultilinearExpression(exn.Expression):
         self.variables = variables
         self.model_data = model_data
         self.piecewise_constant_relation = {}
+        for variable in self.variables:
+            variable.is_discretized = True
 
     def extract_mpip_relation(self, approximation: bool = False):
         """Extract the piecewise constant relation for the multilinear expression."""
