@@ -177,7 +177,7 @@ class LnExpression(OneDimExpression):
 
     @classmethod
     def f(cls, x: float | np.ndarray) -> float | np.ndarray:
-        if x == 0:
+        if x <= 0:
             return -s.StaticSettings.infinity
         return math.log(x)
 
@@ -206,6 +206,8 @@ class SquareRootExpression(OneDimExpression):
 
     @classmethod
     def f(cls, x: float | np.ndarray) -> float | np.ndarray:
+        if x < 0:
+            return -s.StaticSettings.infinity
         return math.sqrt(x)
 
     @classmethod
@@ -328,7 +330,7 @@ class LogExpression(OneDimExpression):
 
     @classmethod
     def f(cls, x: float | np.ndarray) -> float | np.ndarray:
-        if x == 0:
+        if x <= 0:
             return -s.StaticSettings.infinity
         return math.log10(x)
 
