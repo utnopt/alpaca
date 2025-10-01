@@ -1,6 +1,6 @@
 {
 "solver_time_limit": 7200,
-  "osil_file_name": "mathopt3",
+  "osil_file_name": "chance",
   "external_solver": "gurobi",
   "number_of_breakpoints": 5,
   "feature/mpip/separation": 0,

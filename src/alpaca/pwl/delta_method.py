@@ -19,7 +19,7 @@ class DeltaMethod(pwm.PWLMethod):
         self._add_continuous_pwl()
 
     def _add_binary_pwl(self) -> None:
-        for breakpoint_index in range(len(self.variable.breakpoints) - 1):
+        for breakpoint_index in range(len(self.variable.breakpoints) - 2):
             self.pwl_variables_binary.append(
                 var.Variable(
                     lsf.var_name_pwl_delta_binary(self.variable.name, breakpoint_index),
@@ -124,8 +124,8 @@ class DeltaMethod(pwm.PWLMethod):
         ]
 
     def _apply_delta_method_relaxation(self, expression: ode.OneDimExpression):
-        min_deviations = [0.0]
-        max_deviations = [0.0]
+        min_deviations = []
+        max_deviations = []
         for i, bp in enumerate(self.variable.breakpoints[:-1]):
             slope, intercept = (
                 expression.get_linear_approximation_function_parameters_for_segment(
@@ -154,7 +154,7 @@ class DeltaMethod(pwm.PWLMethod):
                     (min_deviations[i + 1] - min_deviations[i], binary_var)
                     for i, binary_var in enumerate(self.pwl_variables_binary)
                 ],
-                rhs=-expression.f(self.variable.breakpoints[0]),
+                rhs=-expression.f(self.variable.breakpoints[0]) - min_deviations[0],
             ),
             con.LinearConstraint(
                 lsf.con_name_pwl_delta_overestimation(expression.name),
@@ -172,7 +172,7 @@ class DeltaMethod(pwm.PWLMethod):
                     (max_deviations[i + 1] - max_deviations[i], binary_var)
                     for i, binary_var in enumerate(self.pwl_variables_binary)
                 ],
-                rhs=-expression.f(self.variable.breakpoints[0]),
+                rhs=-expression.f(self.variable.breakpoints[0]) - max_deviations[0],
             ),
         ]
 
