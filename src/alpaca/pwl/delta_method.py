@@ -215,27 +215,73 @@ class DeltaMethod(pwm.PWLMethod):
             implying_variable_indices: The list of indices for the active variable intervals.
             implied_indices: The resulting indices for the representative variable.
         """
-        constraint_variables = [
-            (
-                -1.0,
-                self.pwl_variables_binary[implied_index],
+        extended_pwl_variables_binary_implied = (
+            [1.0] + self.pwl_variables_binary + [0.0]
+        )
+        extended_pwl_variables_binary_implying = {
+            var_idx: [1.0]
+            + expression.variables[var_idx].pwl.pwl_variables_binary
+            + [0.0]
+            for var_idx in range(len(implying_variable_indices))
+        }
+        constraint_variables = (
+            [
+                (
+                    -1.0,
+                    extended_pwl_variables_binary_implied[implied_index],
+                )
+                for implied_index in implied_indices
+            ]
+            + [
+                (
+                    1.0,
+                    extended_pwl_variables_binary_implied[implied_index + 1],
+                )
+                for implied_index in implied_indices
+            ]
+            + [
+                (
+                    1.0,
+                    extended_pwl_variables_binary_implying[var_idx][
+                        index_in_combination
+                    ],
+                )
+                for var_idx, index_in_combination in enumerate(
+                    implying_variable_indices
+                )
+            ]
+            + [
+                (
+                    -1.0,
+                    extended_pwl_variables_binary_implying[var_idx][
+                        index_in_combination + 1
+                    ],
+                )
+                for var_idx, index_in_combination in enumerate(
+                    implying_variable_indices
+                )
+            ]
+        )
+        rhs = (
+            len(expression.variables)
+            - 1.0
+            - sum(
+                coeff * variable
+                for coeff, variable in constraint_variables
+                if isinstance(variable, float)
             )
-            for implied_index in implied_indices
-        ] + [
-            (
-                1.0,
-                expression.variables[var_idx].pwl.pwl_variables_binary[
-                    index_in_combination
-                ],
-            )
-            for var_idx, index_in_combination in enumerate(implying_variable_indices)
+        )
+        cleaned_constraint_variables = [
+            (coeff, variable)
+            for coeff, variable in constraint_variables
+            if not isinstance(variable, float)
         ]
         constraint = con.LinearConstraint(
             name=lsf.con_name_pwc_multiple_choice_multilinear(
                 expression.name, implying_variable_indices
             ),
             con_type=lsf.constraint_leq(),
-            variables=constraint_variables,
-            rhs=len(expression.variables) - 1.0,
+            variables=cleaned_constraint_variables,
+            rhs=rhs,
         )
         return constraint
