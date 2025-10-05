@@ -28,7 +28,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
     Link: https://optimization-online.org/?p=26208
     """
 
-    def __init__(self, mpip_id: str) -> None:
+    def __init__(self, mpip_id: str, pwl_method: str) -> None:
         """Initialize MPIP instance."""
         self.mpip_id = mpip_id
         self.implying_variables: dict[str, var.Variable] = {}
@@ -41,6 +41,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         self.interval_lp_implied_var = 0
         self.separator = None
         self.feasible = True
+        self.pwl_method = pwl_method
 
     def build_mpip(self) -> None:
         """Build MPIP structure."""

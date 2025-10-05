@@ -1,14 +1,14 @@
 {
 "solver_time_limit": 7200,
-  "osil_file_name": "chance",
+  "osil_file_name": "ex6_2_14",
   "external_solver": "gurobi",
-  "number_of_breakpoints": 5,
+  "number_of_breakpoints": 30,
   "feature/mpip/separation": 0,
   "feature/mpip/mccormick": 0,
   "feature/mpip/stair": 0,
   "feature/mpip/stripe": 0,
   "approximation": 0,
   "reformulate_multilinear_to_bilinear": 1,
-  "bilinear_handling": 0,
+  "bilinear_handling": 1,
   "pwl_method": "delta"
 }

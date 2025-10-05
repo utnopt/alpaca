@@ -10,6 +10,7 @@ import alpaca.settings as s
 import alpaca.mpip.mpip as mp
 import alpaca.model_data.variable as var
 import alpaca.external_solvers.solver_wrapper as sw
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class SeparatedPoint:
@@ -211,34 +212,6 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
 
         return improved_slice_dict_values
 
-    def add_multiple_choice_constraints(self) -> None:
-        """Add all multiple choice constraints to optimization model."""
-        self._add_implying_mc_constraints()
-        self._add_implied_mc_constraint()
-
-    def _add_implying_mc_constraints(self) -> None:
-        """Add multiple choice constraints for implying variables."""
-        for implying_index, implying_variable in self.mpip.implying_variables.items():
-            self.opt_model.add_constraint(
-                sum(
-                    variable.solver_variable
-                    for variable in implying_variable.pwl.pwl_variables_binary
-                )
-                == 1,
-                name=f"mc_implying_{implying_index}_{self.mpip.mpip_id}",
-            )
-
-    def _add_implied_mc_constraint(self) -> None:
-        """Add multiple choice constraint for implied variables."""
-        self.opt_model.add_constraint(
-            sum(
-                variable.solver_variable
-                for variable in self.mpip.implied_variable.pwl.pwl_variables_binary
-            )
-            == 1,
-            name=f"mc_implied_{self.mpip.mpip_id}",
-        )
-
     def build_separation_model(self) -> None:
         """Construct separation model with variables and constraints."""
         self._add_separation_variables()
@@ -248,7 +221,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
         """Create variables for separation model."""
         for implying_index, implying_variable in self.mpip.implying_variables.items():
             sep_implying_variables = []
-            for i in range(len(implying_variable.pwl.pwl_variables_binary)):
+            for i in range(len(implying_variable.breakpoints) - 1):
                 variable = self.separation_model.add_variable(
                     f"sep_implying_{implying_index}_{i}", ub=1, obj=1
                 )
@@ -257,7 +230,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
 
         self.sep_implied_variables = [
             self.separation_model.add_variable(f"sep_implied_{i}", ub=1, obj=-1)
-            for i in range(len(self.mpip.implied_variable.pwl.pwl_variables_binary))
+            for i in range(len(self.mpip.implied_variable.breakpoints) - 1)
         ]
 
     def _add_separation_constraints(self) -> None:
@@ -305,6 +278,12 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
 
     def _generate_cut(self) -> bool:
         """Generate cut based on separation solution."""
+        if self.mpip.pwl_method == lsf.pwl_method_multiple_choice():
+            return self._generate_cut_multiple_choice()
+        return self._generate_cut_delta()
+
+    def _generate_cut_multiple_choice(self) -> bool:
+        """Generate cut based on separation solution multiple choice method."""
         cut_to_separate = self.opt_model.create_cut(
             self.separation_handler,
             f"mpip{self.mpip.mpip_id}_x{self.nr_of_cuts}",
@@ -345,8 +324,84 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
             return True
         return False
 
+    def _generate_cut_delta(self) -> bool:
+        """Generate cut based on separation solution delta method."""
+        cut_rhs = len(self.sep_implying_variables) - 1
+        cut_variables = []
+        violation = -len(self.sep_implying_variables) + 1
+        for implying_index, implying_variable in self.mpip.implying_variables.items():
+            for idx, variable in enumerate(implying_variable.pwl.pwl_variables_binary):
+                solution_value = self.separation_model.get_val(
+                    self.sep_implying_variables[implying_index][idx]
+                )
+                if idx == 0:
+                    cut_rhs -= solution_value
+                    cut_variables.append((-solution_value, variable.solver_variable))
+                else:
+                    cut_variables.append(
+                        (
+                            solution_value,
+                            implying_variable.pwl.pwl_variables_binary[
+                                idx - 1
+                            ].solver_variable,
+                        )
+                    )
+                    cut_variables.append((-solution_value, variable.solver_variable))
+                violation += (
+                    solution_value
+                    * self.point_to_be_separated.implying_values[implying_index][idx]
+                )
+        for idx, variable in enumerate(
+            self.mpip.implied_variable.pwl.pwl_variables_binary
+        ):
+            solution_value = self.separation_model.get_val(
+                self.sep_implied_variables[idx]
+            )
+            if idx == 0:
+                cut_rhs += solution_value
+                cut_variables.append((solution_value, variable.solver_variable))
+            else:
+                cut_variables.append(
+                    (
+                        -solution_value,
+                        self.mpip.implied_variable.pwl.pwl_variables_binary[
+                            idx - 1
+                        ].solver_variable,
+                    )
+                )
+                cut_variables.append((solution_value, variable.solver_variable))
+            violation -= solution_value * self.point_to_be_separated.implied_values[idx]
+        if violation > s.StaticSettings.min_cut_violation:
+            cut_to_separate = self.opt_model.create_cut(
+                self.separation_handler,
+                f"mpip{self.mpip.mpip_id}_x{self.nr_of_cuts}",
+                lhs=None,
+                rhs=cut_rhs,
+                local=False,
+            )
+            for coeff, cut_var in cut_variables:
+                self.opt_model.add_var_to_cut(cut_to_separate, cut_var, coeff)
+            self.nr_of_cuts += 1
+            self.opt_model.add_cut(cut_to_separate)
+            return True
+        return False
+
     def separate_solution(self) -> bool:
         """Extract solution point and initiate separation."""
+        self._build_point_to_be_separated()
+        if self.point_to_be_separated.is_integer():
+            return False
+        self.point_to_be_separated.perturb()
+        return self.separate_point()
+
+    def _build_point_to_be_separated(self) -> None:
+        """Construct the point to be separated from current solution."""
+        if self.mpip.pwl_method == lsf.pwl_method_multiple_choice():
+            self._build_point_to_be_separated_multiple_choice()
+        else:
+            self._build_point_to_be_separated_delta()
+
+    def _build_point_to_be_separated_multiple_choice(self) -> None:
         self.point_to_be_separated.implying_values = {
             implying_index: np.array(
                 [
@@ -362,7 +417,43 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
                 for v in self.mpip.implied_variable.pwl.pwl_variables_binary
             ]
         )
-        if self.point_to_be_separated.is_integer():
-            return False
-        self.point_to_be_separated.perturb()
-        return self.separate_point()
+
+    def _build_point_to_be_separated_delta(self) -> None:
+        """Construct the point to be separated from current solution using delta method."""
+        self.point_to_be_separated.implying_values = {
+            implying_index: np.array(
+                [
+                    1.0
+                    - self.opt_model.get_val_callback(
+                        variable.pwl.pwl_variables_binary[0].solver_variable
+                    )
+                ]
+                + [
+                    self.opt_model.get_val_callback(prev_v.solver_variable)
+                    - self.opt_model.get_val_callback(post_v.solver_variable)
+                    for prev_v, post_v in zip(
+                        variable.pwl.pwl_variables_binary[:-1],
+                        variable.pwl.pwl_variables_binary[1:],
+                    )
+                ]
+            )
+            for implying_index, variable in self.mpip.implying_variables.items()
+        }
+        self.point_to_be_separated.implied_values = np.array(
+            [
+                1.0
+                - self.opt_model.get_val_callback(
+                    self.mpip.implied_variable.pwl.pwl_variables_binary[
+                        0
+                    ].solver_variable
+                )
+            ]
+            + [
+                self.opt_model.get_val_callback(prev_v.solver_variable)
+                - self.opt_model.get_val_callback(post_v.solver_variable)
+                for prev_v, post_v in zip(
+                    self.mpip.implied_variable.pwl.pwl_variables_binary[:-1],
+                    self.mpip.implied_variable.pwl.pwl_variables_binary[1:],
+                )
+            ]
+        )
