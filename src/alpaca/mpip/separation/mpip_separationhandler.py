@@ -4,6 +4,7 @@
 """
 from alpaca.mpip import mpip_handler as mph
 import alpaca.external_solvers.solver_wrapper as sw
+import alpaca.utils.decorators as dec
 from alpaca.mpip.separation import mpip_separator as mps
 
 
@@ -25,11 +26,13 @@ class MPIPSeparationHandler:
             mpip.separator = mps.MPIPSeparator(mpip, self.opt_model)
             mpip.separator.build_separation_model()
 
+    @dec.check_pwl_method_for_mpip_feature
     def add_mc_cormick_constraints(self) -> None:
         """Add McCormick constraints for all MPIPs."""
         for mpip in self.mpip_handler.mpip_dict.values():
             mpip.separator.add_mc_cormick_constraints()
 
+    @dec.check_pwl_method_for_mpip_feature
     def add_stripe_constraints(self) -> None:
         """Add stripe constraints for all MPIPs."""
         for mpip in self.mpip_handler.mpip_dict.values():
