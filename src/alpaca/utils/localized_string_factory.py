@@ -257,10 +257,19 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         )
 
     @classmethod
-    def warning_mpip_features_disabled_for_pwl_method_none(cls):
+    def warning_mpip_features_disabled_for_pwl_method_none(cls) -> str:
         return (
             "MPIP features are disabled when pwl_method is set to 'none'. "
             "Set pwl_method to 'multiple_choice' or 'delta' to enable MPIP features."
+        )
+
+    @classmethod
+    def warning_not_implemented_mpip_feature_for_pwl_method(
+        cls, pwl_method: str
+    ) -> str:
+        return (
+            f"MPIP feature not implemented for pwl_method '{pwl_method}'. "
+            "Set pwl_method to 'multiple_choice' to enable special MPIP features."
         )
 
     @classmethod
@@ -404,14 +413,26 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return f"mcm_breakpoint_{name}_{breakpoint_index}"
 
     @classmethod
+    def var_name_pwl_delta_binary(cls, name: str, breakpoint_index: int) -> str:
+        return f"dm_breakpoint_{name}_{breakpoint_index}"
+
+    @classmethod
     def var_name_pwl_multiple_choice_continuous(
         cls, name: str, breakpoint_index: int
     ) -> str:
         return f"mcm_continuous_{name}_{breakpoint_index}"
 
     @classmethod
+    def var_name_pwl_delta_continuous(cls, name: str, breakpoint_index: int) -> str:
+        return f"dm_continuous_{name}_{breakpoint_index}"
+
+    @classmethod
     def con_name_pwl_multiple_choice_variable_link_continuous(cls, name: str) -> str:
         return f"mcm_varlink_cont_{name}"
+
+    @classmethod
+    def con_name_pwl_delta_variable_link_continuous(cls, name: str) -> str:
+        return f"dm_varlink_cont_{name}"
 
     @classmethod
     def con_name_pwl_multiple_choice_sos(cls, name: str) -> str:
@@ -430,8 +451,20 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return f"mcm_interval_ub_{name}_{breakpoint_index}"
 
     @classmethod
+    def con_name_pwl_delta_interval_lb(cls, name: str, breakpoint_index: int) -> str:
+        return f"dm_interval_lb_{name}_{breakpoint_index}"
+
+    @classmethod
+    def con_name_pwl_delta_interval_ub(cls, name: str, breakpoint_index: int) -> str:
+        return f"dm_interval_ub_{name}_{breakpoint_index}"
+
+    @classmethod
     def con_name_pwl_multiple_choice_approximation(cls, name: str) -> str:
         return f"mcm_approx_{name}"
+
+    @classmethod
+    def con_name_pwl_delta_approximation(cls, name: str) -> str:
+        return f"dm_approx_{name}"
 
     @classmethod
     def con_name_pwl_multiple_choice_underestimation(cls, name: str) -> str:
@@ -440,6 +473,14 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
     @classmethod
     def con_name_pwl_multiple_choice_overestimation(cls, name: str) -> str:
         return f"mcm_over_{name}"
+
+    @classmethod
+    def con_name_pwl_delta_underestimation(cls, name: str) -> str:
+        return f"dm_under_{name}"
+
+    @classmethod
+    def con_name_pwl_delta_overestimation(cls, name: str) -> str:
+        return f"dm_over_{name}"
 
     @classmethod
     def con_name_pwc_multiple_choice_multilinear(

@@ -63,7 +63,7 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
     ) -> None:
         self.mpip_counter += 1
         mpip_id = lsf.mpip_id(self.mpip_counter)
-        mpip = mp.MPIP(mpip_id)
+        mpip = mp.MPIP(mpip_id, self.model_data.settings.pwl_method)
         representative_variable = bilinear_expression.representative_variable
         mpip.add_implied_id(representative_variable)
         first_var = bilinear_expression.variables[0]
@@ -78,7 +78,7 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
     ) -> None:
         self.mpip_counter += 1
         mpip_id = lsf.mpip_id(self.mpip_counter)
-        mpip = mp.MPIP(mpip_id)
+        mpip = mp.MPIP(mpip_id, self.model_data.settings.pwl_method)
         representative_variable = multilinear_expression.representative_variable
         mpip.add_implied_id(representative_variable)
         for var in multilinear_expression.variables:
@@ -102,7 +102,7 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
     ) -> None:
         self.mpip_counter += 1
         mpip_id = lsf.mpip_id(self.mpip_counter)
-        mpip = mp.MPIP(mpip_id)
+        mpip = mp.MPIP(mpip_id, self.model_data.settings.pwl_method)
         representative_variable = nonlinear_expression.representative_variable
         mpip.add_implied_id(representative_variable)
         mpip.implying_function = self._nonlinear_expression_to_scip_expression(

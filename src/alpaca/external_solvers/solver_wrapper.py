@@ -33,6 +33,7 @@ class SolverWrapper:
             self.model.optimize(callback_function)
         else:  # scip
             self.model.optimize()
+            self.model.printStatistics()
 
     def add_constraint(self, expression: Any, name: str = "") -> Any:
         """Add a constraint to the model."""
@@ -210,8 +211,6 @@ class ScipSeparation(scip.Sepa):
 
     def sepaexeclp(self):
         """Run callback event."""
-        if self.model.getDepth() == 0:
-            return {lsf.scip_result_tag(): SCIP_RESULT.DIDNOTFIND}
         self.mpip_separation_handler.opt_model = self.model
         return (
             {lsf.scip_result_tag(): SCIP_RESULT.SEPARATED}

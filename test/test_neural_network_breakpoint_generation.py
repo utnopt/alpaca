@@ -1,4 +1,5 @@
 """Unit tests for the BreakpointNeuralNetwork class."""
+
 # pylint: disable=protected-access
 import unittest
 import dataclasses
