@@ -2,6 +2,7 @@
 """
 @authors: kuen,
 """
+# pylint: disable=too-many-public-methods
 from typing import Any
 import gurobipy as gp
 from gurobipy import nlfunc
@@ -182,6 +183,28 @@ class SolverWrapper:
         if self.mip_solver == lsf.solver_name_gurobi():
             return get_nonlinear_function_gurobi(nonlinearity_type)
         return get_nonlinear_function_scip(nonlinearity_type)
+
+    @staticmethod
+    def set_variable_lb(variable: Any, lb: float) -> None:
+        """Set the lower bound of a variable."""
+        variable.LB = lb
+
+    @staticmethod
+    def set_variable_ub(variable: Any, ub: float) -> None:
+        """Set the upper bound of a variable."""
+        variable.UB = ub
+
+    def get_solution(self) -> float:
+        """Get the objective value of the solution."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            return self.model.ObjVal
+        return self.model.getObjVal()
+
+    def is_infeasible(self) -> bool:
+        """Check if the model has a feasible solution."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            return self.model.Status == gp.GRB.INFEASIBLE
+        return self.model.getStatus() == lsf.scip_status_infeasible()
 
 
 class GurobiCut:

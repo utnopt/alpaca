@@ -32,9 +32,9 @@ class TestModelData(unittest.TestCase):
         model_data = mda.ModelData(user_settings)
 
         external_solver = mm.MIPModel(
-            model_data, user_settings, user_settings.external_solver
+            model_data
         )
-        solver = slv.Solver(external_solver, user_settings)
+        solver = slv.Solver(external_solver)
         mpip_handler = mph.MPIPHandler(model_data)
         mpip_separation_handler = msh.MPIPSeparationHandler(
             mpip_handler, external_solver.opt_model

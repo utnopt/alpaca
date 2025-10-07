@@ -292,6 +292,14 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return f"[{cls._get_timestamp()}] Solve MIP ..."
 
     @classmethod
+    def info_init_stair_locatelli(cls) -> str:
+        return f"[{cls._get_timestamp()}] Initialize stair Locatelli cuts..."
+
+    @classmethod
+    def info_total_stair_locatelli_cuts_added(cls, count: int) -> str:
+        return f"[{cls._get_timestamp()}] Total stair Locatelli cuts added: {count}"
+
+    @classmethod
     def info_optimization_finished(cls, runtime: float) -> str:
         return (
             f"[{cls._get_timestamp()}] Optimization finished in {runtime:.2f} seconds."
@@ -371,6 +379,10 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
     @classmethod
     def scip_result_tag(cls) -> str:
         return "result"
+
+    @classmethod
+    def scip_status_infeasible(cls) -> str:
+        return "infeasible"
 
     @classmethod
     def scip_parameter_reoptimization(cls) -> str:

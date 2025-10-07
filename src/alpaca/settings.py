@@ -69,7 +69,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         )
         self.bilinear_handling = int(
             config_dict.get("bilinear_handling", 0)
-        )  # 0: mccormick, 1: reformulate to sum of squares, 2: piecewise constant
+        )  # 0: mccormick, 1: reformulate to sum of squares, 2: piecewise constant, 3: nonlinear
         self.feature_mpip_separation = int(
             config_dict.get("feature/mpip/separation", 0)
         )
@@ -100,6 +100,13 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.feature_nnbp_convergence_tol = float(
             config_dict.get("feature/nnbp/convergence_tol", 1e-2)
         )
+        self.feature_stair_locatelli = int(
+            config_dict.get("feature/stair_locatelli", 0)
+        )  # 0: disabled, 1: enabled
+
+        self.feature_stair_locatelli_grid_size = int(
+            config_dict.get("feature/stair_locatelli/grid_size", 10)
+        )  # grid size for stair locatelli
 
     def save_to_json(self):
         """

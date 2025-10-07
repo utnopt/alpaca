@@ -1,6 +1,6 @@
 {
 "solver_time_limit": 7200,
-  "osil_file_name": "ex6_2_14",
+  "osil_file_name": "pooling_adhya1tp",
   "external_solver": "gurobi",
   "number_of_breakpoints": 30,
   "feature/mpip/separation": 0,
@@ -9,6 +9,8 @@
   "feature/mpip/stripe": 0,
   "approximation": 0,
   "reformulate_multilinear_to_bilinear": 1,
-  "bilinear_handling": 1,
-  "pwl_method": "delta"
+  "bilinear_handling": 0,
+  "pwl_method": "none",
+  "feature/stair_locatelli": 1,
+  "feature/stair_locatelli/grid_size": 6
 }
