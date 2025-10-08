@@ -38,7 +38,9 @@ def run_optimization():
             slo.StairLocatelli(model_data)
 
         external_solver = mm.MIPModel(
-            model_data, nonlinear=user_settings.pwl_method == lsf.pwl_method_none()
+            model_data,
+            nonlinear=user_settings.pwl_method == lsf.pwl_method_none(),
+            bilinear=user_settings.bilinear_handling == 3,
         )
 
         solver = slv.Solver(external_solver)

@@ -19,8 +19,10 @@ class StairLocatelli:
         logger.info(lsf.info_init_stair_locatelli())
         self.model_data = model_data
         self.settings = model_data.settings
-        self.external_solver = mm.MIPModel(model_data, nonlinear=True)
-        self.external_solver.opt_model.set_time_limit(5)
+        self.external_solver = mm.MIPModel(model_data)
+        self.external_solver.opt_model.set_time_limit(
+            self.model_data.settings.feature_stair_locatelli_obbt_time_limit
+        )
         self.external_solver.opt_model.hide_output()
         self.bilinear_projected_domains: list[
             tuple[ble.BilinearExpression, list[tuple[float, float]]]
@@ -135,7 +137,7 @@ class StairLocatelli:
         self.external_solver.opt_model.optimize()
         if self.external_solver.opt_model.is_infeasible():
             return False, 0.0
-        return True, self.external_solver.opt_model.get_solution()
+        return True, self.external_solver.opt_model.get_objective_value()
 
     @staticmethod
     def _generate_edge_checkpoints(

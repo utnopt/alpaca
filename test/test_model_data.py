@@ -32,7 +32,8 @@ class TestModelData(unittest.TestCase):
         model_data = mda.ModelData(user_settings)
 
         external_solver = mm.MIPModel(
-            model_data
+            model_data,
+            nonlinear=False
         )
         solver = slv.Solver(external_solver)
         mpip_handler = mph.MPIPHandler(model_data)

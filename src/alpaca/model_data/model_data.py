@@ -291,14 +291,20 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         multilinear_handler.handle()
 
         # Step 5: Propagate variable bounds through the expression structures.
-        bpr.BoundPropagator(self).propagate_bounds()
+        bound_propagator = bpr.BoundPropagator(self)
+        if self.settings.bound_propagation == 0:
+            bound_propagator.propagate_bounds()
+        elif self.settings.bound_propagation == 1:
+            self._translate_linear_expressions_to_constraints()
+            bound_propagator.apply_obbt()
+
+        # Step 6: Add McCormick envelopes for bilinear terms if specified.
+        if self.settings.bilinear_handling == 0:
+            multilinear_handler.add_mccormick_envelopes()
 
         if self.settings.pwl_method == lsf.pwl_method_none():
             self._translate_linear_expressions_to_constraints()
             return
-
-        # Step 6: Add McCormick envelopes for bilinear terms if specified.
-        multilinear_handler.add_mccormick_envelopes()
 
         # Step 7: Discretize variables that are part of nonlinear terms.
         dis.BreakpointGenerator(self).generate_breakpoints()

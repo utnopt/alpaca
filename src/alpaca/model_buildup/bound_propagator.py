@@ -12,16 +12,17 @@ from alpaca.expressions import (
     multilinear_expression as mle,
     linear_expression as lie,
 )
+from alpaca.external_solvers import mip_model as mm, solver_wrapper as sw
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
-    from alpaca.model_data.model_data import ModelData
+    from alpaca.model_data import model_data as mda, variable as var
 
 
 class BoundPropagator:
     """Handles bound propagation for constraints and expressions."""
 
-    def __init__(self, model_data: ModelData):
+    def __init__(self, model_data: mda.ModelData):
         self.model_data = model_data
 
     def propagate_bounds(self):
@@ -30,6 +31,38 @@ class BoundPropagator:
         for _ in range(self.model_data.settings.bound_propagation_rounds):
             self._propagate_linear_constraints()
             self._propagate_expressions()
+
+    def apply_obbt(self):
+        """Use optimization-based bound tightening (OBBT) for all variables."""
+        logger.info(lsf.info_apply_obbt())
+        external_solver = mm.MIPModel(self.model_data)
+        external_solver.opt_model.hide_output()
+        external_solver.opt_model.set_time_limit(
+            self.model_data.settings.bound_propagation_obbt_time_limit
+        )
+        for variable in self.model_data.variables.values():
+            if variable.var_type != lsf.var_type_binary():
+                self._tighten_bounds_via_obbt(variable, external_solver.opt_model)
+
+    @staticmethod
+    def _tighten_bounds_via_obbt(variable: var.Variable, opt_model: sw.SolverWrapper):
+        # Minimize to find lower bound
+        opt_model.set_objective(
+            variable.solver_variable, sense=lsf.objective_sense_minimize()
+        )
+        opt_model.optimize()
+        if opt_model.is_optimal():
+            obj_value = opt_model.get_objective_value()
+            variable.lb = max(variable.lb, obj_value)
+
+        # Maximize to find upper bound
+        opt_model.set_objective(
+            variable.solver_variable, sense=lsf.objective_sense_maximize()
+        )
+        opt_model.optimize()
+        if opt_model.is_optimal():
+            obj_value = opt_model.get_objective_value()
+            variable.ub = min(variable.ub, obj_value)
 
     def _propagate_linear_constraints(self):
         """Performs bound propagation on linear equality constraints."""

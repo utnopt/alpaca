@@ -44,10 +44,13 @@ class LinearExpression(exn.Expression):
         self.variables: list[tuple[float, var.Variable]] = []
         self.constant: float = 0.0
         self.model_data: ModelData = model_data
+        self.linear_constraint: con.LinearConstraint | None = None
 
     def add_constraint_from_linear_expression(self):
         """Add constraint from linear expression."""
-        self.model_data.add_constraint(
+        if self.linear_constraint is not None:
+            return
+        self.linear_constraint = self.model_data.add_constraint(
             con.LinearConstraint(
                 lsf.con_name(self.name),
                 con_type=lsf.constraint_eq(),

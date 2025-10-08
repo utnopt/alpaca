@@ -340,6 +340,10 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
             f" The settings are saved as JSON-format to the export folder"
         )
 
+    @classmethod
+    def info_apply_obbt(cls) -> str:
+        return f"[{cls._get_timestamp()}] Apply optimization-based bound tightening (OBBT)..."
+
     # --- Solvers ---
 
     @classmethod
@@ -383,6 +387,10 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
     @classmethod
     def scip_status_infeasible(cls) -> str:
         return "infeasible"
+
+    @classmethod
+    def scip_status_optimal(cls) -> str:
+        return "optimal"
 
     @classmethod
     def scip_parameter_reoptimization(cls) -> str:

@@ -2,23 +2,28 @@
 """
 @authors: kuen,
 """
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import math
 
-from alpaca.model_data import model_data as mda
 from alpaca.utils.logger import logger
 import alpaca.external_solvers.solver_wrapper as sw
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+
+if TYPE_CHECKING:
+    from alpaca.model_data import model_data as mda
 
 
 class MIPModel:
     """Optimization model object."""
 
-    def __init__(self, data: mda.ModelData, nonlinear=False):
+    def __init__(self, data: mda.ModelData, nonlinear=True, bilinear=True) -> None:
         logger.info(lsf.info_init_mip_model_buildup())
         self.opt_model = sw.SolverWrapper(data.settings.external_solver)
         self.data = data
         self.settings = data.settings
         self.nonlinear = nonlinear
+        self.bilinear = bilinear
         self._build_optimization_model()
 
     def _build_optimization_model(self):
@@ -81,7 +86,7 @@ class MIPModel:
                     == expression.representative_variable.solver_variable,
                     name=expression.name,
                 )
-        if self.settings.bilinear_handling == 3:
+        if self.bilinear:
             for expression in self.data.expressions.bilinear_expressions.values():
                 expression.solver_constraint = self.opt_model.add_constraint(
                     (

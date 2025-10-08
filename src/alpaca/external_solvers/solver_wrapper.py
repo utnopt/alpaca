@@ -194,7 +194,7 @@ class SolverWrapper:
         """Set the upper bound of a variable."""
         variable.UB = ub
 
-    def get_solution(self) -> float:
+    def get_objective_value(self) -> float:
         """Get the objective value of the solution."""
         if self.mip_solver == lsf.solver_name_gurobi():
             return self.model.ObjVal
@@ -205,6 +205,12 @@ class SolverWrapper:
         if self.mip_solver == lsf.solver_name_gurobi():
             return self.model.Status == gp.GRB.INFEASIBLE
         return self.model.getStatus() == lsf.scip_status_infeasible()
+
+    def is_optimal(self) -> bool:
+        """Check if the model has been solved to optimality."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            return self.model.Status == gp.GRB.OPTIMAL
+        return self.model.getStatus() == lsf.scip_status_optimal()
 
 
 class GurobiCut:

@@ -59,6 +59,12 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.bound_propagation_rounds = int(
             config_dict.get("bound_propagation_rounds", 3)
         )
+        self.bound_propagation_obbt_time_limit = int(
+            config_dict.get("bound_propagation_obbt_time_limit", 5)
+        )
+        self.feature_stair_locatelli_obbt_time_limit = int(
+            config_dict.get("feature/stair_locatelli/obbt_time_limit", 5)
+        )
         self.export_path = (
             StaticSettings.base_path
             + f"/data/export/{time.strftime('%Y-%m-%d_%H-%M-%S')}_"
@@ -70,6 +76,9 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.bilinear_handling = int(
             config_dict.get("bilinear_handling", 0)
         )  # 0: mccormick, 1: reformulate to sum of squares, 2: piecewise constant, 3: nonlinear
+        self.bound_propagation = int(
+            config_dict.get("bound_propagation", 0)
+        )  # 0: manual, 1: obbt
         self.feature_mpip_separation = int(
             config_dict.get("feature/mpip/separation", 0)
         )

@@ -12,5 +12,6 @@
   "bilinear_handling": 0,
   "pwl_method": "none",
   "feature/stair_locatelli": 1,
-  "feature/stair_locatelli/grid_size": 6
+  "feature/stair_locatelli/grid_size": 6,
+  "bound_propagation": 1
 }
