@@ -172,6 +172,10 @@ class SolverWrapper:
             lsf.mip_solver_parameter_time_limit(self.mip_solver), time_limit
         )
 
+    def turn_off_presolve(self) -> None:
+        """Turn off presolve for the solver."""
+        self.model.setParam(lsf.mip_solver_parameter_presolve(self.mip_solver), 0)
+
     def set_thread_limit(self, thread_limit: int) -> None:
         """Set a thread limit for the solver."""
         self.model.setParam(

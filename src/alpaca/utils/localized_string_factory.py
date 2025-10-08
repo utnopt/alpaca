@@ -365,6 +365,14 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return "time_limit"
 
     @classmethod
+    def mip_solver_parameter_presolve(cls, solver_name: str) -> str:
+        if solver_name == cls.solver_name_scip():
+            return "presolving/maxrounds"
+        if solver_name == cls.solver_name_gurobi():
+            return "Presolve"
+        return "Presolve"
+
+    @classmethod
     def mip_solver_parameter_thread_limit(cls, solver_name: str) -> str:
         if solver_name == cls.solver_name_scip():
             return "parallel/maxnthreads"
