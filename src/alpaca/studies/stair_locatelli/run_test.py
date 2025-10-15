@@ -54,7 +54,10 @@ def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting)
             "pwl_method": "none",
             "feature/stair_locatelli": stair_locatelli_setting,
             "feature/stair_locatelli/grid_size": 10,
-            "bound_propagation": 0,
+            "breakpoint_generation": 1,
+            "feature/nnbp/time_limit": 300,
+            "bound_propagation": 1,
+            "bound_propagation_time_limit": 300,
         }
 
         user_settings = s.UserSettings(config_dict)
