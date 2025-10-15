@@ -39,11 +39,9 @@ echo "instance_name,obj_without,obj_locatelli,obj_stair_locatelli" > "$RESULTS_F
 
 # Find all 'pooling' .osil files and prepare the list of jobs.
 declare -a jobs
-for dir in "$IMPORT_PATH"/instances_*; do
-    while IFS= read -r file; do
-        jobs+=("$file")
-    done < <(find "$dir" -name "pooling*.osil")
-done
+while IFS= read -r file; do
+    jobs+=("$file")
+done < <(find "$IMPORT_PATH" -name "pooling*.osil")
 
 NUM_JOBS=${#jobs[@]}
 echo "Found $NUM_JOBS total jobs to run for the stair_locatelli test."
