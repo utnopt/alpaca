@@ -31,7 +31,7 @@ mkdir -p "$EXPORT_PATH"
 
 # Create a timestamped results file and write the header
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
-RESULTS_FILE="$EXPORT_PATH/results_${TIMESTAMP}.csv"
+RESULTS_FILE="$EXPORT_PATH/mpip_results_${TIMESTAMP}.csv"
 # Added 'seed_value' to the CSV header
 echo "test_case,pwl_method,nr_of_breakpoints,seed,osil_file_name,runtime,mip_gap,mpip_cuts,mpip_cuts_applied,mpip_ratio" > "$RESULTS_FILE"
 
@@ -95,7 +95,7 @@ run_job() {
     # Execute the Python script with all required arguments, including the seed value
     # The output is directly appended to the results file
     PYTHONPATH="$PROJECT_ROOT/src" taskset -c "$core_set" \
-    python3 "$SCRIPT_DIR/run_instance.py" \
+    python3 "$SCRIPT_DIR/run_test.py" \
         --file "$file" \
         --breakpoints "$breakpoints" \
         --test_case "$test_case" \
