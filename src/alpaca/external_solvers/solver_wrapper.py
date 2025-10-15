@@ -163,6 +163,8 @@ class SolverWrapper:
         self, expression: Any, sense=lsf.objective_sense_minimize()
     ) -> None:
         """Set the model's objective function."""
+        if self.mip_solver == lsf.solver_name_scip():
+            self.model.freeTransform()
         self.model.setObjective(expression)
         self.set_objective_sense(sense)
 
