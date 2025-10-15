@@ -10,7 +10,6 @@ from alpaca.model_data import variable as var
 from alpaca.expressions import (
     one_dim_expression as ode,
 )
-from alpaca.utils.logger import logger
 import alpaca.settings as s
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
@@ -125,7 +124,7 @@ class NonlinearExpression:
                 ode.TangensHExpression, level
             )
         elif self.expression_type == lsf.nonlinearity_type_min():
-            next_level = logger.warning(
+            raise KeyError(
                 lsf.warning_expression_type_not_supported(self.expression_type)
             )
         elif self.expression_type == lsf.nonlinearity_type_inverse():
@@ -140,7 +139,7 @@ class NonlinearExpression:
                     ode.SquareRootExpression, level
                 )
             else:
-                next_level = logger.warning(
+                raise KeyError(
                     lsf.warning_expression_type_not_supported(self.expression_type)
                 )
         elif self.expression_type == lsf.nonlinearity_type_xabsx():
@@ -149,9 +148,7 @@ class NonlinearExpression:
             next_level = self._fragment_negate_expression(level)
         else:
             raise KeyError(
-                logger.warning(
-                    lsf.warning_expression_type_not_supported(self.expression_type)
-                )
+                lsf.warning_expression_type_not_supported(self.expression_type)
             )
         for child_expression in self.child_expressions:
             if (
