@@ -16,7 +16,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 PROJECT_ROOT=$(dirname "$(dirname "$SCRIPT_DIR")")
 
 # Paths to the test instances and export directory
-IMPORT_PATH="$PROJECT_ROOT/data/import"
+IMPORT_PATH="$PROJECT_ROOT/data/import/instances"
 EXPORT_PATH="$PROJECT_ROOT/data/export"
 
 # Core configuration for parallel execution
