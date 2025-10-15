@@ -292,9 +292,8 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
 
         # Step 5: Propagate variable bounds through the expression structures.
         bound_propagator = bpr.BoundPropagator(self)
-        if self.settings.bound_propagation == 0:
-            bound_propagator.propagate_bounds()
-        elif self.settings.bound_propagation == 1:
+        bound_propagator.propagate_bounds()
+        if self.settings.bound_propagation == 1:
             self._translate_linear_expressions_to_constraints()
             bound_propagator.apply_obbt()
 

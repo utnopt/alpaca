@@ -22,6 +22,11 @@ class StairLocatelli:
         self.external_solver = mm.MIPModel(model_data)
         self.external_solver.opt_model.set_time_limit(
             self.model_data.settings.feature_stair_locatelli_obbt_time_limit
+            / (
+                len(self.model_data.expressions.bilinear_expressions)
+                * 2
+                * self.settings.feature_stair_locatelli_grid_size
+            )
         )
         self.external_solver.opt_model.hide_output()
         self.bilinear_projected_domains: list[
@@ -59,15 +64,6 @@ class StairLocatelli:
         self.external_solver.opt_model.set_variable_lb(x.solver_variable, x.lb)
         self.external_solver.opt_model.set_variable_ub(x.solver_variable, x.ub)
 
-        # self.external_solver.opt_model.set_objective(x.solver_variable,
-        #                                              sense=lsf.objective_sense_maximize())
-        # for lb, ub in reversed(list(zip(y_domain, y_domain[1:]))):
-        #     feasible, solution_value = self._get_solution_value_for_interval(y, lb, ub)
-        #     if feasible:
-        #         vertices.extend([(solution_value, ub), (solution_value, lb)])
-        # self.external_solver.opt_model.set_variable_lb(y.solver_variable, y.lb)
-        # self.external_solver.opt_model.set_variable_ub(y.solver_variable, y.ub)
-
         self.external_solver.opt_model.set_objective(
             y.solver_variable, sense=lsf.objective_sense_minimize()
         )
@@ -78,16 +74,11 @@ class StairLocatelli:
         self.external_solver.opt_model.set_variable_lb(x.solver_variable, x.lb)
         self.external_solver.opt_model.set_variable_ub(x.solver_variable, x.ub)
 
-        # self.external_solver.opt_model.set_objective(x.solver_variable,
-        #                                              sense=lsf.objective_sense_minimize())
-        # for lb, ub in zip(y_domain, y_domain[1:]):
-        #     feasible, solution_value = self._get_solution_value_for_interval(y, lb, ub)
-        #     if feasible:
-        #         vertices.extend([(solution_value, lb), (solution_value, ub)])
-        # self.external_solver.opt_model.set_variable_lb(y.solver_variable, y.lb)
-        # self.external_solver.opt_model.set_variable_ub(y.solver_variable, y.ub)
+        post_processed_vertices = self._post_process_vertices(vertices)
+        if self.model_data.settings.feature_stair_locatelli == 1:
+            post_processed_vertices = self._get_convex_hull(post_processed_vertices)
         self.bilinear_projected_domains.append(
-            (bilinear_expression, self._post_process_vertices(vertices))
+            (bilinear_expression, post_processed_vertices)
         )
 
     def _post_process_vertices(
@@ -128,6 +119,54 @@ class StairLocatelli:
             if np.isclose(similarity, 1.0, atol=1e-3):
                 non_vertex_point_indices.append(i + 1 % len(vertices))
         return [v for i, v in enumerate(vertices) if i not in non_vertex_point_indices]
+
+    @staticmethod
+    def _get_convex_hull(vertices):
+        """
+        Calculates the convex hull of a set of 2D vertices using the Monotone Chain algorithm.
+
+        Args:
+            vertices: A list of (x, y) tuples.
+
+        Returns:
+            A list of (x, y) tuples representing the vertices of the convex hull
+            in counter-clockwise order.
+        """
+
+        # Helper function to calculate the cross product (for turn direction)
+        def cross_product(p1, p2, p3):
+            return (p2[0] - p1[0]) * (p3[1] - p1[1]) - (p2[1] - p1[1]) * (p3[0] - p1[0])
+
+        # 1. Sort vertices lexicographically (by x, then y)
+        vertices.sort()
+
+        # 2. Build the lower hull
+        lower_hull = []
+        for v in vertices:
+            # While the last two points and the current point make a clockwise turn...
+            while (
+                len(lower_hull) >= 2
+                and cross_product(lower_hull[-2], lower_hull[-1], v) <= 0
+            ):
+                lower_hull.pop()  # ...remove the last point.
+            lower_hull.append(v)
+
+        # 3. Build the upper hull
+        upper_hull = []
+        # Iterate in reverse order
+        for v in reversed(vertices):
+            # While the last two points and the current point make a clockwise turn...
+            while (
+                len(upper_hull) >= 2
+                and cross_product(upper_hull[-2], upper_hull[-1], v) <= 0
+            ):
+                upper_hull.pop()  # ...remove the last point.
+            upper_hull.append(v)
+
+        # 4. Combine hulls and remove duplicates
+        # The first and last points of the sorted list are on both hulls.
+        # We remove them from the upper hull before combining.
+        return lower_hull + upper_hull[1:-1]
 
     def _get_solution_value_for_interval(
         self, variable: var.Variable, lb: float, ub: float
@@ -188,7 +227,11 @@ class StairLocatelli:
         if self._check_if_vertices_are_collinear(v1, v2, v3):
             return False
 
-        cut_coefficients = self._calculate_hyperplane_for_vertex_triple(v1, v2, v3)
+        check, cut_coefficients = self._calculate_hyperplane_for_vertex_triple(
+            v1, v2, v3
+        )
+        if not check:
+            return False
         con_type = self._check_if_hyperplane_is_infeasible(
             cut_coefficients, checkpoints
         )
@@ -255,11 +298,14 @@ class StairLocatelli:
     @staticmethod
     def _calculate_hyperplane_for_vertex_triple(
         v1: tuple[float, float], v2: tuple[float, float], v3: tuple[float, float]
-    ):
+    ) -> tuple[bool, np.ndarray]:
         """Calculate hyperplane coefficients for three points in 2D."""
         matrix = np.array([[v1[0], v1[1], 1], [v2[0], v2[1], 1], [v3[0], v3[1], 1]])
         b = np.array([v1[0] * v1[1], v2[0] * v2[1], v3[0] * v3[1]])
-        return np.linalg.solve(matrix, b)
+        try:
+            return True, np.linalg.solve(matrix, b)
+        except np.linalg.LinAlgError:
+            return False, np.array([0.0, 0.0, 0.0])
 
     @staticmethod
     def _check_if_hyperplane_is_infeasible(

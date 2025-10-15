@@ -39,6 +39,7 @@ class BoundPropagator:
         external_solver.opt_model.hide_output()
         external_solver.opt_model.set_time_limit(
             self.model_data.settings.bound_propagation_obbt_time_limit
+            / len(self.model_data.variables)
         )
         for variable in self.model_data.variables.values():
             if variable.var_type != lsf.var_type_binary():
