@@ -2,23 +2,28 @@
 """
 @authors: kuen,
 """
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import math
 
-from alpaca.model_data import model_data as mda
-from alpaca.settings import UserSettings
 from alpaca.utils.logger import logger
 import alpaca.external_solvers.solver_wrapper as sw
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+
+if TYPE_CHECKING:
+    from alpaca.model_data import model_data as mda
 
 
 class MIPModel:
     """Optimization model object."""
 
-    def __init__(self, data: mda.ModelData, settings: UserSettings, solver_name: str):
+    def __init__(self, data: mda.ModelData, nonlinear=True, bilinear=True) -> None:
         logger.info(lsf.info_init_mip_model_buildup())
-        self.opt_model = sw.SolverWrapper(solver_name)
+        self.opt_model = sw.SolverWrapper(data.settings.external_solver)
         self.data = data
-        self.settings = settings
+        self.settings = data.settings
+        self.nonlinear = nonlinear
+        self.bilinear = bilinear
         self._build_optimization_model()
 
     def _build_optimization_model(self):
@@ -27,7 +32,7 @@ class MIPModel:
         """
         self._add_variables()
         self._add_constraints()
-        if self.settings.pwl_method == lsf.pwl_method_none():
+        if self.nonlinear:
             self._add_nonlinear_constraints()
         self._add_objective()
         self._set_parameters()
@@ -81,7 +86,7 @@ class MIPModel:
                     == expression.representative_variable.solver_variable,
                     name=expression.name,
                 )
-        if not self.settings.bilinear_handling == 1:
+        if self.bilinear:
             for expression in self.data.expressions.bilinear_expressions.values():
                 expression.solver_constraint = self.opt_model.add_constraint(
                     (

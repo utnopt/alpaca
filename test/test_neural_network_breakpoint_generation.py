@@ -27,7 +27,7 @@ class MockUserSettings:
 
     number_of_breakpoints: int = 5
     feature_nnbp_nr_of_samples: int = 200
-    feature_nnbp_max_epochs: int = 100  # Sufficient for convergence in tests
+    feature_nnbp_time_limit: int = 100
     feature_nnbp_queue_size: int = 10
     feature_nnbp_convergence_tol: float = 0.01
     feature_nnbp_learning_rate: float = 1e-7

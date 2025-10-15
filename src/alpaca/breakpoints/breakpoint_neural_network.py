@@ -3,6 +3,7 @@
 @authors: kuen,
 """
 import dataclasses
+import time
 from typing import Callable, Optional
 import numpy as np
 
@@ -210,7 +211,8 @@ class BreakpointNeuralNetwork:
             np.inf for _ in range(self.settings.feature_nnbp_queue_size)
         ]
         epoch: int = 0
-        while epoch < self.settings.feature_nnbp_max_epochs:
+        start_time = time.time()
+        while time.time() - start_time < self.settings.feature_nnbp_time_limit:
             if (
                 epoch > self.settings.feature_nnbp_queue_size
                 and total_loss_queue[0] != 0

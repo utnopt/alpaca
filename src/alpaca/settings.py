@@ -59,6 +59,12 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.bound_propagation_rounds = int(
             config_dict.get("bound_propagation_rounds", 3)
         )
+        self.bound_propagation_obbt_time_limit = int(
+            config_dict.get("bound_propagation_obbt_time_limit", 300)
+        )
+        self.feature_stair_locatelli_obbt_time_limit = int(
+            config_dict.get("feature/stair_locatelli/obbt_time_limit", 1800)
+        )
         self.export_path = (
             StaticSettings.base_path
             + f"/data/export/{time.strftime('%Y-%m-%d_%H-%M-%S')}_"
@@ -69,7 +75,10 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         )
         self.bilinear_handling = int(
             config_dict.get("bilinear_handling", 0)
-        )  # 0: mccormick, 1: reformulate to sum of squares, 2: piecewise constant
+        )  # 0: mccormick, 1: reformulate to sum of squares, 2: piecewise constant, 3: nonlinear
+        self.bound_propagation = int(
+            config_dict.get("bound_propagation", 1)
+        )  # 0: manual, 1: obbt
         self.feature_mpip_separation = int(
             config_dict.get("feature/mpip/separation", 0)
         )
@@ -83,7 +92,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             or self.feature_mpip_stripe
         )
         self.breakpoint_generation = int(
-            config_dict.get("breakpoint_generation", 0)
+            config_dict.get("breakpoint_generation", 1)
         )  # 0: equal, 1: neural networks (nnbp)
         self.feature_nnbp_learning_rate = float(
             config_dict.get("feature/nnbp/learning_rate", 1e-7)
@@ -91,8 +100,8 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.feature_nnbp_nr_of_samples = int(
             config_dict.get("feature/nnbp/nr_of_samples", 1000)
         )
-        self.feature_nnbp_max_epochs = int(
-            config_dict.get("feature/nnbp/max_epochs", 100)
+        self.feature_nnbp_time_limit = int(
+            config_dict.get("feature/nnbp/time_limit", 100)
         )
         self.feature_nnbp_queue_size = int(
             config_dict.get("feature/nnbp/queue_size", 5)
@@ -100,6 +109,13 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.feature_nnbp_convergence_tol = float(
             config_dict.get("feature/nnbp/convergence_tol", 1e-2)
         )
+        self.feature_stair_locatelli = int(
+            config_dict.get("feature/stair_locatelli", 0)
+        )  # 0: disabled, 1: locatelli, 2: stair locatelli
+
+        self.feature_stair_locatelli_grid_size = int(
+            config_dict.get("feature/stair_locatelli/grid_size", 10)
+        )  # grid size for stair locatelli
 
     def save_to_json(self):
         """

@@ -292,6 +292,14 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return f"[{cls._get_timestamp()}] Solve MIP ..."
 
     @classmethod
+    def info_init_stair_locatelli(cls) -> str:
+        return f"[{cls._get_timestamp()}] Initialize stair Locatelli cuts..."
+
+    @classmethod
+    def info_total_stair_locatelli_cuts_added(cls, count: int) -> str:
+        return f"[{cls._get_timestamp()}] Total stair Locatelli cuts added: {count}"
+
+    @classmethod
     def info_optimization_finished(cls, runtime: float) -> str:
         return (
             f"[{cls._get_timestamp()}] Optimization finished in {runtime:.2f} seconds."
@@ -332,6 +340,10 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
             f" The settings are saved as JSON-format to the export folder"
         )
 
+    @classmethod
+    def info_apply_obbt(cls) -> str:
+        return f"[{cls._get_timestamp()}] Apply optimization-based bound tightening (OBBT)..."
+
     # --- Solvers ---
 
     @classmethod
@@ -353,6 +365,14 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return "time_limit"
 
     @classmethod
+    def mip_solver_parameter_presolve(cls, solver_name: str) -> str:
+        if solver_name == cls.solver_name_scip():
+            return "presolving/maxrounds"
+        if solver_name == cls.solver_name_gurobi():
+            return "Presolve"
+        return "Presolve"
+
+    @classmethod
     def mip_solver_parameter_thread_limit(cls, solver_name: str) -> str:
         if solver_name == cls.solver_name_scip():
             return "parallel/maxnthreads"
@@ -371,6 +391,14 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
     @classmethod
     def scip_result_tag(cls) -> str:
         return "result"
+
+    @classmethod
+    def scip_status_infeasible(cls) -> str:
+        return "infeasible"
+
+    @classmethod
+    def scip_status_optimal(cls) -> str:
+        return "optimal"
 
     @classmethod
     def scip_parameter_reoptimization(cls) -> str:

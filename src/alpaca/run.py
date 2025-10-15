@@ -11,6 +11,7 @@ from alpaca.external_solvers import mip_model as mm
 import alpaca.solver.solver as slv
 import alpaca.mpip.mpip_handler as mph
 import alpaca.mpip.separation.mpip_separationhandler as msh
+import alpaca.locatelli.stair_locatelli as slo
 import alpaca.settings as s
 from alpaca.utils import inout as ut_io, data_reading as ut_dr
 from alpaca.utils.logger import logger
@@ -33,11 +34,16 @@ def run_optimization():
 
         model_data = mda.ModelData(user_settings)
 
+        if user_settings.feature_stair_locatelli:
+            slo.StairLocatelli(model_data)
+
         external_solver = mm.MIPModel(
-            model_data, user_settings, user_settings.external_solver
+            model_data,
+            nonlinear=user_settings.pwl_method == lsf.pwl_method_none(),
+            bilinear=user_settings.bilinear_handling == 3,
         )
 
-        solver = slv.Solver(external_solver, user_settings)
+        solver = slv.Solver(external_solver)
 
         if user_settings.feature_mpip:
             if user_settings.pwl_method == lsf.pwl_method_none():
