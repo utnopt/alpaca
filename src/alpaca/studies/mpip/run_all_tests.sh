@@ -100,7 +100,7 @@ run_job() {
         --breakpoints "$breakpoints" \
         --test_case "$test_case" \
         --pwl_method "$pwl_method" \
-        --seed_value "$seed_value" >> "$RESULTS_FILE" 2>&1 # Pass seed_value to the script
+        --seed_value "$seed_value" >> "$RESULTS_FILE" 2>/dev/null
 
     # Return the slot to the semaphore, making it available for the next job
     echo "$slot" >&3

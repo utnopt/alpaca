@@ -101,20 +101,28 @@ if __name__ == "__main__":
     )
 
     if len(sys.argv) > 1:
-        # Hide all console output from alpaca to keep the final CSV clean
-        with open(os.devnull, "w", encoding="utf-8") as devnull:
-            sys.stdout = devnull
-            sys.stderr = devnull
+        parsed_args = parser.parse_args()
+        instance_name_only = os.path.splitext(os.path.basename(parsed_args.file))[0]
 
-            parsed_args = parser.parse_args()
-            instance_name_only = os.path.splitext(os.path.basename(parsed_args.file))[0]
+        # Save the original standard output
+        original_stdout = sys.stdout
 
-            # Run for all three settings
-            obj_without = run_single_stair_locatelli_test(parsed_args.file, 0)
-            obj_locatelli = run_single_stair_locatelli_test(parsed_args.file, 1)
-            obj_stair_locatelli = run_single_stair_locatelli_test(parsed_args.file, 2)
+        try:
+            # Redirect stdout to suppress unwanted prints from the library
+            with open(os.devnull, "w", encoding="utf-8") as devnull:
+                sys.stdout = devnull
+                # Run for all three settings
+                obj_without = run_single_stair_locatelli_test(parsed_args.file, 0)
+                obj_locatelli = run_single_stair_locatelli_test(parsed_args.file, 1)
+                obj_stair_locatelli = run_single_stair_locatelli_test(
+                    parsed_args.file, 2
+                )
+        finally:
+            # Restore the original standard output
+            sys.stdout = original_stdout
 
-        # Print the results as a single CSV line to be captured by the shell script
+        # Print the results as a single CSV line. The calling shell script
+        # will handle directing this to the results file.
         print(
             f"{instance_name_only},{obj_without},{obj_locatelli},{obj_stair_locatelli}"
         )

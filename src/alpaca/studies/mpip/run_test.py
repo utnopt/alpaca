@@ -120,7 +120,7 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
         logger.error(
             "Error occurred while running optimization for %s: %s", osil_file_name, ex
         )
-        return osil_file_name + "ERROR", -1.0, -1.0, -1, -1, -1.0
+        return osil_file_name + "_ERROR", -1.0, -1.0, -1, -1, -1.0
 
     finally:
         # Restore the original instances path to avoid side effects
@@ -157,12 +157,21 @@ if __name__ == "__main__":
         help="Pwl method.",
     )
 
-    # If arguments are provided, run the optimization
     if len(sys.argv) > 1:
-        with open(os.devnull, "w", encoding="utf-8") as devnull:
-            sys.stdout = devnull
-            parsed_args = parser.parse_args()
-            results = run_single_optimization(parsed_args)
+        parsed_args = parser.parse_args()
+        original_stdout = sys.stdout
+
+        try:
+            # Redirect stdout to suppress unwanted prints from the library
+            with open(os.devnull, "w", encoding="utf-8") as devnull:
+                sys.stdout = devnull
+                results = run_single_optimization(parsed_args)
+        finally:
+            # Restore the original standard output
+            sys.stdout = original_stdout
+
+        # Print the results as a single CSV line. The calling shell script
+        # will handle directing this to the results file.
         print(
             f"{parsed_args.test_case},{parsed_args.pwl_method},"
             f"{parsed_args.breakpoints},{parsed_args.seed_value},"

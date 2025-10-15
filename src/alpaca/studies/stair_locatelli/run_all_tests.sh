@@ -75,10 +75,12 @@ run_job() {
     local core_set="$2"
     local slot="$3"
 
-    # Execute the Python script; its output is appended to the results file
+    # Execute the Python script.
+    # Append its standard output (the CSV line) to the results file.
+    # Redirect its standard error (logs, warnings) to /dev/null to keep the CSV clean.
     PYTHONPATH="$PROJECT_ROOT/src" taskset -c "$core_set" \
     python3 "$SCRIPT_DIR/run_test.py" \
-        --file "$file" >> "$RESULTS_FILE" 2>&1
+        --file "$file" >> "$RESULTS_FILE" 2>/dev/null
 
     # Return the slot to the semaphore, making it available for the next job
     echo "$slot" >&3
