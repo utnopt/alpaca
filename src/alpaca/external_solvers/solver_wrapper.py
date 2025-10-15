@@ -2,6 +2,7 @@
 """
 @authors: kuen,
 """
+# pylint: disable=too-many-public-methods
 from typing import Any
 import gurobipy as gp
 from gurobipy import nlfunc
@@ -33,6 +34,7 @@ class SolverWrapper:
             self.model.optimize(callback_function)
         else:  # scip
             self.model.optimize()
+            self.model.printStatistics()
 
     def add_constraint(self, expression: Any, name: str = "") -> Any:
         """Add a constraint to the model."""
@@ -161,6 +163,8 @@ class SolverWrapper:
         self, expression: Any, sense=lsf.objective_sense_minimize()
     ) -> None:
         """Set the model's objective function."""
+        if self.mip_solver == lsf.solver_name_scip():
+            self.model.freeTransform()
         self.model.setObjective(expression)
         self.set_objective_sense(sense)
 
@@ -169,6 +173,10 @@ class SolverWrapper:
         self.model.setParam(
             lsf.mip_solver_parameter_time_limit(self.mip_solver), time_limit
         )
+
+    def turn_off_presolve(self) -> None:
+        """Turn off presolve for the solver."""
+        self.model.setParam(lsf.mip_solver_parameter_presolve(self.mip_solver), 0)
 
     def set_thread_limit(self, thread_limit: int) -> None:
         """Set a thread limit for the solver."""
@@ -181,6 +189,34 @@ class SolverWrapper:
         if self.mip_solver == lsf.solver_name_gurobi():
             return get_nonlinear_function_gurobi(nonlinearity_type)
         return get_nonlinear_function_scip(nonlinearity_type)
+
+    @staticmethod
+    def set_variable_lb(variable: Any, lb: float) -> None:
+        """Set the lower bound of a variable."""
+        variable.LB = lb
+
+    @staticmethod
+    def set_variable_ub(variable: Any, ub: float) -> None:
+        """Set the upper bound of a variable."""
+        variable.UB = ub
+
+    def get_objective_value(self) -> float:
+        """Get the objective value of the solution."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            return self.model.ObjVal
+        return self.model.getObjVal()
+
+    def is_infeasible(self) -> bool:
+        """Check if the model has a feasible solution."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            return self.model.Status == gp.GRB.INFEASIBLE
+        return self.model.getStatus() == lsf.scip_status_infeasible()
+
+    def is_optimal(self) -> bool:
+        """Check if the model has been solved to optimality."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            return self.model.Status == gp.GRB.OPTIMAL
+        return self.model.getStatus() == lsf.scip_status_optimal()
 
 
 class GurobiCut:
@@ -210,8 +246,6 @@ class ScipSeparation(scip.Sepa):
 
     def sepaexeclp(self):
         """Run callback event."""
-        if self.model.getDepth() == 0:
-            return {lsf.scip_result_tag(): SCIP_RESULT.DIDNOTFIND}
         self.mpip_separation_handler.opt_model = self.model
         return (
             {lsf.scip_result_tag(): SCIP_RESULT.SEPARATED}

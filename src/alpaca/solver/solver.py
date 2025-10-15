@@ -5,7 +5,6 @@
 import time
 
 from alpaca.external_solvers import mip_model as mm, solver_wrapper as sw
-from alpaca.settings import UserSettings
 from alpaca.utils.logger import logger
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
@@ -13,9 +12,9 @@ from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 class Solver:
     """Solver object."""
 
-    def __init__(self, external_solver: mm.MIPModel, settings: UserSettings):
+    def __init__(self, external_solver: mm.MIPModel):
         self.external_solver = external_solver
-        self.settings = settings
+        self.settings = external_solver.settings
         self.mpip_separation_handler = None
         self.gurobi_callback_function = None
 

@@ -52,9 +52,7 @@ class MultilinearExpression(exn.Expression):
         self.model_data = model_data
         self.piecewise_constant_relation = {}
         for variable in self.variables:
-            variable.add_nonlinearity_to_occurring_in(
-                lsf.nonlinearity_type_multilinear(len(variables))
-            )
+            variable.is_discretized = True
 
     def extract_mpip_relation(self, approximation: bool = False):
         """Extract the piecewise constant relation for the multilinear expression."""

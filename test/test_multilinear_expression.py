@@ -57,13 +57,7 @@ class TestMultilinearExpression(unittest.TestCase):
         )
         self.assertEqual(expr.level, 0)
         for var in variables:
-            self.assertIn(lsf.nonlinearity_type_multilinear(3), var.occurring_in)
             self.assertTrue(var.is_discretized)
-        # Test idempotency of occurring_in
-        MultilinearExpression("test_init_expr_2", self.model_data, [self.x], 0)
-        self.assertEqual(
-            self.x.occurring_in.count(lsf.nonlinearity_type_multilinear(1)), 1
-        )
 
     def test_get_implied_lb_and_ub(self):
         """Test the static method get_implied_lb_and_ub."""
