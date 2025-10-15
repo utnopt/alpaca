@@ -67,6 +67,18 @@ class SolverWrapper:
             return var.X
         return self.model.getVal(var)
 
+    def get_mip_gap(self) -> float:
+        """Get the MIP gap of the current solution."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            return self.model.MIPGap
+        return self.model.getGap()
+
+    def get_nr_of_applied_cuts(self) -> int:
+        """Get the number of applied cuts."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            return self.model.NumUserCuts
+        return self.model.getNCutsApplied()
+
     def get_val_callback(self, var: Any) -> float:
         """Get the value of a variable in a callback."""
         if self.mip_solver == lsf.solver_name_gurobi():
