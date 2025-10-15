@@ -21,8 +21,8 @@ EXPORT_PATH="$PROJECT_ROOT/data/export"
 
 # Core configuration for parallel execution
 # Each job is single-threaded
-NUM_CORES=14
-CORES_PER_JOB=1
+NUM_CORES=28
+CORES_PER_JOB=4
 MAX_PARALLEL_JOBS=$((NUM_CORES / CORES_PER_JOB))
 
 # --- Setup ---
