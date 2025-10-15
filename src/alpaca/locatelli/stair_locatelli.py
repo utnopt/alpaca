@@ -8,6 +8,7 @@ import numpy as np
 from alpaca.model_data import model_data as md, variable as var, constraint as con
 from alpaca.expressions import bilinear_expression as ble
 from alpaca.external_solvers import mip_model as mm
+import alpaca.settings as s
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 from alpaca.utils.logger import logger
 
@@ -51,9 +52,6 @@ class StairLocatelli:
         x_domain = np.linspace(
             x.lb, x.ub, self.settings.feature_stair_locatelli_grid_size
         ).tolist()
-        # y_domain = np.linspace(
-        #     y.lb, y.ub, self.settings.feature_stair_locatelli_grid_size
-        # ).tolist()
         self.external_solver.opt_model.set_objective(
             y.solver_variable, sense=lsf.objective_sense_maximize()
         )
@@ -113,11 +111,16 @@ class StairLocatelli:
             vec1 = np.array([v2[0] - v1[0], v2[1] - v1[1]])
             vec2 = np.array([v3[0] - v2[0], v3[1] - v2[1]])
 
-            normalized_vec1 = vec1 / np.linalg.norm(vec1)
-            normalized_vec2 = vec2 / np.linalg.norm(vec2)
+            norm1 = np.linalg.norm(vec1)
+            norm2 = np.linalg.norm(vec2)
+            if norm1 < 1e-8 or norm2 < 1e-8:
+                non_vertex_point_indices.append((i + 1) % len(vertices))
+                continue
+            normalized_vec1 = vec1 / norm1
+            normalized_vec2 = vec2 / norm2
             similarity = np.dot(normalized_vec1, normalized_vec2)
             if np.isclose(similarity, 1.0, atol=1e-3):
-                non_vertex_point_indices.append(i + 1 % len(vertices))
+                non_vertex_point_indices.append((i + 1) % len(vertices))
         return [v for i, v in enumerate(vertices) if i not in non_vertex_point_indices]
 
     @staticmethod
@@ -314,9 +317,21 @@ class StairLocatelli:
     ) -> str:
         """Check if hyperplane is infeasible for all vertices."""
         x_coeff, y_coeff, const = cut_coefficients
-        if np.all([x_coeff * x + y_coeff * y + const <= x * y for x, y in checkpoints]):
+        if np.all(
+            [
+                x_coeff * x + y_coeff * y + const
+                <= x * y + s.StaticSettings.feasibility_tolerance
+                for x, y in checkpoints
+            ]
+        ):
             return lsf.constraint_geq()
-        if np.all([x_coeff * x + y_coeff * y + const >= x * y for x, y in checkpoints]):
+        if np.all(
+            [
+                x_coeff * x + y_coeff * y + const
+                >= x * y - s.StaticSettings.feasibility_tolerance
+                for x, y in checkpoints
+            ]
+        ):
             return lsf.constraint_leq()
         return lsf.empty_string()
 
@@ -328,6 +343,6 @@ class StairLocatelli:
         vec1 = np.array([v2[0] - v1[0], v2[1] - v1[1]])
         vec2 = np.array([v3[0] - v2[0], v3[1] - v2[1]])
         # Check if vectors are collinear using cross product
-        if abs(np.cross(vec1, vec2)) < 0.0001:
+        if abs(np.cross(vec1, vec2)) < s.StaticSettings.feasibility_tolerance:
             return True
         return False
