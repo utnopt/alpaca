@@ -114,10 +114,13 @@ for job_params in "${jobs[@]}"; do
     # Assign a core set to the job
     core_set="${core_sets[$slot]}"
 
-    # Start the job in the background
-    # The job_params are split into individual arguments for run_job
-    echo "Starting job for $(basename $job_params) on cores $core_set (slot $slot)"
-    run_job $job_params "$core_set" "$slot" &
+    # Split the job_params string into a proper array to avoid word-splitting issues
+    read -r -a params_array <<< "$job_params"
+
+    # Start the job in the background, passing parameters correctly
+    # The first element of the array (${params_array[0]}) is the filename
+    echo "Starting job for $(basename "${params_array[0]}") on cores $core_set (slot $slot)"
+    run_job "${params_array[@]}" "$core_set" "$slot" &
 done
 
 # Wait for all background jobs to complete
