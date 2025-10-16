@@ -59,7 +59,6 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
             "bound_propagation_time_limit": 300,
         }
         user_settings = s.UserSettings(config_dict)
-        # Configure console logger to show ERROR level messages
         ut_io.config_console_logger(log_level=logging.ERROR)
         ut_io.config_file_logger(user_settings)
         user_settings.save_to_json()
