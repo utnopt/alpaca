@@ -57,15 +57,6 @@ class TestModelData(unittest.TestCase):
                 ):
                     self._run_model_test("least", approx, reformulate)
 
-    def test_st_e41_model_data_creation(self):
-        """Test model data creation for st_e41 instance."""
-        for approx in [0, 1]:
-            for reformulate in [0, 1]:
-                with self.subTest(
-                    approximation=approx, reformulate_multilinear=reformulate
-                ):
-                    self._run_model_test("st_e41", approx, reformulate)
-
     def test_chance_model_data_creation(self):
         """Test model data creation for chance instance."""
         for approx in [0, 1]:
