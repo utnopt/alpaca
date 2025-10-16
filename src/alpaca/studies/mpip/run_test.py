@@ -78,6 +78,8 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
             bilinear=user_settings.bilinear_handling == 3,
         )
 
+        external_solver.opt_model.hide_output()
+
         solver = slv.Solver(external_solver)
 
         if user_settings.feature_mpip:
