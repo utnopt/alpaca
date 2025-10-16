@@ -91,14 +91,15 @@ run_job() {
     local slot="$7"
 
     # Execute the Python script with all required arguments, including the seed value
-    # The output is directly appended to the results file
+    # The output is directly appended to the results file.
+    # Errors will now be printed to the console.
     PYTHONPATH="$PROJECT_ROOT/src" taskset -c "$core_set" \
     python3 "$SCRIPT_DIR/run_test.py" \
         --file "$file" \
         --breakpoints "$breakpoints" \
         --test_case "$test_case" \
         --pwl_method "$pwl_method" \
-        --seed_value "$seed_value" >> "$RESULTS_FILE" 2>/dev/null
+        --seed_value "$seed_value" >> "$RESULTS_FILE"
 
     # Return the slot to the semaphore, making it available for the next job
     echo "$slot" >&3
