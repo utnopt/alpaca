@@ -3,7 +3,10 @@
 @authors: kuen,
 """
 import itertools
+import os
 import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D  # pylint: disable=unused-import
 
 from alpaca.model_data import model_data as md, variable as var, constraint as con
 from alpaca.expressions import bilinear_expression as ble
@@ -73,7 +76,7 @@ class StairLocatelli:
         self.external_solver.opt_model.set_variable_ub(x.solver_variable, x.ub)
 
         post_processed_vertices = self._post_process_vertices(vertices)
-        if self.model_data.settings.feature_stair_locatelli == 1:
+        if self.settings.feature_stair_locatelli == 1:
             post_processed_vertices = self._get_convex_hull(post_processed_vertices)
         self.bilinear_projected_domains.append(
             (bilinear_expression, post_processed_vertices)
@@ -113,13 +116,16 @@ class StairLocatelli:
 
             norm1 = np.linalg.norm(vec1)
             norm2 = np.linalg.norm(vec2)
-            if norm1 < 1e-8 or norm2 < 1e-8:
+            if (
+                norm1 < s.StaticSettings.feasibility_tolerance
+                or norm2 < s.StaticSettings.feasibility_tolerance
+            ):
                 non_vertex_point_indices.append((i + 1) % len(vertices))
                 continue
             normalized_vec1 = vec1 / norm1
             normalized_vec2 = vec2 / norm2
             similarity = np.dot(normalized_vec1, normalized_vec2)
-            if np.isclose(similarity, 1.0, atol=1e-3):
+            if np.isclose(similarity, 1.0, atol=s.StaticSettings.feasibility_tolerance):
                 non_vertex_point_indices.append((i + 1) % len(vertices))
         return [v for i, v in enumerate(vertices) if i not in non_vertex_point_indices]
 
@@ -346,3 +352,114 @@ class StairLocatelli:
         if abs(np.cross(vec1, vec2)) < s.StaticSettings.feasibility_tolerance:
             return True
         return False
+
+    def plot_polygons(self):
+        """
+        Plots all polygons defined by post_processed_vertices and saves the
+        plot to a file.
+        """
+        plot_dir = os.path.join(self.settings.export_path, "stair_locatelli_plots")
+        os.makedirs(plot_dir, exist_ok=True)
+
+        for bilinear_expression, vertices in self.bilinear_projected_domains:
+            if not vertices:
+                continue
+            fig = plt.figure(figsize=(10, 8))
+            ax = plt.gca()
+            # Unzip vertices into x and y coordinates
+            x_coords, y_coords = zip(*vertices)
+            # Add the first vertex to the end to close the polygon
+            x_coords_closed = x_coords + (x_coords[0],)
+            y_coords_closed = y_coords + (y_coords[0],)
+            ax.plot(
+                x_coords_closed,
+                y_coords_closed,
+                marker="o",
+                linestyle="-",
+                label=f"Polygon for {bilinear_expression.name}",
+            )
+            ax.set_xlabel(bilinear_expression.variables[0].name)
+            ax.set_ylabel(bilinear_expression.variables[1].name)
+            ax.set_title("Projected Feasible Domains (Polygons)")
+            ax.legend()
+            ax.grid(True)
+
+            file_path = os.path.join(
+                plot_dir, f"polygons_{bilinear_expression.name}.png"
+            )
+            plt.savefig(file_path)
+            plt.close(fig)
+
+    def plot_locatelli_cuts(self):  # pylint: disable=too-many-locals
+        """
+        Plots the z = x*y surface and the feasible hyperplanes (Locatelli cuts)
+        for each bilinear term and saves them to files.
+        """
+        plot_dir = os.path.join(self.settings.export_path, "stair_locatelli_plots")
+        os.makedirs(plot_dir, exist_ok=True)
+        view_angles = [
+            (30, -60),  # Default-ish view
+            (30, 30),  # Another common view
+            (60, -120),  # Higher elevation, different azimuth
+        ]
+
+        for bilinear_expression, vertices in self.bilinear_projected_domains:
+            if len(vertices) < 3:
+                continue
+
+            x_var, y_var = bilinear_expression.variables
+
+            # Create a meshgrid for plotting
+            x_range = np.linspace(x_var.lb, x_var.ub, 30)
+            y_range = np.linspace(y_var.lb, y_var.ub, 30)
+            x, y = np.meshgrid(x_range, y_range)
+            z = x * y
+
+            for i, (elev, azim) in enumerate(view_angles):
+                fig = plt.figure(figsize=(12, 9))
+                ax = fig.add_subplot(111, projection="3d")
+
+                # Plot the original z = x*y surface
+                ax.plot_surface(x, y, z, alpha=0.5, color="r", label="z = x*y")
+
+                checkpoints = self._generate_edge_checkpoints(vertices)
+
+                # Find and plot feasible hyperplanes
+                for v1, v2, v3 in itertools.combinations(vertices, 3):
+
+                    # Re-use logic from the cut generation to find valid planes
+                    if self._check_if_vertices_are_collinear(v1, v2, v3):
+                        continue
+
+                    check, cut_coefficients = (
+                        self._calculate_hyperplane_for_vertex_triple(v1, v2, v3)
+                    )
+                    if not check:
+                        continue
+                    con_type = self._check_if_hyperplane_is_infeasible(
+                        cut_coefficients, checkpoints
+                    )
+                    if con_type != lsf.empty_string():
+                        color = "green" if con_type == lsf.constraint_leq() else "blue"
+                        x_coeff, y_coeff, const = cut_coefficients
+                        z_plane = x_coeff * x + y_coeff * y + const
+                        # Plot the hyperplane
+                        ax.plot_surface(
+                            x,
+                            y,
+                            z_plane,
+                            alpha=0.6,
+                            rstride=100,
+                            cstride=100,
+                            color=color,
+                        )
+
+                ax.set_xlabel(f"x ({x_var.name})")
+                ax.set_ylabel(f"y ({y_var.name})")
+                ax.set_zlabel(f"z ({bilinear_expression.representative_variable.name})")
+                ax.set_title(f"Feasible Locatelli Cuts for {bilinear_expression.name}")
+                ax.view_init(elev=elev, azim=azim)
+                filename = f"locatelli_cuts_{bilinear_expression.name}_{i}.png"
+                file_path = os.path.join(plot_dir, filename)
+                plt.savefig(file_path)
+                plt.close(fig)
