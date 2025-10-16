@@ -86,8 +86,9 @@ run_job() {
     local breakpoints="$2"
     local test_case="$3"
     local seed_value="$4" # Added seed_value parameter
-    local core_set="$5"
-    local slot="$6"
+    local pwl_method="$5"
+    local core_set="$6"
+    local slot="$7"
 
     # Execute the Python script with all required arguments, including the seed value
     # The output is directly appended to the results file
