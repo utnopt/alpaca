@@ -48,7 +48,6 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
             "number_of_breakpoints": args.breakpoints,
             "pwl_method": args.pwl_method,
             "feature/mpip/separation": int(args.test_case.lower() == "mpip"),
-            "feature_mpip": int(args.mpip_stripe),
             "seed": int(args.seed_value),
             "external_solver": "scip",
             "solver_time_limit": 7200,
