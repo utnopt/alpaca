@@ -49,7 +49,7 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
             "pwl_method": args.pwl_method,
             "feature/mpip/separation": int(args.test_case.lower() == "mpip"),
             "seed": int(args.seed_value),
-            "external_solver": "scip",
+            "external_solver": "gurobi",
             "solver_time_limit": 7200,
             "reformulate_multilinear_to_bilinear": 1,
             "bilinear_handling": 1,

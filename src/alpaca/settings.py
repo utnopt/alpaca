@@ -40,6 +40,7 @@ class StaticSettings:
     min_cut_violation = 1e-3
     rounding_precision = 5
     mpip_sparsity = 0.45
+    maximum_mpip_size = 5
 
 
 class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance-attributes
