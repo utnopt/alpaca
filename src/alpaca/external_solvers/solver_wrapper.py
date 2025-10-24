@@ -76,7 +76,7 @@ class SolverWrapper:
     def get_nr_of_applied_cuts(self) -> int:
         """Get the number of applied cuts."""
         if self.mip_solver == lsf.solver_name_gurobi():
-            return self.model.NumUserCuts
+            return 0
         return self.model.getNCutsApplied()
 
     def get_val_callback(self, var: Any) -> float:
