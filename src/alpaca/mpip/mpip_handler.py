@@ -13,6 +13,7 @@ from alpaca.expressions import (
     multilinear_expression as mle,
 )
 import alpaca.mpip.mpip as mp
+import alpaca.settings as s
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
@@ -108,7 +109,8 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         mpip.implying_function = self._nonlinear_expression_to_scip_expression(
             nonlinear_expression, mpip
         )
-        if mpip.feasible:
+        if mpip.feasible and len(
+                mpip.interval_lp_implying_vars) <= s.StaticSettings.maximum_mpip_size:
             self.mpip_dict[mpip_id] = mpip
 
     def _nonlinear_expression_to_scip_expression(

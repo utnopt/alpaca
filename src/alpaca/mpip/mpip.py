@@ -68,6 +68,12 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
             lsf.mpip_interval_lp_var_name(variable.name)
         )
 
+    def calculate_relation_ratio(self) -> float:
+        """Calculate relation ratio."""
+        return sum(
+            len(implied_indices) for implied_indices in self.relation.values()
+        ) / len(self.relation)
+
     def _calculate_relation_function(self) -> None:
         breakpoint_ranges = []
         for variable in self.implying_variables.values():
