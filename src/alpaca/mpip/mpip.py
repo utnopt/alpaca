@@ -4,10 +4,10 @@
 """
 import itertools
 import bisect
-import pyscipopt as scip
 
 import alpaca.settings as s
 import alpaca.model_data.variable as var
+import alpaca.external_solvers.solver_wrapper as sw
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
@@ -34,9 +34,9 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         self.implying_variables: dict[str, var.Variable] = {}
         self.implied_variable: var.Variable | None = None
         self.relation = {}
-        self.implying_function = scip.Expr()
-        self.interval_lp = scip.Model()
-        self.interval_lp.hideOutput()
+        self.interval_lp = sw.SolverWrapper(mip_solver=lsf.solver_name_gurobi())
+        self.implying_function = self.interval_lp.nonlinear_expression()
+        self.interval_lp.hide_output()
         self.interval_lp_implying_vars = {}
         self.interval_lp_implied_var = 0
         self.separator = None
@@ -54,7 +54,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
     ) -> None:
         """Add implied variable information."""
         self.implied_variable = variable
-        self.interval_lp_implied_var = self.interval_lp.addVar(
+        self.interval_lp_implied_var = self.interval_lp.add_variable(
             lsf.mpip_interval_lp_var_name(variable.name), lb=-s.StaticSettings.infinity
         )
 
@@ -64,7 +64,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
     ) -> None:
         """Add implying variable information."""
         self.implying_variables.update({variable.name: variable})
-        self.interval_lp_implying_vars[variable.name] = self.interval_lp.addVar(
+        self.interval_lp_implying_vars[variable.name] = self.interval_lp.add_variable(
             lsf.mpip_interval_lp_var_name(variable.name)
         )
 
@@ -109,35 +109,35 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         return tuple(range(idx1, idx2 + 1))
 
     def _add_implying_function_to_interval_lp(self) -> None:
-        self.interval_lp.addCons(self.interval_lp_implied_var == self.implying_function)
+        self.interval_lp.add_constraint(
+            self.interval_lp_implied_var == self.implying_function
+        )
 
     def _implied_interval_scip(
         self, intervals: dict[str, tuple[float, float]]
     ) -> tuple[bool, float, float]:
-        self.interval_lp.freeTransform()
         for implying_index, (low, high) in intervals.items():
             implying_var = self.interval_lp_implying_vars[implying_index]
-            self.interval_lp.chgVarLb(implying_var, low)
-            self.interval_lp.chgVarUb(implying_var, high)
+            self.interval_lp.set_variable_lb(implying_var, low)
+            self.interval_lp.set_variable_ub(implying_var, high)
 
-        self.interval_lp.setObjective(
-            self.interval_lp_implied_var, lsf.objective_sense_minimize()
+        self.interval_lp.set_objective(
+            self.interval_lp_implied_var, sense=lsf.objective_sense_minimize()
         )
         self.interval_lp.optimize()
-        if self.interval_lp.getStatus() == lsf.opt_model_status_infeasible():
+        if self.interval_lp.is_infeasible():
             return False, 0.0, 0.0
         lower_bound = round(
-            self.interval_lp.getObjVal(), s.StaticSettings.rounding_precision
+            self.interval_lp.get_objective_value(), s.StaticSettings.rounding_precision
         )
-        self.interval_lp.freeTransform()
 
-        self.interval_lp.setObjective(
+        self.interval_lp.set_objective(
             self.interval_lp_implied_var, lsf.objective_sense_maximize()
         )
         self.interval_lp.optimize()
-        if self.interval_lp.getStatus() == lsf.opt_model_status_infeasible():
+        if self.interval_lp.is_infeasible():
             return False, 0.0, 0.0
         upper_bound = round(
-            self.interval_lp.getObjVal(), s.StaticSettings.rounding_precision
+            self.interval_lp.get_objective_value(), s.StaticSettings.rounding_precision
         )
         return True, lower_bound, upper_bound

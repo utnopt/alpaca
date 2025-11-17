@@ -5,7 +5,6 @@
 import pyscipopt as scip
 
 from alpaca.utils.logger import logger
-import alpaca.external_solvers.solver_wrapper as sw
 import alpaca.model_data.model_data as mda
 from alpaca.expressions import (
     nonlinear_expression as nle,
@@ -109,8 +108,11 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         mpip.implying_function = self._nonlinear_expression_to_scip_expression(
             nonlinear_expression, mpip
         )
-        if mpip.feasible and len(
-                mpip.interval_lp_implying_vars) <= s.StaticSettings.maximum_mpip_size:
+        if (
+            mpip.feasible
+            and len(mpip.interval_lp_implying_vars)
+            <= s.StaticSettings.maximum_mpip_size
+        ):
             self.mpip_dict[mpip_id] = mpip
 
     def _nonlinear_expression_to_scip_expression(
@@ -136,10 +138,18 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
             ) / self._continue_mpip_instance(
                 nonlinear_expression.child_expressions[1], mpip
             )
-        scip_function = sw.get_nonlinear_function_scip(
+        if nonlinear_expression.expression_type == lsf.nonlinearity_type_power():
+            exponent = nonlinear_expression.child_expressions[1]
+            return (
+                self._continue_mpip_instance(
+                    nonlinear_expression.child_expressions[0], mpip
+                )
+                ** exponent
+            )
+        nonlinear_function = mpip.interval_lp.get_nonlinear_function(
             nonlinear_expression.expression_type
         )
-        return scip_function(
+        return nonlinear_function(
             self._continue_mpip_instance(
                 nonlinear_expression.child_expressions[0], mpip
             )

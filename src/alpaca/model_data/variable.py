@@ -60,7 +60,7 @@ class Variable:  # pylint: disable=too-many-instance-attributes
         """Save in which types of nonlinearities the variable occurs.
         To determine the optimal breakpoint locations later in breakpoint_generator.py.
         """
-        if nonlinearity_type not in self.occurring_in:
+        if nonlinearity_type != lsf.power_expression_class_name():
             self.occurring_in[nonlinearity_type] = nonlinearity_function
             self.is_discretized = True
 
