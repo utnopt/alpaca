@@ -349,7 +349,7 @@ def get_nonlinear_function_gurobi(  # pylint: disable=too-many-return-statements
         lsf.nonlinearity_type_xabsx(),
         lsf.nonlinearity_type_abs(),
     ):
-        return lambda x: nlfunc.square(nlfunc.sqrt(x))
+        return gp.abs_
     if nonlinearity_type == lsf.nonlinearity_type_negate():
         return lambda x: -x
     if lsf.nonlinearity_type_power() in nonlinearity_type:

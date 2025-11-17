@@ -137,8 +137,6 @@ class DeltaMethod(pwm.PWLMethod):
             )
             min_deviations.append(min_deviation)
             max_deviations.append(max_deviation)
-        if not min_deviations:
-            pass
         return [
             con.LinearConstraint(
                 lsf.con_name_pwl_delta_underestimation(expression.name),

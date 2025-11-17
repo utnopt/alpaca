@@ -567,6 +567,8 @@ class PowerExpression(OneDimExpression):
         """
         Solves f'(x) = m for x, i.e., y * x^(y-1) = m.
         """
+        if self.y == 0:
+            return []
         val = m / self.y
         exponent = 1.0 / (self.y - 1.0)
         solutions = []
@@ -576,10 +578,17 @@ class PowerExpression(OneDimExpression):
             return []
         x_sol = math.pow(val, exponent)
         solutions.append(x_sol)
-        if (self.y - 1) % 2 == 0 and (self.y - 1) > 0 and val > 0:
+        if (
+            abs((self.y - 1) % 2) < s.StaticSettings.feasibility_tolerance
+            and (self.y - 1) > 0
+            and val > 0
+        ):
             if x_sol != 0:
                 solutions.append(-x_sol)
-        elif (1.0 / (self.y - 1.0)) % 2 == 0 and val > 0:
+        elif (
+            abs((1.0 / (self.y - 1.0)) % 2) < s.StaticSettings.feasibility_tolerance
+            and val > 0
+        ):
             if x_sol != 0:
                 solutions.append(-x_sol)
         return list(set(solutions))
