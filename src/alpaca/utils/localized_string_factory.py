@@ -62,6 +62,10 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
     def opt_model_status_infeasible(cls) -> str:
         return "infeasible"
 
+    @classmethod
+    def opt_model_status_optimal(cls) -> str:
+        return "optimal"
+
     # --- Variable & Constraint Naming Conventions ---
 
     @classmethod
@@ -183,6 +187,10 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return "xabsx"
 
     @classmethod
+    def nonlinearity_type_abs(cls) -> str:
+        return "abs"
+
+    @classmethod
     def nonlinearity_type_negate(cls) -> str:
         return "negate"
 
@@ -201,6 +209,10 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
     @classmethod
     def nonlinearity_type_multilinear(cls, nr_of_implying_vars: int) -> str:
         return f"multilinear_{nr_of_implying_vars}"
+
+    @classmethod
+    def power_expression_class_name(cls) -> str:
+        return "PowerExpression"
 
     # --- Errors, Warnings, and Info Messages ---
 

@@ -30,7 +30,8 @@ class BreakpointGenerator:
 
     def _get_breakpoints_for_variable(self, variable: var.Variable) -> list[float]:
         if variable.ub == variable.lb:
-            return [variable.lb]
+            variable.is_discretized = False
+            return []
         if (
             not variable.occurring_in
             or self.model_data.settings.breakpoint_generation == 0

@@ -32,6 +32,9 @@ class SolverWrapper:
         """Optimize the model."""
         if self.mip_solver == lsf.solver_name_gurobi():
             self.model.optimize(callback_function)
+            if self.model.Status == gp.GRB.INFEASIBLE:
+                self.model.computeIIS()
+                self.model.write("model.ilp")
         else:  # scip
             self.model.optimize()
             self.model.printStatistics()
@@ -129,6 +132,12 @@ class SolverWrapper:
         else:  # scip
             self.model.hideOutput()
 
+    def nonlinear_expression(self) -> Any:
+        """Get a new, empty nonlinear expression object."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            return 0 * self.model.addVar().nl
+        return scip.Expr()
+
     def enable_reoptimization(self):
         """Enable re-optimization features if supported."""
         if self.mip_solver == lsf.solver_name_scip():
@@ -202,15 +211,19 @@ class SolverWrapper:
             return get_nonlinear_function_gurobi(nonlinearity_type)
         return get_nonlinear_function_scip(nonlinearity_type)
 
-    @staticmethod
-    def set_variable_lb(variable: Any, lb: float) -> None:
+    def set_variable_lb(self, variable: Any, lb: float) -> None:
         """Set the lower bound of a variable."""
-        variable.LB = lb
+        if self.mip_solver == lsf.solver_name_gurobi():
+            variable.LB = lb
+        else:
+            self.model.chgVarLb(variable, lb)
 
-    @staticmethod
-    def set_variable_ub(variable: Any, ub: float) -> None:
+    def set_variable_ub(self, variable: Any, ub: float) -> None:
         """Set the upper bound of a variable."""
-        variable.UB = ub
+        if self.mip_solver == lsf.solver_name_gurobi():
+            variable.UB = ub
+        else:
+            self.model.chgVarUb(variable, ub)
 
     def get_objective_value(self) -> float:
         """Get the objective value of the solution."""
@@ -296,10 +309,16 @@ def get_nonlinear_function_scip(  # pylint: disable=too-many-return-statements
         return lambda x: (1 - scip.exp(-2 * x)) / (1 + scip.exp(-2 * x))
     if nonlinearity_type == lsf.nonlinearity_type_inverse():
         return lambda x: x**-1
-    if nonlinearity_type == lsf.nonlinearity_type_xabsx():
-        return lambda x: x * abs(x)
+    if nonlinearity_type in (
+        lsf.nonlinearity_type_xabsx(),
+        lsf.nonlinearity_type_abs(),
+    ):
+        return abs
     if nonlinearity_type == lsf.nonlinearity_type_negate():
         return lambda x: -x
+    if lsf.nonlinearity_type_power() in nonlinearity_type:
+        power_value = float(nonlinearity_type.split("_")[-1])
+        return lambda x: x**power_value
 
     raise NotImplementedError(lsf.error_nonlinearity_not_implemented(nonlinearity_type))
 
@@ -326,9 +345,15 @@ def get_nonlinear_function_gurobi(  # pylint: disable=too-many-return-statements
         return lambda x: (1 - nlfunc.exp(-2 * x)) / (1 + nlfunc.exp(-2 * x))
     if nonlinearity_type == lsf.nonlinearity_type_inverse():
         return lambda x: 1 / x
-    if nonlinearity_type == lsf.nonlinearity_type_xabsx():
-        return lambda x: x * gp.abs_(x)
+    if nonlinearity_type in (
+        lsf.nonlinearity_type_xabsx(),
+        lsf.nonlinearity_type_abs(),
+    ):
+        return gp.abs_
     if nonlinearity_type == lsf.nonlinearity_type_negate():
         return lambda x: -x
+    if lsf.nonlinearity_type_power() in nonlinearity_type:
+        power_value = float(nonlinearity_type.split("_")[-1])
+        return lambda x: x**power_value
 
     raise NotImplementedError(lsf.error_nonlinearity_not_implemented(nonlinearity_type))

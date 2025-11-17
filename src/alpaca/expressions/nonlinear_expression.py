@@ -138,11 +138,16 @@ class NonlinearExpression:
                 next_level = self._fragment_one_dim_expression(
                     ode.SquareRootExpression, level
                 )
+            elif isinstance(self.child_expressions[1], float):
+                next_level = self._fragment_power_expression(ode.PowerExpression, level)
             else:
                 raise KeyError(
                     lsf.warning_expression_type_not_supported(self.expression_type)
                 )
-        elif self.expression_type == lsf.nonlinearity_type_xabsx():
+        elif self.expression_type in (
+            lsf.nonlinearity_type_xabsx(),
+            lsf.nonlinearity_type_abs(),
+        ):
             next_level = self._fragment_one_dim_expression(ode.AbsExpression, level)
         elif self.expression_type == lsf.nonlinearity_type_negate():
             next_level = self._fragment_negate_expression(level)
@@ -314,6 +319,22 @@ class NonlinearExpression:
             self._fragment_one_dim_expression_with_coefficient(expression_class, level)
             return level + 2
         self._fragment_one_dim_expression_without_coefficient(expression_class, level)
+        return level + 1
+
+    def _fragment_power_expression(self, expression_class: type, level: int) -> int:
+        variable = (
+            self.child_expressions[0][1]
+            if isinstance(self.child_expressions[0], tuple)
+            else self.child_expressions[0].representative_variable
+        )
+        self.model_data.add_one_dim_expression(
+            expression_class,
+            lsf.expression_hash_generic_nonlinear(variable.name, self.expression_type),
+            variable,
+            level,
+            self.child_expressions[1],
+            representative_variable=self.representative_variable,
+        )
         return level + 1
 
     def _fragment_one_dim_expression_with_coefficient(

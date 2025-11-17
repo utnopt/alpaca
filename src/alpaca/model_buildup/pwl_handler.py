@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from alpaca.utils.logger import logger
 from alpaca.pwl import multiple_choice_method as mcm, delta_method as dem
 import alpaca.expressions.one_dim_expression as ode
+import alpaca.model_data.constraint as con
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
@@ -86,6 +87,17 @@ class PWLHandler:
             if isinstance(expression, ode.AbsExpression):
                 expression.handle_abs_expression(self.model_data)
                 continue
+            if not expression.variable.is_discretized:  # ub = lb
+                assert expression.variable.ub == expression.variable.lb
+                self.model_data.add_constraint(
+                    con.LinearConstraint(
+                        lsf.con_name_pwl_delta_approximation(expression.name),
+                        con_type=lsf.constraint_eq(),
+                        variables=[(1.0, expression.representative_variable)],
+                        rhs=expression.f(expression.variable.lb),
+                    )
+                )
+                continue
             constraints = (
                 expression.variable.pwl.couple_domain_to_function_value_one_dim(
                     expression, approximation=self.model_data.settings.approximation
@@ -111,6 +123,12 @@ class PWLHandler:
         """
         if self.model_data.settings.bilinear_handling == 2:
             for expression in self.model_data.expressions.bilinear_expressions.values():
+                if not expression.representative_variable.is_discretized:  # ub = lb
+                    assert (
+                        expression.representative_variable.ub
+                        == expression.representative_variable.lb
+                    )
+                    continue
                 constraints = (
                     expression.representative_variable.pwl.apply_pwc_relaxation(
                         expression,

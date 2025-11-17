@@ -68,8 +68,7 @@ class BoundPropagator:
     def _propagate_linear_constraints(self):
         """Performs bound propagation on linear equality constraints."""
         for constraint in self.model_data.constraints.values():
-            if constraint.con_type == lsf.constraint_eq():
-                self._propagate_bounds_equation(constraint)
+            self._propagate_bounds_equation(constraint)
 
     @staticmethod
     def _propagate_bounds_equation(constraint: con.LinearConstraint):

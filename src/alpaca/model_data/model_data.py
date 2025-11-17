@@ -198,6 +198,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         name: str,
         variable: var.Variable,
         level: int,
+        power_exponent: int = 1,
         representative_variable: var.Variable | None = None,
     ) -> ode.OneDimExpression:
         """Add a one-dimensional expression to the model, or return it if it already exists.
@@ -207,6 +208,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             name: The unique name or hash for the expression.
             variable: The variable object involved in the expression.
             level: The nesting level of the expression in the model hierarchy.
+            power_exponent: The exponent for power expressions (default is 1).
             representative_variable: An optional variable that represents this expression.
 
         Returns:
@@ -214,6 +216,17 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         """
         if name in self.expressions.one_dim_expressions:
             return self.expressions.one_dim_expressions[name]
+        if power_exponent != 1:
+            one_dim_expression = ode.PowerExpression(
+                name,
+                self,
+                variable,
+                level,
+                power_exponent,
+                representative_variable=representative_variable,
+            )
+            self.expressions.one_dim_expressions[name] = one_dim_expression
+            return one_dim_expression
         one_dim_expression = expression_class(
             name,
             self,

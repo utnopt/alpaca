@@ -499,3 +499,96 @@ class InverseExpression(OneDimExpression):
             return []
         val = math.sqrt(-1.0 / m)
         return [val, -val]
+
+
+class PowerExpression(OneDimExpression):
+    """
+    Power expression representing r = x^y.
+
+    A one-dimensional expression where the representative variable equals
+    the input variable raised to the power of 'y'.
+
+    The key difference from other OneDimExpressions is that 'y' is
+    an instance-specific parameter. Therefore, 'f' and 'f_derivative'
+    are instance methods, not class methods.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        model_data: ModelData,
+        variable: var.Variable,
+        level: int,
+        y: float,
+        representative_variable: var.Variable | None = None,
+    ):
+        """
+        Initialize the Power expression.
+
+        Args:
+            name: Unique identifier for the expression.
+            model_data: The ModelData object.
+            variable: The input variable (x).
+            level: Level of expression in expression tree.
+            y: The exponent for the power function (x^y).
+            representative_variable: Optional existing variable to represent
+                the expression result. If None, a new variable will be created.
+        """
+        super().__init__(name, model_data, variable, level, representative_variable)
+        self.y = y
+        self.variable.add_nonlinearity_to_occurring_in(
+            f"{self.__class__.__name__}_{y}", self
+        )
+
+    def nonlinearity_type(self) -> str:
+        """Return the nonlinearity type for power expression."""
+        return f"{lsf.nonlinearity_type_power()}_{self.y}"
+
+    def f(  # pylint: disable=arguments-differ
+        self, x: float | np.ndarray
+    ) -> float | np.ndarray:
+        """
+        Evaluates the function f(x) = x^y.
+        """
+        if abs(x) < s.StaticSettings.feasibility_tolerance:
+            return 0.0
+        return np.power(x, self.y)
+
+    def f_derivative(self, x: float) -> float:  # pylint: disable=arguments-differ
+        """
+        Evaluates the function f'(x) = y * x^(y-1).
+        Note: This is an INSTANCE method, not a @classmethod.
+        """
+        if abs(x) < s.StaticSettings.feasibility_tolerance:
+            return 0.0
+        return self.y * math.pow(x, self.y - 1)
+
+    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+        """
+        Solves f'(x) = m for x, i.e., y * x^(y-1) = m.
+        """
+        if self.y == 0:
+            return []
+        val = m / self.y
+        exponent = 1.0 / (self.y - 1.0)
+        solutions = []
+        if val < 0 and exponent % 1 != 0:
+            return []
+        if val == 0 and exponent < 0:
+            return []
+        x_sol = math.pow(val, exponent)
+        solutions.append(x_sol)
+        if (
+            abs((self.y - 1) % 2) < s.StaticSettings.feasibility_tolerance
+            and (self.y - 1) > 0
+            and val > 0
+        ):
+            if x_sol != 0:
+                solutions.append(-x_sol)
+        elif (
+            abs((1.0 / (self.y - 1.0)) % 2) < s.StaticSettings.feasibility_tolerance
+            and val > 0
+        ):
+            if x_sol != 0:
+                solutions.append(-x_sol)
+        return list(set(solutions))
