@@ -10,6 +10,7 @@ from alpaca.utils.logger import logger
 import alpaca.model_data.variable as var
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 import alpaca.breakpoints.breakpoint_neural_network as bnn
+import  alpaca.settings as s
 
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData
@@ -29,7 +30,7 @@ class BreakpointGenerator:
                 variable.breakpoints = self._get_breakpoints_for_variable(variable)
 
     def _get_breakpoints_for_variable(self, variable: var.Variable) -> list[float]:
-        if variable.ub == variable.lb:
+        if abs(variable.ub - variable.lb) < s.StaticSettings.feasibility_tolerance:
             variable.is_discretized = False
             return []
         if (

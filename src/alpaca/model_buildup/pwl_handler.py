@@ -10,6 +10,7 @@ from alpaca.pwl import multiple_choice_method as mcm, delta_method as dem
 import alpaca.expressions.one_dim_expression as ode
 import alpaca.model_data.constraint as con
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+import alpaca.settings as s
 
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData
@@ -88,7 +89,9 @@ class PWLHandler:
                 expression.handle_abs_expression(self.model_data)
                 continue
             if not expression.variable.is_discretized:  # ub = lb
-                assert expression.variable.ub == expression.variable.lb
+                assert abs(
+                    expression.variable.ub - expression.variable.lb
+                ) < s.StaticSettings.feasibility_tolerance
                 self.model_data.add_constraint(
                     con.LinearConstraint(
                         lsf.con_name_pwl_delta_approximation(expression.name),

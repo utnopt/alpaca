@@ -391,8 +391,8 @@ class AbsExpression(OneDimExpression):
                 con_type=lsf.constraint_leq(),
                 variables=[
                     (1.0, self.representative_variable),
-                    (1.0, self.variable),
-                    (-self.variable.ub + self.variable.lb, binary_abs_variable),
+                    (-1.0, self.variable),
+                    (2 * self.variable.lb, binary_abs_variable),
                 ],
             )
         )
@@ -402,7 +402,7 @@ class AbsExpression(OneDimExpression):
                 con_type=lsf.constraint_leq(),
                 variables=[
                     (1.0, self.representative_variable),
-                    (-1.0, self.variable),
+                    (1.0, self.variable),
                     (2 * self.variable.ub, binary_abs_variable),
                 ],
                 rhs=2 * self.variable.ub,

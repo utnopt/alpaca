@@ -50,7 +50,10 @@ class SolverWrapper:
     ) -> Any:
         """Add a nonlinear constraint to the model."""
         if self.mip_solver == lsf.solver_name_gurobi():
-            return self.model.addGenConstrNL(res_var, expression, name)
+            try:
+                return self.model.addGenConstrNL(res_var, expression, name)
+            except ValueError:
+                return self.model.addGenConstrAbs(res_var, expression.argvar, name)
         return self.model.addCons(res_var == expression, name=name)
 
     def add_variable(  # pylint: disable=too-many-arguments, too-many-positional-arguments

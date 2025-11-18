@@ -1,8 +1,8 @@
 {
 "solver_time_limit": 7200,
-  "osil_file_name": "st_e04",
+  "osil_file_name": "gaslib",
   "external_solver": "gurobi",
-  "number_of_breakpoints": 10,
+  "number_of_breakpoints": 50,
   "feature/mpip/separation": 0,
   "feature/mpip/mccormick": 0,
   "feature/mpip/stair": 0,
@@ -13,8 +13,8 @@
   "pwl_method": "delta",
   "feature/stair_locatelli": 0,
   "feature/stair_locatelli/grid_size": 10,
-  "bound_propagation": 1,
+  "bound_propagation": 0,
   "feature/nnbp/time_limit": 5,
   "bound_propagation_obbt_time_limit": 300,
-  "breakpoint_generation": 1
+  "breakpoint_generation": 0
 }
