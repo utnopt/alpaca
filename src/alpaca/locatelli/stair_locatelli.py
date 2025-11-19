@@ -41,46 +41,241 @@ class StairLocatelli:
     def _add_stair_locatelli_constraints(self):
         """Add stair locatelli cuts."""
         self._get_vertices_for_bilinear_projections()
+        # self.plot_polygons()
         self._add_locatelli_cuts_from_vertices()
 
     def _get_vertices_for_bilinear_projections(self):
         for expression in self.model_data.expressions.bilinear_expressions.values():
             self._get_projected_domain_vertices_for_bilinear_expression(expression)
 
-    def _get_projected_domain_vertices_for_bilinear_expression(
+    def _get_projected_domain_vertices_for_bilinear_expression(  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         self, bilinear_expression: ble.BilinearExpression
     ):
-        vertices = []
+        x, y = tuple(bilinear_expression.variables)
+
+        max_x_conditions = []
+        max_x_boundary_values = {y.lb: -np.inf}
+        max_y_conditions = []
+        max_y_boundary_values = {x.lb: -np.inf}
+        min_x_conditions = []
+        min_x_boundary_values = {y.lb: np.inf}
+        min_y_conditions = []
+        min_y_boundary_values = {x.lb: np.inf}
+
+        def max_y(x_value):
+            if x_value in max_y_boundary_values:
+                return max_y_boundary_values[x_value]
+            for cond, val in max_y_conditions:
+                if cond(x_value):
+                    return val
+            return None
+
+        def max_x(y_value):
+            if y_value in max_x_boundary_values:
+                return max_x_boundary_values[y_value]
+            for cond, val in max_x_conditions:
+                if cond(y_value):
+                    return val
+            return None
+
+        def min_y(x_value):
+            if x_value in min_y_boundary_values:
+                return min_y_boundary_values[x_value]
+            for cond, val in min_y_conditions:
+                if cond(x_value):
+                    return val
+            return None
+
+        def min_x(y_value):
+            if y_value in min_x_boundary_values:
+                return min_x_boundary_values[y_value]
+            for cond, val in min_x_conditions:
+                if cond(y_value):
+                    return val
+            return None
+
         x, y = tuple(bilinear_expression.variables)
         x_domain = np.linspace(
             x.lb, x.ub, self.settings.feature_stair_locatelli_grid_size
         ).tolist()
+        y_domain = np.linspace(
+            y.lb, y.ub, self.settings.feature_stair_locatelli_grid_size
+        ).tolist()
+        y_grid_addition = []
+        x_grid_addition = []
         self.external_solver.opt_model.set_objective(
             y.solver_variable, sense=lsf.objective_sense_maximize()
         )
         for lb, ub in zip(x_domain, x_domain[1:]):
             feasible, solution_value = self._get_solution_value_for_interval(x, lb, ub)
             if feasible:
-                vertices.extend([(lb, solution_value), (ub, solution_value)])
-        self.external_solver.opt_model.set_variable_lb(x.solver_variable, x.lb)
-        self.external_solver.opt_model.set_variable_ub(x.solver_variable, x.ub)
+                close_entry_in_y_grid = self._find_closest_entry_in_list(
+                    y_grid_addition + y_domain, solution_value
+                )
+                if close_entry_in_y_grid is not None:
+                    new_y_grid_value = close_entry_in_y_grid
+                else:
+                    y_grid_addition.append(solution_value)
+                    new_y_grid_value = solution_value
+                max_y_boundary_values[lb] = max(
+                    max_y_boundary_values[lb], new_y_grid_value
+                )
+                max_y_boundary_values[ub] = new_y_grid_value
+                max_y_conditions.append(
+                    (lambda u, f_lb=lb, f_ub=ub: f_lb <= u <= f_ub, new_y_grid_value)
+                )
 
         self.external_solver.opt_model.set_objective(
             y.solver_variable, sense=lsf.objective_sense_minimize()
         )
-        for lb, ub in reversed(list(zip(x_domain, x_domain[1:]))):
+        for lb, ub in zip(x_domain, x_domain[1:]):
             feasible, solution_value = self._get_solution_value_for_interval(x, lb, ub)
             if feasible:
-                vertices.extend([(ub, solution_value), (lb, solution_value)])
+                close_entry_in_y_grid = self._find_closest_entry_in_list(
+                    y_grid_addition + y_domain, solution_value
+                )
+                if close_entry_in_y_grid is not None:
+                    new_y_grid_value = close_entry_in_y_grid
+                else:
+                    y_grid_addition.append(solution_value)
+                    new_y_grid_value = solution_value
+                min_y_boundary_values[lb] = min(
+                    min_y_boundary_values[lb], new_y_grid_value
+                )
+                min_y_boundary_values[ub] = new_y_grid_value
+                min_y_conditions.append(
+                    (lambda u, f_lb=lb, f_ub=ub: f_lb <= u <= f_ub, new_y_grid_value)
+                )
         self.external_solver.opt_model.set_variable_lb(x.solver_variable, x.lb)
         self.external_solver.opt_model.set_variable_ub(x.solver_variable, x.ub)
 
-        post_processed_vertices = self._post_process_vertices(vertices)
+        self.external_solver.opt_model.set_objective(
+            x.solver_variable, sense=lsf.objective_sense_maximize()
+        )
+        for lb, ub in zip(y_domain, y_domain[1:]):
+            feasible, solution_value = self._get_solution_value_for_interval(y, lb, ub)
+            if feasible:
+                close_entry_in_x_grid = self._find_closest_entry_in_list(
+                    x_grid_addition + x_domain, solution_value
+                )
+                if close_entry_in_x_grid is not None:
+                    new_x_grid_value = close_entry_in_x_grid
+                else:
+                    x_grid_addition.append(solution_value)
+                    new_x_grid_value = solution_value
+                max_x_boundary_values[lb] = max(
+                    max_x_boundary_values[lb], new_x_grid_value
+                )
+                max_x_boundary_values[ub] = new_x_grid_value
+                max_x_conditions.append(
+                    (lambda u, f_lb=lb, f_ub=ub: f_lb <= u <= f_ub, new_x_grid_value)
+                )
+
+        self.external_solver.opt_model.set_objective(
+            x.solver_variable, sense=lsf.objective_sense_minimize()
+        )
+        for lb, ub in zip(y_domain, y_domain[1:]):
+            feasible, solution_value = self._get_solution_value_for_interval(y, lb, ub)
+            if feasible:
+                close_entry_in_x_grid = self._find_closest_entry_in_list(
+                    x_grid_addition + x_domain, solution_value
+                )
+                if close_entry_in_x_grid is not None:
+                    new_x_grid_value = close_entry_in_x_grid
+                else:
+                    x_grid_addition.append(solution_value)
+                    new_x_grid_value = solution_value
+                min_x_boundary_values[lb] = min(
+                    min_x_boundary_values[lb], new_x_grid_value
+                )
+                min_x_boundary_values[ub] = new_x_grid_value
+                min_x_conditions.append(
+                    (lambda u, f_lb=lb, f_ub=ub: f_lb <= u <= f_ub, new_x_grid_value)
+                )
+        self.external_solver.opt_model.set_variable_lb(y.solver_variable, y.lb)
+        self.external_solver.opt_model.set_variable_ub(y.solver_variable, y.ub)
+
+        x_grid = sorted(x_domain + x_grid_addition)
+        y_grid = sorted(y_domain + y_grid_addition)
+        feasible_grid_points = []
+        for x_grid_point in x_grid:
+            for y_grid_point in y_grid:
+                y_ub = max_y(x_grid_point)
+                if y_grid_point > y_ub:
+                    continue
+                y_lb = min_y(x_grid_point)
+                if y_grid_point < y_lb:
+                    continue
+                x_ub = max_x(y_grid_point)
+                if x_grid_point > x_ub:
+                    continue
+                x_lb = min_x(y_grid_point)
+                if x_grid_point < x_lb:
+                    continue
+                feasible_grid_points.append((x_grid_point, y_grid_point))
+        start_vertex = feasible_grid_points[0]
+        current_vertex = start_vertex
+        current_direction = -1
+        traversed = []
+        while True:
+            for i in range(4):
+                next_direction = (current_direction - 1 + i) % 4
+                if next_direction == 0:  # up
+                    candidate_next_vertices = [
+                        y_coord
+                        for x_coord, y_coord in feasible_grid_points
+                        if x_coord == current_vertex[0] and y_coord > current_vertex[1]
+                    ]
+                    if candidate_next_vertices:
+                        next_vertex = (current_vertex[0], min(candidate_next_vertices))
+                        break
+                elif next_direction == 1:  # right
+                    candidate_next_vertices = [
+                        x_coord
+                        for x_coord, y_coord in feasible_grid_points
+                        if y_coord == current_vertex[1] and x_coord > current_vertex[0]
+                    ]
+                    if candidate_next_vertices:
+                        next_vertex = (min(candidate_next_vertices), current_vertex[1])
+                        break
+                elif next_direction == 2:  # down
+                    candidate_next_vertices = [
+                        y_coord
+                        for x_coord, y_coord in feasible_grid_points
+                        if x_coord == current_vertex[0] and y_coord < current_vertex[1]
+                    ]
+                    if candidate_next_vertices:
+                        next_vertex = (current_vertex[0], max(candidate_next_vertices))
+                        break
+                elif next_direction == 3:  # left
+                    candidate_next_vertices = [
+                        x_coord
+                        for x_coord, y_coord in feasible_grid_points
+                        if y_coord == current_vertex[1] and x_coord < current_vertex[0]
+                    ]
+                    if candidate_next_vertices:
+                        next_vertex = (max(candidate_next_vertices), current_vertex[1])
+                        break
+            if (current_vertex, next_direction) in traversed:
+                break
+            if current_direction != next_direction:
+                traversed.append((current_vertex, next_direction))
+            current_vertex = next_vertex
+            current_direction = next_direction
+
+        post_processed_vertices = [point for point, direction in traversed]
         if self.settings.feature_stair_locatelli == 1:
             post_processed_vertices = self._get_convex_hull(post_processed_vertices)
         self.bilinear_projected_domains.append(
             (bilinear_expression, post_processed_vertices)
         )
+
+    @staticmethod
+    def _find_closest_entry_in_list(data, target):
+        closest_val = min(data, key=lambda x: abs(x - target))
+        if abs(closest_val - target) <= s.StaticSettings.feasibility_tolerance:
+            return closest_val
+        return None
 
     def _post_process_vertices(
         self, vertices: list[tuple[float, float]]

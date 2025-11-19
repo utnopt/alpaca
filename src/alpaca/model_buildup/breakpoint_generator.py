@@ -10,7 +10,7 @@ from alpaca.utils.logger import logger
 import alpaca.model_data.variable as var
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 import alpaca.breakpoints.breakpoint_neural_network as bnn
-import  alpaca.settings as s
+import alpaca.settings as s
 
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData
