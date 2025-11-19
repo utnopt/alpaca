@@ -315,7 +315,7 @@ class NonlinearExpression:
         return level + 1
 
     def _fragment_one_dim_expression(self, expression_class: type, level: int) -> int:
-        if len(self.child_expressions) == 2:
+        if isinstance(self.child_expressions[0], tuple) and self.child_expressions[0][0] != 1.0:
             self._fragment_one_dim_expression_with_coefficient(expression_class, level)
             return level + 2
         self._fragment_one_dim_expression_without_coefficient(expression_class, level)
@@ -340,21 +340,6 @@ class NonlinearExpression:
     def _fragment_one_dim_expression_with_coefficient(
         self, expression_class: type, level: int
     ) -> None:
-        if isinstance(self.child_expressions[0], float):
-            coeff = self.child_expressions[0]
-            variable = (
-                self.child_expressions[1][1]
-                if isinstance(self.child_expressions[1], tuple)
-                else self.child_expressions[1].representative_variable
-            )
-
-        else:
-            coeff = self.child_expressions[1]
-            variable = (
-                self.child_expressions[0][1]
-                if isinstance(self.child_expressions[0], tuple)
-                else self.child_expressions[0].representative_variable
-            )
         helper_variable = self.model_data.add_variable(
             var.Variable(lsf.helper_variable_name(self.name))
         )
@@ -363,7 +348,7 @@ class NonlinearExpression:
             level + 1,
             representative_variable=helper_variable,
         )
-        lin_expression.variables.append((coeff, variable))
+        lin_expression.variables.append(self.child_expressions[0])
         self.model_data.add_one_dim_expression(
             expression_class,
             lsf.expression_hash_generic_nonlinear(
