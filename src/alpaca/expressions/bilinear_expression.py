@@ -156,8 +156,9 @@ class BilinearExpression(mle.MultilinearExpression):
         """Calculate volume and max difference improvement of bilinear relaxation."""
         x = self.variables[0]
         y = self.variables[1]
-        z = self.representative_variable
-        max_z_interval = z.ub - z.lb
+        max_z_interval = max(x.ub * y.ub, x.lb * y.lb, x.lb * y.ub, x.ub * y.lb) - min(
+            x.ub * y.ub, x.lb * y.lb, x.lb * y.ub, x.ub * y.lb
+        )
         mc_cormick_interval_sizes = []
         locatelli_interval_sizes = []
 

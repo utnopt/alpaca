@@ -125,7 +125,10 @@ class SquareExpression(OneDimExpression):
 
     @classmethod
     def f(cls, x: float | np.ndarray) -> float | np.ndarray:
-        return x**2
+        try:
+            return x**2
+        except OverflowError:
+            return s.StaticSettings.infinity
 
     @classmethod
     def f_derivative(cls, x: float) -> float:
@@ -150,11 +153,17 @@ class ExponentialExpression(OneDimExpression):
 
     @classmethod
     def f(cls, x: float | np.ndarray) -> float | np.ndarray:
-        return math.exp(x)
+        try:
+            return math.exp(x)
+        except OverflowError:
+            return s.StaticSettings.infinity
 
     @classmethod
     def f_derivative(cls, x: float) -> float:
-        return math.exp(x)
+        try:
+            return math.exp(x)
+        except OverflowError:
+            return s.StaticSettings.infinity
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
         # f'(x) = e^x. e^x = m => x = ln(m). Requires m > 0.
@@ -550,18 +559,24 @@ class PowerExpression(OneDimExpression):
         """
         Evaluates the function f(x) = x^y.
         """
-        if abs(x) < s.StaticSettings.feasibility_tolerance:
-            return 0.0
-        return np.power(x, self.y)
+        try:
+            if abs(x) < s.StaticSettings.feasibility_tolerance:
+                return 0.0
+            return np.power(x, self.y)
+        except OverflowError:
+            return s.StaticSettings.infinity
 
     def f_derivative(self, x: float) -> float:  # pylint: disable=arguments-differ
         """
         Evaluates the function f'(x) = y * x^(y-1).
         Note: This is an INSTANCE method, not a @classmethod.
         """
-        if abs(x) < s.StaticSettings.feasibility_tolerance:
-            return 0.0
-        return self.y * math.pow(x, self.y - 1)
+        try:
+            if abs(x) < s.StaticSettings.feasibility_tolerance:
+                return 0.0
+            return self.y * math.pow(x, self.y - 1)
+        except OverflowError:
+            return s.StaticSettings.infinity
 
     def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
         """
