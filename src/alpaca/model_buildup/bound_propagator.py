@@ -52,18 +52,23 @@ class BoundPropagator:
             variable.solver_variable, sense=lsf.objective_sense_minimize()
         )
         opt_model.optimize()
-        if opt_model.is_optimal():
-            obj_value = opt_model.get_objective_value()
-            variable.lb = max(variable.lb, obj_value)
-
+        if opt_model.is_infeasible():
+            return
+        try:
+            variable.lb = max(variable.lb, opt_model.get_objective_bound())
+        except AttributeError:
+            pass
         # Maximize to find upper bound
         opt_model.set_objective(
             variable.solver_variable, sense=lsf.objective_sense_maximize()
         )
         opt_model.optimize()
-        if opt_model.is_optimal():
-            obj_value = opt_model.get_objective_value()
-            variable.ub = min(variable.ub, obj_value)
+        if opt_model.is_infeasible():
+            return
+        try:
+            variable.ub = min(variable.ub, opt_model.get_objective_bound())
+        except AttributeError:
+            pass
 
     def _propagate_linear_constraints(self):
         """Performs bound propagation on linear equality constraints."""

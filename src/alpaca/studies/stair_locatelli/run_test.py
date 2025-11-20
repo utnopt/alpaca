@@ -53,11 +53,12 @@ def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting)
             "bilinear_handling": 0,
             "pwl_method": "none",
             "feature/stair_locatelli": stair_locatelli_setting,
-            "feature/stair_locatelli/grid_size": 10,
+            "feature/stair_locatelli/grid_size": 5,
             "breakpoint_generation": 1,
             "feature/nnbp/time_limit": 300,
             "bound_propagation": 1,
-            "bound_propagation_time_limit": 300,
+            "bound_propagation_time_limit": 3600,
+            "feature/stair_locatelli/obbt_time_limit": 3600,
         }
 
         user_settings = s.UserSettings(config_dict)
@@ -80,13 +81,21 @@ def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting)
         solver = slv.Solver(external_solver)
         runtime = solver.solve_instance()
 
+        volume_improvement, max_diff_improvement = (
+            model_data.calculate_mean_bilinear_relaxation_volume_and_max_diff_improvement()
+        )
+
         logger.info(lsf.info_optimization_finished(runtime))
-        return external_solver.opt_model.model.ObjBound
+        return (
+            external_solver.opt_model.model.ObjBound,
+            volume_improvement,
+            max_diff_improvement,
+        )
 
     except Exception:  # pylint: disable=broad-except
         logger.error("Error running instance %s", instance_name)
         logger.error(traceback.format_exc())
-        return "ERROR"
+        return "ERROR", "ERROR", "ERROR"
     finally:
         # Restore original path to avoid side effects
         s.StaticSettings.instances_path = original_instances_path
@@ -112,11 +121,17 @@ if __name__ == "__main__":
             with open(os.devnull, "w", encoding="utf-8") as devnull:
                 sys.stdout = devnull
                 # Run for all three settings
-                obj_without = run_single_stair_locatelli_test(parsed_args.file, 0)
-                obj_locatelli = run_single_stair_locatelli_test(parsed_args.file, 1)
-                obj_stair_locatelli = run_single_stair_locatelli_test(
-                    parsed_args.file, 2
-                )
+                obj_without, _, _ = run_single_stair_locatelli_test(parsed_args.file, 0)
+                (
+                    obj_locatelli,
+                    volume_improvement_locatelli,
+                    max_diff_improvement_locatelli,
+                ) = run_single_stair_locatelli_test(parsed_args.file, 1)
+                (
+                    obj_stair_locatelli,
+                    volume_improvement_stair_locatelli,
+                    max_diff_improvement_stair_locatelli,
+                ) = run_single_stair_locatelli_test(parsed_args.file, 2)
         finally:
             # Restore the original standard output
             sys.stdout = original_stdout
@@ -125,6 +140,8 @@ if __name__ == "__main__":
         # will handle directing this to the results file.
         print(
             f"{instance_name_only},{obj_without},{obj_locatelli},{obj_stair_locatelli}"
+            f",{volume_improvement_locatelli},{max_diff_improvement_locatelli}"
+            f",{volume_improvement_stair_locatelli},{max_diff_improvement_stair_locatelli}"
         )
 
     else:

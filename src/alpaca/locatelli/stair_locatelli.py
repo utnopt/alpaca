@@ -108,6 +108,9 @@ class StairLocatelli:
         )
         for lb, ub in zip(x_domain, x_domain[1:]):
             feasible, solution_value = self._get_solution_value_for_interval(x, lb, ub)
+            solution_value = (
+                y.ub if solution_value is None else min(solution_value, y.ub)
+            )
             if feasible:
                 close_entry_in_y_grid = self._find_closest_entry_in_list(
                     y_grid_addition + y_domain, solution_value
@@ -130,6 +133,9 @@ class StairLocatelli:
         )
         for lb, ub in zip(x_domain, x_domain[1:]):
             feasible, solution_value = self._get_solution_value_for_interval(x, lb, ub)
+            solution_value = (
+                y.lb if solution_value is None else max(solution_value, y.lb)
+            )
             if feasible:
                 close_entry_in_y_grid = self._find_closest_entry_in_list(
                     y_grid_addition + y_domain, solution_value
@@ -154,6 +160,9 @@ class StairLocatelli:
         )
         for lb, ub in zip(y_domain, y_domain[1:]):
             feasible, solution_value = self._get_solution_value_for_interval(y, lb, ub)
+            solution_value = (
+                x.ub if solution_value is None else min(solution_value, x.ub)
+            )
             if feasible:
                 close_entry_in_x_grid = self._find_closest_entry_in_list(
                     x_grid_addition + x_domain, solution_value
@@ -176,6 +185,9 @@ class StairLocatelli:
         )
         for lb, ub in zip(y_domain, y_domain[1:]):
             feasible, solution_value = self._get_solution_value_for_interval(y, lb, ub)
+            solution_value = (
+                x.lb if solution_value is None else max(solution_value, x.lb)
+            )
             if feasible:
                 close_entry_in_x_grid = self._find_closest_entry_in_list(
                     x_grid_addition + x_domain, solution_value
@@ -213,13 +225,28 @@ class StairLocatelli:
                 if x_grid_point < x_lb:
                     continue
                 feasible_grid_points.append((x_grid_point, y_grid_point))
-        start_vertex = feasible_grid_points[0]
+        if len(feasible_grid_points) <= 1:
+            return
+        start_vertex = (0, 0)
+        start_vertex_found = False
+        for start_vertex in feasible_grid_points:
+            candidate_next_vertices = [
+                x_coord
+                for x_coord, y_coord in feasible_grid_points
+                if y_coord == start_vertex[1] and x_coord < start_vertex[0]
+            ]
+            if not candidate_next_vertices:
+                start_vertex_found = True
+                break
+        if not start_vertex_found:
+            return
         current_vertex = start_vertex
         current_direction = -1
         traversed = []
         while True:
             for i in range(4):
                 next_direction = (current_direction - 1 + i) % 4
+                next_vertex = (-42, -42)
                 if next_direction == 0:  # up
                     candidate_next_vertices = [
                         y_coord
@@ -374,13 +401,16 @@ class StairLocatelli:
 
     def _get_solution_value_for_interval(
         self, variable: var.Variable, lb: float, ub: float
-    ) -> tuple[bool, float]:
+    ) -> tuple[bool, float | None]:
         self.external_solver.opt_model.set_variable_lb(variable.solver_variable, lb)
         self.external_solver.opt_model.set_variable_ub(variable.solver_variable, ub)
         self.external_solver.opt_model.optimize()
         if self.external_solver.opt_model.is_infeasible():
             return False, 0.0
-        return True, self.external_solver.opt_model.get_objective_value()
+        try:
+            return True, self.external_solver.opt_model.get_objective_bound()
+        except AttributeError:
+            return True, None
 
     @staticmethod
     def _generate_edge_checkpoints(
@@ -476,6 +506,14 @@ class StairLocatelli:
             ],
         )
         self.model_data.add_constraint(locatelli_cut)
+        if con_type == lsf.constraint_leq():
+            bilinear_expression.linear_relaxation_for_bilinear["overestimator"].append(
+                locatelli_cut
+            )
+        elif con_type == lsf.constraint_geq():
+            bilinear_expression.linear_relaxation_for_bilinear["underestimator"].append(
+                locatelli_cut
+            )
 
     def _add_locatelli_cuts_from_vertices(self):
         """

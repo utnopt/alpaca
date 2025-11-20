@@ -66,6 +66,9 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.feature_stair_locatelli_obbt_time_limit = int(
             config_dict.get("feature/stair_locatelli/obbt_time_limit", 1800)
         )
+        self.feature_stair_locatelli_evaluation_grid_size = int(
+            config_dict.get("feature/stair_locatelli/evaluation_grid_size", 100)
+        )
         self.export_path = (
             StaticSettings.base_path
             + f"/data/export/{time.strftime('%Y-%m-%d_%H-%M-%S')}_"

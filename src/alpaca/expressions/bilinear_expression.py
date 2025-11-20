@@ -2,6 +2,8 @@
 """
 @authors: kuen,
 """
+import numpy as np
+
 from alpaca.expressions import (
     multilinear_expression as mle,
     one_dim_expression as ode,
@@ -93,51 +95,183 @@ class BilinearExpression(mle.MultilinearExpression):
         z = self.representative_variable
 
         # McCormick envelope constraints
-        self.model_data.add_constraint(
-            con.LinearConstraint(
-                lsf.con_name_mc_cormick_continuous_lb_ub(self.name),
-                con_type=lsf.constraint_leq(),
-                variables=[
-                    (1.0, z),
-                    (-x.lb, y),
-                    (-y.ub, x),
-                ],
-                rhs=-x.lb * y.ub,
+        self.mc_cormick_constraints["overestimator"].append(
+            self.model_data.add_constraint(
+                con.LinearConstraint(
+                    lsf.con_name_mc_cormick_continuous_lb_ub(self.name),
+                    con_type=lsf.constraint_leq(),
+                    variables=[
+                        (1.0, z),
+                        (-x.lb, y),
+                        (-y.ub, x),
+                    ],
+                    rhs=-x.lb * y.ub,
+                )
             )
         )
-        self.model_data.add_constraint(
-            con.LinearConstraint(
-                lsf.con_name_mc_cormick_continuous_ub_lb(self.name),
-                con_type=lsf.constraint_leq(),
-                variables=[
-                    (1.0, z),
-                    (-x.ub, y),
-                    (-y.lb, x),
-                ],
-                rhs=-x.ub * y.lb,
+        self.mc_cormick_constraints["overestimator"].append(
+            self.model_data.add_constraint(
+                con.LinearConstraint(
+                    lsf.con_name_mc_cormick_continuous_ub_lb(self.name),
+                    con_type=lsf.constraint_leq(),
+                    variables=[
+                        (1.0, z),
+                        (-x.ub, y),
+                        (-y.lb, x),
+                    ],
+                    rhs=-x.ub * y.lb,
+                )
             )
         )
-        self.model_data.add_constraint(
-            con.LinearConstraint(
-                lsf.con_name_mc_cormick_continuous_lb_lb(self.name),
-                con_type=lsf.constraint_geq(),
-                variables=[
-                    (1.0, z),
-                    (-x.lb, y),
-                    (-y.lb, x),
-                ],
-                rhs=-x.lb * y.lb,
+        self.mc_cormick_constraints["underestimator"].append(
+            self.model_data.add_constraint(
+                con.LinearConstraint(
+                    lsf.con_name_mc_cormick_continuous_lb_lb(self.name),
+                    con_type=lsf.constraint_geq(),
+                    variables=[
+                        (1.0, z),
+                        (-x.lb, y),
+                        (-y.lb, x),
+                    ],
+                    rhs=-x.lb * y.lb,
+                )
             )
         )
-        self.model_data.add_constraint(
-            con.LinearConstraint(
-                lsf.con_name_mc_cormick_continuous_ub_ub(self.name),
-                con_type=lsf.constraint_geq(),
-                variables=[
-                    (1.0, z),
-                    (-x.ub, y),
-                    (-y.ub, x),
-                ],
-                rhs=-x.ub * y.ub,
+        self.mc_cormick_constraints["underestimator"].append(
+            self.model_data.add_constraint(
+                con.LinearConstraint(
+                    lsf.con_name_mc_cormick_continuous_ub_ub(self.name),
+                    con_type=lsf.constraint_geq(),
+                    variables=[
+                        (1.0, z),
+                        (-x.ub, y),
+                        (-y.ub, x),
+                    ],
+                    rhs=-x.ub * y.ub,
+                )
             )
         )
+
+    def volume_and_max_diff_improvement(self):  #pylint: disable=too-many-locals
+        """Calculate volume and max difference improvement of bilinear relaxation."""
+        x = self.variables[0]
+        y = self.variables[1]
+        z = self.representative_variable
+        max_z_interval = z.ub - z.lb
+        mc_cormick_interval_sizes = []
+        locatelli_interval_sizes = []
+
+        for x_grid in np.linspace(
+            x.lb,
+            x.ub,
+            self.model_data.settings.feature_stair_locatelli_evaluation_grid_size,
+        ):
+            for y_grid in np.linspace(
+                y.lb,
+                y.ub,
+                self.model_data.settings.feature_stair_locatelli_evaluation_grid_size,
+            ):
+                upper_bounds_locatelli = [
+                    -[
+                        coefficient
+                        for coefficient, variable in constraint.variables
+                        if variable == x
+                    ][0]
+                    * x_grid
+                    + -[
+                        coefficient
+                        for coefficient, variable in constraint.variables
+                        if variable == y
+                    ][0]
+                    * y_grid
+                    + constraint.rhs
+                    for constraint in self.linear_relaxation_for_bilinear[
+                        "overestimator"
+                    ]
+                ]
+                upper_bound_mc_cormick = min(
+                    (
+                        -[
+                            coefficient
+                            for coefficient, variable in constraint.variables
+                            if variable == x
+                        ][0]
+                        * x_grid
+                        + -[
+                            coefficient
+                            for coefficient, variable in constraint.variables
+                            if variable == y
+                        ][0]
+                        * y_grid
+                        + constraint.rhs
+                        for constraint in self.mc_cormick_constraints["overestimator"]
+                    )
+                )
+                upper_bound_locatelli = (
+                    min([upper_bound_mc_cormick] + upper_bounds_locatelli)
+                    if upper_bounds_locatelli
+                    else upper_bound_mc_cormick
+                )
+
+                lower_bounds_locatelli = [
+                    -[
+                        coefficient
+                        for coefficient, variable in constraint.variables
+                        if variable == x
+                    ][0]
+                    * x_grid
+                    + -[
+                        coefficient
+                        for coefficient, variable in constraint.variables
+                        if variable == y
+                    ][0]
+                    * y_grid
+                    + constraint.rhs
+                    for constraint in self.linear_relaxation_for_bilinear[
+                        "underestimator"
+                    ]
+                ]
+                lower_bound_mc_cormick = max(
+                    (
+                        -[
+                            coefficient
+                            for coefficient, variable in constraint.variables
+                            if variable == x
+                        ][0]
+                        * x_grid
+                        + -[
+                            coefficient
+                            for coefficient, variable in constraint.variables
+                            if variable == y
+                        ][0]
+                        * y_grid
+                        + constraint.rhs
+                        for constraint in self.mc_cormick_constraints["underestimator"]
+                    )
+                )
+                lower_bound_locatelli = (
+                    max([lower_bound_mc_cormick] + lower_bounds_locatelli)
+                    if lower_bounds_locatelli
+                    else lower_bound_mc_cormick
+                )
+                mc_cormick_interval_sizes.append(
+                    upper_bound_mc_cormick - lower_bound_mc_cormick
+                )
+                locatelli_interval_sizes.append(
+                    max(0, upper_bound_locatelli - lower_bound_locatelli)
+                )
+        if sum(mc_cormick_interval_sizes) == 0:
+            return 0, 0
+        volume_improvement = (
+            sum(mc_cormick_interval_sizes) - sum(locatelli_interval_sizes)
+        ) / sum(mc_cormick_interval_sizes)
+        max_diff_improvement = (
+            max(
+                mc_cormick_interval_size - locatelli_interval_size
+                for mc_cormick_interval_size, locatelli_interval_size in zip(
+                    mc_cormick_interval_sizes, locatelli_interval_sizes
+                )
+            )
+            / max_z_interval
+        )
+        return volume_improvement, max_diff_improvement

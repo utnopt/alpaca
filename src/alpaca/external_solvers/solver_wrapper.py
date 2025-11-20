@@ -234,6 +234,12 @@ class SolverWrapper:
             return self.model.ObjVal
         return self.model.getObjVal()
 
+    def get_objective_bound(self) -> float:
+        """Get the objective bound value of the solution."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            return self.model.ObjBound
+        return self.model.getObjlimit()
+
     def is_infeasible(self) -> bool:
         """Check if the model has a feasible solution."""
         if self.mip_solver == lsf.solver_name_gurobi():

@@ -333,3 +333,26 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         """Converts expression objects into their equivalent constraint representations."""
         for expression in self.expressions.linear_expressions.values():
             expression.add_constraint_from_linear_expression()
+
+    def calculate_mean_bilinear_relaxation_volume_and_max_diff_improvement(self):
+        """Calculate the mean volume of bilinear relaxations in the model."""
+        total_volume_improvement = 0.0
+        total_max_diff_improvement = 0.0
+
+        for bilinear_expr in self.expressions.bilinear_expressions.values():
+            volume_improvement, max_diff_improvement = (
+                bilinear_expr.volume_and_max_diff_improvement()
+            )
+            total_volume_improvement += volume_improvement
+            total_max_diff_improvement += max_diff_improvement
+
+        if len(self.expressions.bilinear_expressions) == 0:
+            return -1.0, -1.0
+
+        mean_volume_improvement = total_volume_improvement / len(
+            self.expressions.bilinear_expressions
+        )
+        mean_max_diff_improvement = total_max_diff_improvement / len(
+            self.expressions.bilinear_expressions
+        )
+        return mean_volume_improvement, mean_max_diff_improvement
