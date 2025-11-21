@@ -180,5 +180,8 @@ class StairLocatelli:
         volume_improvement = (total_mc_size - sum(loc_sizes)) / total_mc_size
         # Calculate max difference normalized by the total z interval
         max_diff = max(mc - loc for mc, loc in zip(mc_sizes, loc_sizes))
-        max_diff_improvement = max_diff / max_z_interval
+        if max_z_interval == 0:
+            max_diff_improvement = 0
+        else:
+            max_diff_improvement = max_diff / max_z_interval
         return volume_improvement, max_diff_improvement
