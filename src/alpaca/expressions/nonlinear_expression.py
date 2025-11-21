@@ -315,7 +315,10 @@ class NonlinearExpression:
         return level + 1
 
     def _fragment_one_dim_expression(self, expression_class: type, level: int) -> int:
-        if isinstance(self.child_expressions[0], tuple) and self.child_expressions[0][0] != 1.0:
+        if (
+            isinstance(self.child_expressions[0], tuple)
+            and self.child_expressions[0][0] != 1.0
+        ):
             self._fragment_one_dim_expression_with_coefficient(expression_class, level)
             return level + 2
         self._fragment_one_dim_expression_without_coefficient(expression_class, level)

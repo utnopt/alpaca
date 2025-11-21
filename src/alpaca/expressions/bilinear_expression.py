@@ -2,6 +2,7 @@
 """
 @authors: kuen,
 """
+
 from alpaca.expressions import (
     multilinear_expression as mle,
     one_dim_expression as ode,
@@ -93,51 +94,59 @@ class BilinearExpression(mle.MultilinearExpression):
         z = self.representative_variable
 
         # McCormick envelope constraints
-        self.model_data.add_constraint(
-            con.LinearConstraint(
-                lsf.con_name_mc_cormick_continuous_lb_ub(self.name),
-                con_type=lsf.constraint_leq(),
-                variables=[
-                    (1.0, z),
-                    (-x.lb, y),
-                    (-y.ub, x),
-                ],
-                rhs=-x.lb * y.ub,
+        self.mc_cormick_constraints["overestimator"].append(
+            self.model_data.add_constraint(
+                con.LinearConstraint(
+                    lsf.con_name_mc_cormick_continuous_lb_ub(self.name),
+                    con_type=lsf.constraint_leq(),
+                    variables=[
+                        (1.0, z),
+                        (-x.lb, y),
+                        (-y.ub, x),
+                    ],
+                    rhs=-x.lb * y.ub,
+                )
             )
         )
-        self.model_data.add_constraint(
-            con.LinearConstraint(
-                lsf.con_name_mc_cormick_continuous_ub_lb(self.name),
-                con_type=lsf.constraint_leq(),
-                variables=[
-                    (1.0, z),
-                    (-x.ub, y),
-                    (-y.lb, x),
-                ],
-                rhs=-x.ub * y.lb,
+        self.mc_cormick_constraints["overestimator"].append(
+            self.model_data.add_constraint(
+                con.LinearConstraint(
+                    lsf.con_name_mc_cormick_continuous_ub_lb(self.name),
+                    con_type=lsf.constraint_leq(),
+                    variables=[
+                        (1.0, z),
+                        (-x.ub, y),
+                        (-y.lb, x),
+                    ],
+                    rhs=-x.ub * y.lb,
+                )
             )
         )
-        self.model_data.add_constraint(
-            con.LinearConstraint(
-                lsf.con_name_mc_cormick_continuous_lb_lb(self.name),
-                con_type=lsf.constraint_geq(),
-                variables=[
-                    (1.0, z),
-                    (-x.lb, y),
-                    (-y.lb, x),
-                ],
-                rhs=-x.lb * y.lb,
+        self.mc_cormick_constraints["underestimator"].append(
+            self.model_data.add_constraint(
+                con.LinearConstraint(
+                    lsf.con_name_mc_cormick_continuous_lb_lb(self.name),
+                    con_type=lsf.constraint_geq(),
+                    variables=[
+                        (1.0, z),
+                        (-x.lb, y),
+                        (-y.lb, x),
+                    ],
+                    rhs=-x.lb * y.lb,
+                )
             )
         )
-        self.model_data.add_constraint(
-            con.LinearConstraint(
-                lsf.con_name_mc_cormick_continuous_ub_ub(self.name),
-                con_type=lsf.constraint_geq(),
-                variables=[
-                    (1.0, z),
-                    (-x.ub, y),
-                    (-y.ub, x),
-                ],
-                rhs=-x.ub * y.ub,
+        self.mc_cormick_constraints["underestimator"].append(
+            self.model_data.add_constraint(
+                con.LinearConstraint(
+                    lsf.con_name_mc_cormick_continuous_ub_ub(self.name),
+                    con_type=lsf.constraint_geq(),
+                    variables=[
+                        (1.0, z),
+                        (-x.ub, y),
+                        (-y.ub, x),
+                    ],
+                    rhs=-x.ub * y.ub,
+                )
             )
         )

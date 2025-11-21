@@ -89,9 +89,10 @@ class PWLHandler:
                 expression.handle_abs_expression(self.model_data)
                 continue
             if not expression.variable.is_discretized:  # ub = lb
-                assert abs(
-                    expression.variable.ub - expression.variable.lb
-                ) < s.StaticSettings.feasibility_tolerance
+                assert (
+                    abs(expression.variable.ub - expression.variable.lb)
+                    < s.StaticSettings.feasibility_tolerance
+                )
                 self.model_data.add_constraint(
                     con.LinearConstraint(
                         lsf.con_name_pwl_delta_approximation(expression.name),

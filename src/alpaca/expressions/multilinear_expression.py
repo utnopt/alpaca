@@ -51,6 +51,11 @@ class MultilinearExpression(exn.Expression):
         self.variables = variables
         self.model_data = model_data
         self.piecewise_constant_relation = {}
+        self.linear_relaxation_for_bilinear = {
+            "underestimator": [],
+            "overestimator": [],
+        }
+        self.mc_cormick_constraints = {"underestimator": [], "overestimator": []}
         for variable in self.variables:
             variable.is_discretized = True
 
