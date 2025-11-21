@@ -321,17 +321,16 @@ class DomainProjector:
         return [point for point, direction in traversed]
 
     def _find_start_vertex(self, feasible_grid_points: list[tuple[float, float]]):
-        start_vertex = (None, None)
         # Find start vertex: one that has no neighbor to the left
-        for start_vertex in feasible_grid_points:
+        for candidate_vertex in feasible_grid_points:
             candidate_next_vertices = [
                 x_coord
                 for x_coord, y_coord in feasible_grid_points
-                if y_coord == start_vertex[1] and x_coord < start_vertex[0]
+                if y_coord == candidate_vertex[1] and x_coord < candidate_vertex[0]
             ]
             if not candidate_next_vertices:
-                break
-        return start_vertex
+                return candidate_vertex
+        return (None, None)
 
     def _get_solution_value_for_interval(
         self, variable: var.Variable, lb: float, ub: float
