@@ -238,7 +238,7 @@ class SolverWrapper:
         """Get the objective bound value of the solution."""
         if self.mip_solver == lsf.solver_name_gurobi():
             return self.model.ObjBound
-        return self.model.getObjlimit()
+        return self.model.getDualbound()
 
     def is_infeasible(self) -> bool:
         """Check if the model has a feasible solution."""

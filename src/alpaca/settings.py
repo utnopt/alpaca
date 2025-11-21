@@ -81,7 +81,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             config_dict.get("bilinear_handling", 0)
         )  # 0: mccormick, 1: reformulate to sum of squares, 2: piecewise constant, 3: nonlinear
         self.bound_propagation = int(
-            config_dict.get("bound_propagation", 1)
+            config_dict.get("bound_propagation", 0)
         )  # 0: manual, 1: obbt
         self.feature_mpip_separation = int(
             config_dict.get("feature/mpip/separation", 0)
