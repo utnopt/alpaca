@@ -66,8 +66,12 @@ def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting)
         user_settings.save_to_json()
 
         model_data = mda.ModelData(user_settings)
+        volume_improvement, max_diff_improvement = 0.0, 0.0
         if user_settings.feature_stair_locatelli:
-            slo.StairLocatelli(model_data)
+            stair_locatelli = slo.StairLocatelli(model_data)
+            volume_improvement, max_diff_improvement = (
+                stair_locatelli.calculate_mean_bilinear_relaxation_volume_and_max_diff_improvement()
+            )
 
         external_solver = mm.MIPModel(
             model_data,
@@ -80,10 +84,6 @@ def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting)
 
         solver = slv.Solver(external_solver)
         runtime = solver.solve_instance()
-
-        volume_improvement, max_diff_improvement = (
-            model_data.calculate_mean_bilinear_relaxation_volume_and_max_diff_improvement()
-        )
 
         logger.info(lsf.info_optimization_finished(runtime))
         return (
