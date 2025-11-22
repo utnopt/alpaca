@@ -50,7 +50,12 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         for multilinear_expression in list(
             self.multilinear_expressions.values()
         ) + list(self.bilinear_expressions.values()):
-            if multilinear_expression.representative_variable.is_discretized:
+            if multilinear_expression.representative_variable.is_discretized and all(
+                (
+                    variable.is_discretized
+                    for variable in multilinear_expression.variables
+                )
+            ):
                 multilinear_expression.extract_mpip_relation(
                     approximation=self.model_data.settings.approximation
                 )

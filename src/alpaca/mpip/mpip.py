@@ -37,6 +37,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         self.interval_lp = sw.SolverWrapper(mip_solver=lsf.solver_name_gurobi())
         self.implying_function = self.interval_lp.nonlinear_expression()
         self.interval_lp.hide_output()
+        self.interval_lp.set_time_limit(s.StaticSettings.mpip_interval_lp_time_limit)
         self.interval_lp_implying_vars = {}
         self.interval_lp_implied_var = 0
         self.separator = None
@@ -127,9 +128,13 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         self.interval_lp.optimize()
         if self.interval_lp.is_infeasible():
             return False, 0.0, 0.0
-        lower_bound = round(
-            self.interval_lp.get_objective_value(), s.StaticSettings.rounding_precision
-        )
+        try:
+            lower_bound = round(
+                self.interval_lp.get_objective_bound(),
+                s.StaticSettings.rounding_precision,
+            )
+        except AttributeError:
+            lower_bound = -s.StaticSettings.infinity
 
         self.interval_lp.set_objective(
             self.interval_lp_implied_var, lsf.objective_sense_maximize()
@@ -137,7 +142,11 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         self.interval_lp.optimize()
         if self.interval_lp.is_infeasible():
             return False, 0.0, 0.0
-        upper_bound = round(
-            self.interval_lp.get_objective_value(), s.StaticSettings.rounding_precision
-        )
+        try:
+            upper_bound = round(
+                self.interval_lp.get_objective_bound(),
+                s.StaticSettings.rounding_precision,
+            )
+        except AttributeError:
+            upper_bound = s.StaticSettings.infinity
         return True, lower_bound, upper_bound

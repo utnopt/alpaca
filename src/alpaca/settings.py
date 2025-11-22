@@ -41,6 +41,7 @@ class StaticSettings:
     rounding_precision = 5
     mpip_sparsity = 0.45
     maximum_mpip_size = 5
+    mpip_interval_lp_time_limit = 5
 
 
 class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance-attributes
