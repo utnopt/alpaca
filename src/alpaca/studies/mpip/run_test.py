@@ -50,12 +50,12 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
             "feature/mpip/separation": int(args.test_case.lower() == "mpip"),
             "seed": int(args.seed_value),
             "external_solver": "gurobi",
-            "solver_time_limit": 7200,
+            "solver_time_limit": 1,
             "reformulate_multilinear_to_bilinear": 1,
-            "bilinear_handling": 1,
-            "breakpoint_generation": 1,
+            "bilinear_handling": 2,
+            "breakpoint_generation": 0,
             "feature/nnbp/time_limit": 300,
-            "bound_propagation": 1,
+            "bound_propagation": 0,
             "bound_propagation_time_limit": 300,
         }
         user_settings = s.UserSettings(config_dict)
