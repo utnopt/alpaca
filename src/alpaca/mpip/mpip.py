@@ -44,10 +44,10 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         self.feasible = True
         self.pwl_method = pwl_method
 
-    def build_mpip(self) -> None:
+    def build_mpip(self) -> bool:
         """Build MPIP structure."""
         self._add_implying_function_to_interval_lp()
-        self._calculate_relation_function()
+        return self._calculate_relation_function()
 
     def add_implied_id(
         self,
@@ -75,7 +75,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
             len(implied_indices) for implied_indices in self.relation.values()
         ) / len(self.relation)
 
-    def _calculate_relation_function(self) -> None:
+    def _calculate_relation_function(self) -> bool:
         breakpoint_ranges = []
         for variable in self.implying_variables.values():
             bp = variable.breakpoints
@@ -86,13 +86,16 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
             key = tuple(implying_index for implying_index, _ in combo)
             intervals = tuple(interval for _, interval in combo)
             interval_dict = dict(zip(list(self.implying_variables.keys()), intervals))
-            feasible, lb, ub = self._implied_interval_scip(interval_dict)
-            if feasible:
+            return_code, lb, ub = self._implied_interval_scip(interval_dict)
+            if return_code == 1:
                 self.relation[key] = self._calculate_implied_relation_from_interval(
                     lb, ub
                 )
-            else:
+            elif return_code == 0:
                 self.relation[key] = ()
+            else:
+                return False
+        return True
 
     def _calculate_implied_relation_from_interval(self, lb: float, ub: float) -> tuple:
         if self.implied_variable.breakpoints[0] == ub:
@@ -116,7 +119,7 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
 
     def _implied_interval_scip(
         self, intervals: dict[str, tuple[float, float]]
-    ) -> tuple[bool, float, float]:
+    ) -> tuple[int, float, float]:
         for implying_index, (low, high) in intervals.items():
             implying_var = self.interval_lp_implying_vars[implying_index]
             self.interval_lp.set_variable_lb(implying_var, low)
@@ -126,27 +129,27 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
             self.interval_lp_implied_var, sense=lsf.objective_sense_minimize()
         )
         self.interval_lp.optimize()
-        if self.interval_lp.is_infeasible():
-            return False, 0.0, 0.0
-        try:
+        if self.interval_lp.is_optimal():
             lower_bound = round(
-                self.interval_lp.get_objective_bound(),
+                self.interval_lp.get_objective_value(),
                 s.StaticSettings.rounding_precision,
             )
-        except AttributeError:
-            lower_bound = -s.StaticSettings.infinity
+        elif self.interval_lp.is_infeasible():
+            return 0, 0.0, 0.0
+        else:
+            return -1, 0.0, 0.0
 
         self.interval_lp.set_objective(
             self.interval_lp_implied_var, lsf.objective_sense_maximize()
         )
         self.interval_lp.optimize()
-        if self.interval_lp.is_infeasible():
-            return False, 0.0, 0.0
-        try:
+        if self.interval_lp.is_optimal():
             upper_bound = round(
                 self.interval_lp.get_objective_bound(),
                 s.StaticSettings.rounding_precision,
             )
-        except AttributeError:
-            upper_bound = s.StaticSettings.infinity
-        return True, lower_bound, upper_bound
+        elif self.interval_lp.is_infeasible():
+            return 0, 0.0, 0.0
+        else:
+            return -1, 0.0, 0.0
+        return 1, lower_bound, upper_bound

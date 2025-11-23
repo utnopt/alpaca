@@ -32,16 +32,17 @@ class StaticSettings:
     log_rotation_type = "size"  # use "size", "time" or "none"
 
     # ===== Data settings =====
-    infinity = 1e7
+    infinity = 1e5
     feasibility_tolerance = 1e-3
 
     # ===== MPIP settings =====
     max_violation_relation = 1e-2
     min_cut_violation = 1e-3
     rounding_precision = 5
-    mpip_sparsity = 0.45
+    maximum_mpip_implication_factor = 3
+    minimum_mpip_size = 2
     maximum_mpip_size = 5
-    mpip_interval_lp_time_limit = 5
+    mpip_interval_lp_time_limit = 1
 
 
 class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance-attributes

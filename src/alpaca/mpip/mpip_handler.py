@@ -36,9 +36,25 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         self._build_mpip_instances()
 
     def _build_mpip_instances(self) -> None:
+        mpip_to_be_removed = []
         for mpip in self.mpip_dict.values():
             if not mpip.relation:
-                mpip.build_mpip()
+                if not mpip.build_mpip():
+                    mpip_to_be_removed.append(mpip.mpip_id)
+                    continue
+            if (
+                sum(
+                    (
+                        len(implied_variables)
+                        for implied_variables in mpip.relation.values()
+                    )
+                )
+                / len(mpip.relation)
+                > s.StaticSettings.maximum_mpip_implication_factor
+            ):
+                mpip_to_be_removed.append(mpip.mpip_id)
+        for mpip_id in mpip_to_be_removed:
+            del self.mpip_dict[mpip_id]
 
     def _extract_mpip_instances_in_nonlinear_expressions(self) -> None:
         """Extract mpip instances from nonlinear expression trees."""
@@ -115,7 +131,8 @@ class MPIPHandler:  # pylint: disable=too-many-instance-attributes
         )
         if (
             mpip.feasible
-            and len(mpip.interval_lp_implying_vars)
+            and s.StaticSettings.minimum_mpip_size
+            <= len(mpip.interval_lp_implying_vars)
             <= s.StaticSettings.maximum_mpip_size
         ):
             self.mpip_dict[mpip_id] = mpip
