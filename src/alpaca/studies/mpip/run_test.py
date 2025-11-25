@@ -50,16 +50,16 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
             "feature/mpip/separation": int(args.test_case.lower() == "mpip"),
             "seed": int(args.seed_value),
             "external_solver": "gurobi",
-            "solver_time_limit": 7200,
+            "solver_time_limit": 1,
             "reformulate_multilinear_to_bilinear": 1,
             "bilinear_handling": 2,
-            "breakpoint_generation": 1,
+            "breakpoint_generation": 0,
             "feature/nnbp/time_limit": 3600,
             "bound_propagation": 1,
             "bound_propagation_time_limit": 3600,
         }
         user_settings = s.UserSettings(config_dict)
-        ut_io.config_console_logger(log_level=logging.ERROR)
+        ut_io.config_console_logger(log_level=logging.DEBUG)
         ut_io.config_file_logger(user_settings)
         user_settings.save_to_json()
         if hasattr(signal, "SIGALRM"):
@@ -71,6 +71,16 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
             # Disable the alarm once the operation is complete or has failed.
             if hasattr(signal, "SIGALRM"):
                 signal.alarm(0)
+
+        for variable in model_data.variables.values():
+            if variable.is_discretized:
+                if (
+                    variable.lb == -s.StaticSettings.infinity
+                    or variable.ub == s.StaticSettings.infinity
+                ):
+                    raise ValueError(
+                        f"Variable {variable.name} is discretized but has infinite bounds."
+                    )
 
         external_solver = mm.MIPModel(
             model_data,
