@@ -37,7 +37,7 @@ class StaticSettings:
 
     # ===== MPIP settings =====
     max_violation_relation = 1e-2
-    min_cut_violation = 1e-3
+    min_cut_violation = 1e-2
     rounding_precision = 5
     maximum_mpip_implication_factor = 3
     minimum_mpip_size = 2
