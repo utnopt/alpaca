@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=protected-access
 """
 @authors: kuen,
 """
@@ -292,7 +293,13 @@ def gurobi_separation_callback(grb_model, where):
     """Callback for mpip separation"""
     if where == gp.GRB.Callback.MIPNODE:
         if grb_model.cbGet(gp.GRB.Callback.MIPNODE_STATUS) == gp.GRB.Status.OPTIMAL:
-            grb_model._mpip_separation_handler.separate_solution()  # pylint: disable=protected-access
+            grb_model._mpip_separation_handler.iteration += 1
+            if (
+                grb_model._mpip_separation_handler.iteration
+                % grb_model._mpip_separation_handler.settings.feature_mpip_frequency
+                == 0
+            ):
+                grb_model._mpip_separation_handler.separate_solution()
 
 
 def get_nonlinear_function_scip(  # pylint: disable=too-many-return-statements

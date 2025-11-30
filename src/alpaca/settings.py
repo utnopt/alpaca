@@ -91,6 +91,10 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.feature_mpip_mccormick = int(config_dict.get("feature/mpip/mccormick", 0))
         self.feature_mpip_stair = int(config_dict.get("feature/mpip/stair", 0))
         self.feature_mpip_stripe = int(config_dict.get("feature/mpip/stripe", 0))
+        self.feature_mpip_useless_threshold = float(
+            config_dict.get("feature/mpip/useless_threshold", 0.1)
+        )
+        self.feature_mpip_frequency = int(config_dict.get("feature/mpip/frequency", 10))
         self.feature_mpip = (
             self.feature_mpip_separation
             or self.feature_mpip_mccormick

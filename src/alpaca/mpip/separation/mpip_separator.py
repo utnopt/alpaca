@@ -65,21 +65,31 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
 
     def __init__(self, mpip: mp.MPIP, opt_model: sw.SolverWrapper) -> None:
         self.separation_model = sw.SolverWrapper(opt_model.mip_solver)
+        self.mpip = mpip
         self._setup_separation_model()
         self.separation_handler: None | sw.ScipSeparation = None
-        self.mpip = mpip
         self.relation_matrix_size = len(mpip.implied_variable.breakpoints) - 1
         self.sep_implying_variables: dict[str, list[Any]] = {}
         self.sep_implied_variables: list[Any] = []
         self.point_to_be_separated = SeparatedPoint()
         self.opt_model = opt_model
         self.nr_of_cuts = 0
+        self.nr_of_not_cuts = 0
+        self.used = 1
+        self.unused = 0
+        self.usefulness = 1
 
     def _setup_separation_model(self) -> None:
         """Configure separation model settings."""
         self.separation_model.hide_output()
         self.separation_model.set_seed(42)
         self.separation_model.enable_reoptimization()
+
+    def reset_useless_counter(self) -> None:
+        """Reset the useless cut counter."""
+        self.used = 1
+        self.unused = 0
+        self.usefulness = 1
 
     def add_mc_cormick_constraints(self) -> None:
         """Add McCormick envelope constraints to optimization model."""
@@ -320,8 +330,13 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
             violation -= solution_value * self.point_to_be_separated.implied_values[idx]
         if violation > s.StaticSettings.min_cut_violation:
             self.nr_of_cuts += 1
+            self.used += 1
+            self.usefulness = self.used / (self.used + self.unused)
             self.opt_model.add_cut(cut_to_separate)
             return True
+        self.nr_of_not_cuts += 1
+        self.unused += 1
+        self.usefulness = self.used / (self.used + self.unused)
         return False
 
     def _generate_cut_delta(self) -> bool:
@@ -382,8 +397,13 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
             for coeff, cut_var in cut_variables:
                 self.opt_model.add_var_to_cut(cut_to_separate, cut_var, coeff)
             self.nr_of_cuts += 1
+            self.used += 1
+            self.usefulness = self.used / (self.used + self.unused)
             self.opt_model.add_cut(cut_to_separate)
             return True
+        self.nr_of_not_cuts += 1
+        self.unused += 1
+        self.usefulness = self.used / (self.used + self.unused)
         return False
 
     def separate_solution(self) -> bool:

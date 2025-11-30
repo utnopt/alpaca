@@ -15,6 +15,7 @@ class MPIPSeparationHandler:
         self, mpip_handler: mph.MPIPHandler, opt_model: sw.SolverWrapper
     ) -> None:
         self.mpip_handler = mpip_handler
+        self.settings = mpip_handler.model_data.settings
         self.iteration = 0
         self.opt_model = opt_model
         self.nr_added_cuts = 0
@@ -40,9 +41,15 @@ class MPIPSeparationHandler:
 
     def separate_solution(self) -> bool:
         """Perform separation for current solution."""
-        self.iteration += 1
         separated = False
         for mpip in self.mpip_handler.mpip_dict.values():
+            if (
+                self.iteration % int(30 / self.settings.feature_mpip_useless_threshold)
+                == 0
+            ):
+                mpip.separator.reset_useless_counter()
+            if mpip.separator.usefulness < self.settings.feature_mpip_useless_threshold:
+                continue
             if mpip.separator.separate_solution():
                 separated = True
         if separated:
