@@ -21,12 +21,20 @@ class Solver:
     def solve_instance(self):
         """Solve instance."""
         logger.info(lsf.info_init_solver())
-        self._activate_mpip_features()
-        self._attach_event_handlers()
         start_time = time.time()
         self.external_solver.opt_model.optimize(self.gurobi_callback_function)
         runtime = time.time() - start_time
         return runtime
+
+    def compute_optimal_mip_start(self):
+        """Compute an optimal MIP start using the external solver."""
+        self.external_solver.opt_model.optimize(self.gurobi_callback_function)
+        self.external_solver.save_solution_to_mip_start()
+        self.external_solver.opt_model.reset_model()
+        self.external_solver.set_mip_start()
+        self._activate_mpip_features()
+        self._attach_event_handlers()
+        self.external_solver.opt_model.turn_off_heuristics()
 
     def _attach_event_handlers(self):
         if self.settings.external_solver == lsf.solver_name_scip():

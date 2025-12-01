@@ -1,8 +1,9 @@
 {
-      "osil_file_name": "nvs23",
-      "number_of_breakpoints": 15,
+      "osil_file_name": "pooling_adhya1pq",
+      "number_of_breakpoints": 30,
       "pwl_method": "delta",
       "feature/mpip/separation": 1,
+      "feature/mpip/frequency": 100,
       "seed": 1,
       "external_solver": "gurobi",
       "solver_time_limit": 2000,

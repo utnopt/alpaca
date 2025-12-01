@@ -429,6 +429,10 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return "OutputFlag"
 
     @classmethod
+    def gurobi_parameter_heuristics(cls) -> str:
+        return "Heuristics"
+
+    @classmethod
     def gurobi_model_attribute_sense(cls) -> str:
         return "ModelSense"
 

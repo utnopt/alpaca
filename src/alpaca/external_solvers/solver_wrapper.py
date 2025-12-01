@@ -74,6 +74,27 @@ class SolverWrapper:
             return var.X
         return self.model.getVal(var)
 
+    def set_mip_start(self, var: Any, value: float) -> None:
+        """Set MIP start for a variable."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            var.Start = value
+        else:
+            self.model.setSolVal(None, var, value)
+
+    def reset_model(self) -> None:
+        """Reset the model to its initial state."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            self.model.reset(clearall=1)
+        else:
+            pass
+
+    def turn_off_heuristics(self) -> None:
+        """Turn off heuristics for the solver."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            self.model.setParam(lsf.gurobi_parameter_heuristics(), 0)
+        else:  # scip
+            self.model.setHeuristics(scip.SCIP_PARAMSETTING.OFF)
+
     def get_mip_gap(self) -> float:
         """Get the MIP gap of the current solution."""
         if self.mip_solver == lsf.solver_name_gurobi():
@@ -293,9 +314,8 @@ def gurobi_separation_callback(grb_model, where):
     """Callback for mpip separation"""
     if where == gp.GRB.Callback.MIPNODE:
         if grb_model.cbGet(gp.GRB.Callback.MIPNODE_STATUS) == gp.GRB.Status.OPTIMAL:
-            grb_model._mpip_separation_handler.iteration += 1
             if (
-                grb_model._mpip_separation_handler.iteration
+                grb_model.cbGet(gp.GRB.Callback.MIPNODE_NODCNT)
                 % grb_model._mpip_separation_handler.settings.feature_mpip_frequency
                 == 0
             ):
