@@ -44,6 +44,7 @@ touch "$ERROR_LOG_FILE"
 declare -a jobs
 for dir in "$IMPORT_PATH"/test_instances_*; do
     num_breakpoints=$(basename "$dir" | grep -o '[0-9]*$')
+    echo "$num_breakpoints"
     while IFS= read -r file; do
     # For each file and each test case, create 5 jobs with different seeds.
       for seed in 0 1 2 3 4; do
