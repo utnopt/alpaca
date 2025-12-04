@@ -43,7 +43,7 @@ declare -a jobs
 for num_breakpoints in 20; do
     while IFS= read -r file; do
     # For each file and each test case, create 5 jobs with different seeds.
-      for seed in 0 10 50; do
+      for seed in 0 1 2 3 4; do
         for pwl_method in "delta" "multiple_choice"; do
           # Each job is defined by: file, number_of_breakpoints, test_case, mpip_stripe_flag, seed_value
           # Added seed_value to the job parameters
