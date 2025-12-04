@@ -44,7 +44,6 @@ touch "$ERROR_LOG_FILE"
 declare -a jobs
 for dir in "$IMPORT_PATH"/test_instances_*; do
     num_breakpoints=$(basename "$dir" | grep -o '[0-9]*$')
-    echo "$num_breakpoints"
     while IFS= read -r file; do
     # For each file and each test case, create 5 jobs with different seeds.
       for seed in 0 1 2 3 4; do
@@ -55,8 +54,8 @@ for dir in "$IMPORT_PATH"/test_instances_*; do
           jobs+=("$file $num_breakpoints Standard $seed $pwl_method")
         done
       done
-    done
-done < <(find "$IMPORT_PATH"/instances -name "*.osil")
+    done < <(find "$dir" -name "*.osil")
+done
 
 NUM_JOBS=${#jobs[@]}
 echo "Found $NUM_JOBS total jobs to run across all test configurations and seeds."
