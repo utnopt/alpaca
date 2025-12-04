@@ -40,7 +40,8 @@ echo "test_case,pwl_method,nr_of_breakpoints,seed,osil_file_name,runtime,mip_gap
 # Find all test instance directories (e.g., test_instances_5, test_instances_10)
 # and prepare the list of jobs to be executed.
 declare -a jobs
-for num_breakpoints in 20; do
+for dir in "$IMPORT_PATH"/test_instances_*; do
+    num_breakpoints=$(basename "$dir" | grep -o '[0-9]*$')
     while IFS= read -r file; do
     # For each file and each test case, create 5 jobs with different seeds.
       for seed in 0 1 2 3 4; do
