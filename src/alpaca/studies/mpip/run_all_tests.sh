@@ -32,8 +32,10 @@ mkdir -p "$EXPORT_PATH"
 # Create a timestamped results file and write the header
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 RESULTS_FILE="$EXPORT_PATH/mpip_results_${TIMESTAMP}.csv"
+ERROR_LOG_FILE="$EXPORT_PATH/mpip_errors_${TIMESTAMP}.log"
 # Added 'seed_value' to the CSV header
 echo "test_case,pwl_method,nr_of_breakpoints,seed,osil_file_name,runtime,mip_gap,mpip_cuts,mpip_cuts_applied,mpip_ratio" > "$RESULTS_FILE"
+touch "$ERROR_LOG_FILE"
 
 # --- Job Definition ---
 
@@ -59,6 +61,7 @@ NUM_JOBS=${#jobs[@]}
 echo "Found $NUM_JOBS total jobs to run across all test configurations and seeds."
 echo "Running up to $MAX_PARALLEL_JOBS jobs in parallel, using $CORES_PER_JOB cores each."
 echo "Results will be saved to $RESULTS_FILE"
+echo "Errors will be saved to $ERROR_LOG_FILE"
 
 # --- Parallel Execution Engine ---
 
@@ -100,7 +103,7 @@ run_job() {
         --breakpoints "$breakpoints" \
         --test_case "$test_case" \
         --pwl_method "$pwl_method" \
-        --seed_value "$seed_value" >> "$RESULTS_FILE" 2>/dev/null
+        --seed_value "$seed_value" >> "$RESULTS_FILE" 2>> "$ERROR_LOG_FILE"
 
     # Return the slot to the semaphore, making it available for the next job
     echo "$slot" >&3
@@ -132,3 +135,4 @@ wait
 exec 3>&-
 
 echo "All optimization runs completed. Results saved to $RESULTS_FILE"
+echo "Errors:  $ERROR_LOG_FILE"
