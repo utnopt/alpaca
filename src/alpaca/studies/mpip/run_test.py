@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=duplicate-code, too-many-locals
+# pylint: disable=duplicate-code, too-many-locals, too-many-branches
 """
 This script is a lightweight wrapper to run a single optimization instance.
 It takes a .osil file and several configuration settings as command-line arguments.
@@ -104,6 +104,10 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
         seed_value = int(args.seed_value)
         solver.external_solver.opt_model.set_seed(seed_value)
         runtime = solver.solve_instance()
+        if user_settings.feature_mpip:
+            for mpip in mpip_handler.mpip_dict.values():
+                for cut in mpip.separator.find_good_cuts():
+                    mpip.get_block_structure(cut)
         mip_gap = solver.external_solver.opt_model.get_mip_gap()
         nr_cuts = (
             0

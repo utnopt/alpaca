@@ -153,3 +153,28 @@ class MPIP:  # pylint: disable=too-many-instance-attributes
         else:
             return -1, 0.0, 0.0
         return 1, lower_bound, upper_bound
+
+    def get_block_structure(self, cut: sw.GurobiCut) -> list:
+        """Get block structure."""
+        lhs_expr = cut.lhs
+        coeff_dict = {variable.VarName: coeff for coeff, variable in lhs_expr.linTerms()}
+        if len(self.implying_variables) != 2:
+            return []
+        implying_vars = list(self.implying_variables.values())
+        blocks = [[], [], []]
+        for block_index in range(3):
+            for x_var in implying_vars[0].pwl.pwl_variables_binary:
+                x_coeff = coeff_dict[x_var.name]
+                for y_var in implying_vars[1].pwl.pwl_variables_binary:
+                    y_coeff = coeff_dict[y_var.name]
+                    if x_coeff + s.StaticSettings.feasibility_tolerance >= (
+                        block_index + 1
+                    ) * (
+                        1 / 3
+                    ) and y_coeff + s.StaticSettings.feasibility_tolerance >= (
+                        3 - block_index
+                    ) * (
+                        1 / 3
+                    ):
+                        blocks[block_index].append((x_var, y_var))
+        return blocks

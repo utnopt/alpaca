@@ -292,6 +292,9 @@ class GurobiCut:
         self.rhs = rhs if rhs is not None else 0.0
         self.local = local
 
+    def __repr__(self):
+        return f"GurobiCut(name={self.name}, lhs={self.lhs}, rhs={self.rhs})"
+
 
 class ScipSeparation(scip.Sepa):
     """Wrapper for SCIP separation handler."""
