@@ -22,6 +22,8 @@ class Solver:
         """Solve instance."""
         logger.info(lsf.info_init_solver())
         start_time = time.time()
+        self._activate_mpip_features()
+        self._attach_event_handlers()
         self.external_solver.opt_model.optimize(self.gurobi_callback_function)
         runtime = time.time() - start_time
         return runtime
