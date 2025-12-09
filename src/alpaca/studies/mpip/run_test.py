@@ -20,6 +20,7 @@ from alpaca.utils import inout as ut_io
 from alpaca.utils.logger import logger
 import alpaca.utils.error_handling as erh
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+import alpaca.studies.mpip.visualizer as vis  # pylint: disable=unused-import
 
 
 def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
@@ -60,7 +61,7 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
             "bound_propagation_time_limit": 3600,
         }
         user_settings = s.UserSettings(config_dict)
-        ut_io.config_console_logger(log_level=logging.DEBUG)
+        ut_io.config_console_logger(log_level=logging.INFO)
         ut_io.config_file_logger(user_settings)
         user_settings.save_to_json()
         if hasattr(signal, "SIGALRM"):
@@ -104,10 +105,9 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
         seed_value = int(args.seed_value)
         solver.external_solver.opt_model.set_seed(seed_value)
         runtime = solver.solve_instance()
-        if user_settings.feature_mpip:
-            for mpip in mpip_handler.mpip_dict.values():
-                for cut in mpip.separator.find_good_cuts():
-                    mpip.get_block_structure(cut)
+        # if user_settings.feature_mpip:
+        #     visualizer = vis.Visualizer(user_settings)
+        #     visualizer.plot_blocks(mpip_handler)
         mip_gap = solver.external_solver.opt_model.get_mip_gap()
         nr_cuts = (
             0

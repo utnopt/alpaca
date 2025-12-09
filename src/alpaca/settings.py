@@ -43,6 +43,7 @@ class StaticSettings:
     minimum_mpip_size = 2
     maximum_mpip_size = 5
     mpip_interval_lp_time_limit = 1
+    nr_of_blocks_plotted = 5
 
 
 class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance-attributes

@@ -297,7 +297,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
         """Generate cut based on separation solution multiple choice method."""
         cut_to_separate = self.opt_model.create_cut(
             self.separation_handler,
-            f"mpip{self.mpip.mpip_id}_x{self.nr_of_cuts}",
+            f"{self.mpip.mpip_id}_x_{self.nr_of_cuts}",
             lhs=None,
             rhs=len(self.sep_implying_variables) - 1,
             local=False,
@@ -391,7 +391,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
         if violation > s.StaticSettings.min_cut_violation:
             cut_to_separate = self.opt_model.create_cut(
                 self.separation_handler,
-                f"mpip{self.mpip.mpip_id}_x{self.nr_of_cuts}",
+                f"{self.mpip.mpip_id}_x_{self.nr_of_cuts}",
                 lhs=None,
                 rhs=cut_rhs,
                 local=False,
@@ -480,11 +480,3 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
                 )
             ]
         )
-
-    def find_good_cuts(self):
-        """Get all cuts with zero slack."""
-        return [
-            cut
-            for cut in self.separated_cuts
-            if cut.rhs - cut.lhs.getValue() < s.StaticSettings.feasibility_tolerance
-        ]

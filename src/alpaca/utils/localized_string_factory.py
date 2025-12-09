@@ -753,3 +753,55 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
     @classmethod
     def osil_attr_idx_two(cls) -> str:
         return "idxTwo"
+
+    # --- Study Stair Locatelli ---
+
+    @classmethod
+    def study_stair_locatelli_export_folder(cls) -> str:
+        return "stair_locatelli/"
+
+    @classmethod
+    def study_stair_locatelli_polygon_plot_name(cls, expression_name: str) -> str:
+        return f"polygons_{expression_name}.png"
+
+    @classmethod
+    def study_stair_locatelli_cut_plot_name(
+        cls, expression_name: str, cut_index: int
+    ) -> str:
+        return f"cuts_{expression_name}_{cut_index}.png"
+
+    @classmethod
+    def study_stair_locatelli_info_plot_polygons(cls) -> str:
+        return "Plotting 2D projection polygons for stair locatelli..."
+
+    @classmethod
+    def study_stair_locatelli_info_plot_cuts(cls) -> str:
+        return "Plotting 3D surfaces for stair locatelli..."
+
+    # --- Study MPIP ---
+
+    @classmethod
+    def study_mpip_export_folder_blocks(cls) -> str:
+        return "mpip_blocks/"
+
+    @classmethod
+    def study_mpip_export_folder_performance(cls) -> str:
+        return "performance_plots/"
+
+    @classmethod
+    def study_mpip_performance_plot_name(cls) -> str:
+        return "performance_profile_comparison.png"
+
+    @classmethod
+    def study_mpip_runtime_scaling_plot_name(cls) -> str:
+        return "runtime_scaling_comparison.png"
+
+    @classmethod
+    def study_mpip_info_plot_blocks(cls) -> str:
+        return (
+            "Plotting block structures for MPIP structures with 2 implying variables..."
+        )
+
+    @classmethod
+    def study_mpip_info_plot_performance(cls) -> str:
+        return "Creating performance plots from MPIP results..."
