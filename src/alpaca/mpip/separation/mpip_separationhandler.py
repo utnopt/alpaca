@@ -39,6 +39,13 @@ class MPIPSeparationHandler:
         for mpip in self.mpip_handler.mpip_dict.values():
             mpip.separator.add_stripe_constraints()
 
+    @dec.check_pwl_method_for_mpip_feature
+    def add_corner_constraints(self) -> None:
+        """Add corner constraints for all MPIPs."""
+        for mpip in self.mpip_handler.mpip_dict.values():
+            if len(mpip.implying_variables) == 2:
+                mpip.separator.add_corner_constraints()
+
     def separate_solution(self) -> bool:
         """Perform separation for current solution."""
         separated = False

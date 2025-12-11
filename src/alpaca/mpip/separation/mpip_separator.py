@@ -106,6 +106,84 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
                 implying_indices, implying_variables, implied_variables
             )
 
+    def add_corner_constraints(self) -> None:
+        """Add corner constraints to optimization model."""
+        x_var_name = list(self.mpip.implying_variables.keys())[0]
+        y_var_name = list(self.mpip.implying_variables.keys())[1]
+        max_x_index = len(self.sep_implying_variables[x_var_name]) - 1
+        max_y_index = len(self.sep_implying_variables[y_var_name]) - 1
+        upper_right_corners = []
+        right_up = 1  # 0: right, 1: up
+        i, j = 0, max_y_index + 1
+        while i <= max_x_index:
+            while 0 not in self.mpip.relation.get((i, j - 1), (0,)):
+                if right_up == 0:
+                    upper_right_corners.append((i - 1, j))
+                right_up = 1
+                j -= 1
+                if j < 0:
+                    break
+            right_up = 0
+            i += 1
+        upper_right_corners.append((max_x_index, j))
+        first_bottom_left = (
+            (-1, max_y_index)
+            if upper_right_corners[0][1] != max_y_index + 1
+            else (
+                upper_right_corners[0][0],
+                max_y_index,
+            )
+        )
+        upper_right_corners = [first_bottom_left] + upper_right_corners[1:]
+        blocks = [
+            (
+                tuple(range(upper_right_corners[i][0] + 1, upper_right_corner[0] + 1)),
+                tuple(range(upper_right_corner[1], max_y_index + 1)),
+            )
+            for i, upper_right_corner in enumerate(upper_right_corners[1:])
+        ]
+        for block in blocks:
+            self._add_constraint_from_block(block)
+
+    def _add_constraint_from_block(
+        self, block: tuple[tuple[int, ...], tuple[int, ...]]
+    ) -> None:
+        """Add constraint for a specific block."""
+        x_indices, y_indices = block
+        self.opt_model.add_constraint(
+            sum(
+                self.mpip.implying_variables[
+                    list(self.mpip.implying_variables.keys())[0]
+                ]
+                .pwl.pwl_variables_binary[x_index]
+                .solver_variable
+                for x_index in x_indices
+            )
+            + sum(
+                self.mpip.implying_variables[
+                    list(self.mpip.implying_variables.keys())[1]
+                ]
+                .pwl.pwl_variables_binary[y_index]
+                .solver_variable
+                for y_index in y_indices
+            )
+            - sum(
+                self.mpip.implied_variable.pwl.pwl_variables_binary[
+                    implied_index
+                ].solver_variable
+                for implied_index in sum(
+                    {
+                        self.mpip.relation.get((x_index, y_index), ())
+                        for x_index in x_indices
+                        for y_index in y_indices
+                    },
+                    (),
+                )
+            )
+            <= len(self.mpip.implying_variables) - 1,
+            name=f"corner_{block}_{self.mpip.mpip_id}".replace(" ", ""),
+        )
+
     def _generate_implying_combinations(
         self,
     ) -> Iterator[tuple[tuple[int, ...], tuple[var.Variable, ...]]]:

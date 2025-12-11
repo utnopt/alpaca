@@ -90,6 +90,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             config_dict.get("feature/mpip/separation", 0)
         )
         self.feature_mpip_mccormick = int(config_dict.get("feature/mpip/mccormick", 0))
+        self.feature_mpip_corner = int(config_dict.get("feature/mpip/corner", 0))
         self.feature_mpip_stair = int(config_dict.get("feature/mpip/stair", 0))
         self.feature_mpip_stripe = int(config_dict.get("feature/mpip/stripe", 0))
         self.feature_mpip_useless_threshold = float(

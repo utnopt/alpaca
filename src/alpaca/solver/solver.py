@@ -50,6 +50,11 @@ class Solver:
                 logger.warning(lsf.warning_mpip_features_disabled_for_pwl_method_none())
                 return
             self.mpip_separation_handler.add_mc_cormick_constraints()
+        if self.settings.feature_mpip_corner:
+            if self.settings.pwl_method == lsf.pwl_method_none():
+                logger.warning(lsf.warning_mpip_features_disabled_for_pwl_method_none())
+                return
+            self.mpip_separation_handler.add_corner_constraints()
         if self.settings.feature_mpip_stripe:
             if self.settings.pwl_method == lsf.pwl_method_none():
                 logger.warning(lsf.warning_mpip_features_disabled_for_pwl_method_none())

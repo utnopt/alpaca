@@ -16,6 +16,7 @@ import alpaca.settings as s
 from alpaca.utils import inout as ut_io, data_reading as ut_dr
 from alpaca.utils.logger import logger
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+import alpaca.studies.mpip.visualizer as vis  # pylint: disable=unused-import
 
 
 def run_optimization():
@@ -55,6 +56,9 @@ def run_optimization():
                 )
                 solver.mpip_separation_handler = mpip_separation_handler
         runtime = solver.solve_instance()
+        # if user_settings.feature_mpip:
+        #     visualizer = vis.Visualizer(user_settings)
+        #     visualizer.plot_blocks(mpip_handler)
 
         logger.info(lsf.info_optimization_finished(runtime))
     except Exception as ex:  # pylint: disable=broad-exception-caught
