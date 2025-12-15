@@ -797,6 +797,10 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return "runtime_scaling_comparison.png"
 
     @classmethod
+    def study_mpip_solved_instances_plot_name(cls) -> str:
+        return "solved_instances_over_time.png"
+
+    @classmethod
     def study_mpip_info_plot_blocks(cls) -> str:
         return (
             "Plotting block structures for MPIP structures with 2 implying variables..."

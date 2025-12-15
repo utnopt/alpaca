@@ -166,6 +166,9 @@ class Visualizer:
             self._plot_runtime_by_breakpoints(
                 out_path + lsf.study_mpip_runtime_scaling_plot_name()
             )
+            self._plot_instances_solved_over_time(
+                out_path + lsf.study_mpip_solved_instances_plot_name()
+            )
 
     def _load_and_prep_data(self, filepath):
         """
@@ -267,6 +270,48 @@ class Visualizer:
         plt.ylabel("Runtime (s) [Log Scale]", fontsize=12)
         plt.title("Runtime Distribution by Breakpoint Count", fontsize=14)
         plt.legend(title="Configuration", loc="upper left", bbox_to_anchor=(1, 1))
+
+        plt.tight_layout()
+        plt.savefig(output_file, dpi=300)
+        plt.close()
+
+    def _plot_instances_solved_over_time(self, output_file):
+        """
+        Generates a plot showing the number of instances solved over time (Cactus plot).
+        """
+        plt.figure(figsize=(10, 6))
+        sns.set_style("whitegrid")
+
+        methods = self.results_df["Method"].unique()
+
+        # Determine the global max runtime to set x-axis limit consistently if needed
+        # max_runtime = self.results_df["runtime"].max()
+
+        for method in methods:
+            # Get runtimes for this method
+            method_data = self.results_df[self.results_df["Method"] == method]
+            runtimes = method_data["runtime"].values
+
+            # Sort runtimes
+            runtimes.sort()
+
+            # Filter out unsolved instances (assuming unsolved are marked as inf or very large,
+            # though here we just take valid runtimes from the dataframe. If your DF includes
+            # failed runs as NaNs or Infs, ensure they are handled.
+            solved_runtimes = runtimes[np.isfinite(runtimes)]
+
+            # Y-axis: Number of instances solved
+            # We add 0 at the start to make the line start from origin or near it
+            x_vals = np.concatenate(([0], solved_runtimes))
+            y_vals = np.arange(0, len(solved_runtimes) + 1)
+
+            plt.step(x_vals, y_vals, where="post", label=method, linewidth=2)
+
+        plt.xlabel("Time (s)", fontsize=12)
+        plt.ylabel("Number of Instances Solved", fontsize=12)
+        plt.title("Instances Solved over Time", fontsize=14)
+        plt.legend(title="Configuration")
+        plt.grid(True, which="both", ls="-", alpha=0.5)
 
         plt.tight_layout()
         plt.savefig(output_file, dpi=300)

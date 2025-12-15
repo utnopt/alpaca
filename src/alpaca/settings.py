@@ -102,6 +102,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             or self.feature_mpip_mccormick
             or self.feature_mpip_stair
             or self.feature_mpip_stripe
+            or self.feature_mpip_corner
         )
         self.breakpoint_generation = int(
             config_dict.get("breakpoint_generation", 1)

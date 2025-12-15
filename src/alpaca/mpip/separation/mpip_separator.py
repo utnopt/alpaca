@@ -171,13 +171,15 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
                 self.mpip.implied_variable.pwl.pwl_variables_binary[
                     implied_index
                 ].solver_variable
-                for implied_index in sum(
-                    {
-                        self.mpip.relation.get((x_index, y_index), ())
-                        for x_index in x_indices
-                        for y_index in y_indices
-                    },
-                    (),
+                for implied_index in set(
+                    sum(
+                        {
+                            self.mpip.relation.get((x_index, y_index), ())
+                            for x_index in x_indices
+                            for y_index in y_indices
+                        },
+                        (),
+                    )
                 )
             )
             <= len(self.mpip.implying_variables) - 1,
