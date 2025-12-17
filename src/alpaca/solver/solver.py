@@ -60,6 +60,13 @@ class Solver:
                 logger.warning(lsf.warning_mpip_features_disabled_for_pwl_method_none())
                 return
             self.mpip_separation_handler.add_stripe_constraints()
+        if self.settings.feature_mpip_bar:
+            if self.settings.pwl_method != lsf.pwl_method_multiple_choice():
+                logger.warning(
+                    lsf.warning_mpip_features_enabled_only_for_pwl_method_mc()
+                )
+                return
+            self.mpip_separation_handler.add_bar_constraints()
 
     def _attach_event_handlers_scip(self):
         if self.settings.feature_mpip_separation:

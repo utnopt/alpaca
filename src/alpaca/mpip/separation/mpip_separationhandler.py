@@ -34,6 +34,12 @@ class MPIPSeparationHandler:
             mpip.separator.add_mc_cormick_constraints()
 
     @dec.check_pwl_method_for_mpip_feature
+    def add_bar_constraints(self) -> None:
+        """Add bar constraints for all MPIPs."""
+        for mpip in self.mpip_handler.mpip_dict.values():
+            mpip.separator.add_bar_constraints()
+
+    @dec.check_pwl_method_for_mpip_feature
     def add_stripe_constraints(self) -> None:
         """Add stripe constraints for all MPIPs."""
         for mpip in self.mpip_handler.mpip_dict.values():

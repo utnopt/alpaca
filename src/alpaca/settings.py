@@ -93,6 +93,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.feature_mpip_corner = int(config_dict.get("feature/mpip/corner", 0))
         self.feature_mpip_stair = int(config_dict.get("feature/mpip/stair", 0))
         self.feature_mpip_stripe = int(config_dict.get("feature/mpip/stripe", 0))
+        self.feature_mpip_bar = int(config_dict.get("feature/mpip/bar", 0))
         self.feature_mpip_useless_threshold = float(
             config_dict.get("feature/mpip/useless_threshold", 0.1)
         )
@@ -103,6 +104,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             or self.feature_mpip_stair
             or self.feature_mpip_stripe
             or self.feature_mpip_corner
+            or self.feature_mpip_bar
         )
         self.breakpoint_generation = int(
             config_dict.get("breakpoint_generation", 1)

@@ -276,6 +276,13 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         )
 
     @classmethod
+    def warning_mpip_features_enabled_only_for_pwl_method_mc(cls) -> str:
+        return (
+            "Some MPIP features are only enabled when pwl_method is set to 'multiple_choice'. "
+            "Set pwl_method to 'multiple_choice' to enable these MPIP features."
+        )
+
+    @classmethod
     def warning_not_implemented_mpip_feature_for_pwl_method(
         cls, pwl_method: str
     ) -> str:

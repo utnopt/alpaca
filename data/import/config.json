@@ -1,10 +1,11 @@
 {
-      "osil_file_name": "pooling_adhya1pq",
+      "osil_file_name": "kriging_peaks-red020",
       "number_of_breakpoints": 30,
       "pwl_method": "multiple_choice",
       "feature/mpip/separation": 0,
       "feature/mpip/frequency": 50,
       "feature/mpip/corner": 0,
+      "feature/mpip/bar": 1,
       "seed": 1,
       "external_solver": "gurobi",
       "solver_time_limit": 2000,

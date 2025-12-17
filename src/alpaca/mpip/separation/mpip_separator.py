@@ -106,6 +106,124 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
                 implying_indices, implying_variables, implied_variables
             )
 
+    def add_bar_constraints(self) -> None:
+        """Add bar constraints to optimization model."""
+        checker = self._check_if_bar_applicable()
+        if checker == -1:
+            return
+        if checker == 0:
+            self._add_vertical_bar_constraints()
+        if checker == 1:
+            self._add_horizontal_bar_constraints()
+
+    def _check_if_bar_applicable(self) -> int:
+        if len(self.mpip.implying_variables) != 2:
+            return -1
+        if self._check_vertical_bar_applicable():
+            return 0
+        if self._check_horizontal_bar_applicable():
+            return 1
+        return -1
+
+    def _check_vertical_bar_applicable(self) -> bool:
+        x_var_name = list(self.mpip.implying_variables.keys())[0]
+        y_var_name = list(self.mpip.implying_variables.keys())[1]
+        entries_in_column = [
+            len(
+                set(
+                    self.mpip.relation[(row_index, column_index)]
+                    for row_index in range(
+                        len(self.mpip.implying_variables[x_var_name].breakpoints) - 1
+                    )
+                )
+            )
+            for column_index in range(
+                len(self.mpip.implying_variables[y_var_name].breakpoints) - 1
+            )
+        ]
+        return max(entries_in_column) <= 3
+
+    def _check_horizontal_bar_applicable(self) -> bool:
+        x_var_name = list(self.mpip.implying_variables.keys())[0]
+        y_var_name = list(self.mpip.implying_variables.keys())[1]
+        entries_in_row = [
+            len(
+                set(
+                    self.mpip.relation[(row_index, column_index)]
+                    for column_index in range(
+                        len(self.mpip.implying_variables[y_var_name].breakpoints) - 1
+                    )
+                )
+            )
+            for row_index in range(
+                len(self.mpip.implying_variables[x_var_name].breakpoints) - 1
+            )
+        ]
+        return max(entries_in_row) <= 3
+
+    @staticmethod
+    def _get_bar_row_column_sets(
+        item_entries: list[set[int]],
+    ) -> list:
+        bar_rc_sets = []
+        z_index_sets = set(tuple(s) for s in item_entries)
+        combined_z_index_sets = set(
+            tuple(set(tuple_1 + tuple_2))
+            for tuple_1, tuple_2 in itertools.combinations(z_index_sets, 2)
+            if bool(set(tuple_1) & set(tuple_2))
+        )
+        for z_index_set in z_index_sets | combined_z_index_sets:
+            bar_rc_sets.append(
+                set(
+                    i
+                    for i, entries in enumerate(item_entries)
+                    if set(entries).issubset(z_index_set)
+                )
+            )
+        return bar_rc_sets
+
+    def _add_horizontal_bar_constraints(self) -> None:
+        """
+        Generates inclusion maximal row sets based on entry containment.
+        """
+        x_var_name = list(self.mpip.implying_variables.keys())[0]
+        nr_of_rows = len(self.mpip.implying_variables[x_var_name].breakpoints) - 1
+        y_var_name = list(self.mpip.implying_variables.keys())[1]
+        nr_of_columns = len(self.mpip.implying_variables[y_var_name].breakpoints) - 1
+        entries_in_row: list[set[int]] = [
+            set().union(
+                *set(
+                    self.mpip.relation[(row_index, column_index)]
+                    for column_index in range(nr_of_columns)
+                )
+            )
+            for row_index in range(nr_of_rows)
+        ]
+        for row_set in self._get_bar_row_column_sets(entries_in_row):
+            self._add_constraint_from_block((row_set, tuple(range(nr_of_columns))))
+
+    def _add_vertical_bar_constraints(self) -> None:
+        """
+        Generates inclusion maximal column sets based on entry containment.
+        """
+        x_var_name = list(self.mpip.implying_variables.keys())[0]
+        nr_of_rows = len(self.mpip.implying_variables[x_var_name].breakpoints) - 1
+        y_var_name = list(self.mpip.implying_variables.keys())[1]
+        nr_of_columns = len(self.mpip.implying_variables[y_var_name].breakpoints) - 1
+        entries_in_column: list[set[int]] = [
+            set().union(
+                *set(
+                    self.mpip.relation[(row_index, column_index)]
+                    for row_index in range(nr_of_rows)
+                )
+            )
+            for column_index in range(nr_of_columns)
+        ]
+        for column_set in self._get_bar_row_column_sets(entries_in_column):
+            self._add_constraint_from_block(
+                (tuple(range(nr_of_rows)), tuple(column_set))
+            )
+
     def add_corner_constraints(self) -> None:
         """Add corner constraints to optimization model."""
         for z_index in range(len(self.mpip.implied_variable.breakpoints)):
