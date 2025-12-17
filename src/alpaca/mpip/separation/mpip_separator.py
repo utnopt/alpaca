@@ -108,40 +108,78 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
 
     def add_corner_constraints(self) -> None:
         """Add corner constraints to optimization model."""
+        for z_index in range(len(self.mpip.implied_variable.breakpoints)):
+            self._add_corner_constraint_bottom_right_one_entry(z_index)
+            self._add_corner_constraint_top_left_one_entry(z_index)
+
+    def _add_corner_constraint_bottom_right_one_entry(self, z_index: int) -> None:
         x_var_name = list(self.mpip.implying_variables.keys())[0]
         y_var_name = list(self.mpip.implying_variables.keys())[1]
         max_x_index = len(self.sep_implying_variables[x_var_name]) - 1
         max_y_index = len(self.sep_implying_variables[y_var_name]) - 1
-        upper_right_corners = []
-        right_up = 1  # 0: right, 1: up
-        i, j = 0, max_y_index + 1
-        while i <= max_x_index:
-            while 0 not in self.mpip.relation.get((i, j - 1), (0,)):
-                if right_up == 0:
-                    upper_right_corners.append((i - 1, j))
-                right_up = 1
-                j -= 1
-                if j < 0:
+
+        current_low_y = 0
+        blocks = []
+        for i in range(max_x_index, -1, -1):
+            for j in range(max_y_index, current_low_y - 1, -1):
+                if z_index in self.mpip.relation.get((i, j), (z_index,)):
+                    new_low_y = j + 1
+                    if i < max_x_index:
+                        blocks.append(
+                            (
+                                tuple(range(i + 1, max_x_index + 1)),  # X: i+1 to max_x
+                                tuple(
+                                    range(current_low_y, max_y_index + 1)
+                                ),  # Y: current_low_y to max_y
+                            )
+                        )
+
+                    current_low_y = new_low_y
                     break
-            right_up = 0
-            i += 1
-        upper_right_corners.append((max_x_index, j))
-        first_bottom_left = (
-            (-1, max_y_index)
-            if upper_right_corners[0][1] != max_y_index + 1
-            else (
-                upper_right_corners[0][0],
-                max_y_index,
+
+        if current_low_y <= max_y_index:
+            blocks.append(
+                (
+                    tuple(range(0, max_x_index + 1)),
+                    tuple(range(current_low_y, max_y_index + 1)),
+                )
             )
-        )
-        upper_right_corners = [first_bottom_left] + upper_right_corners[1:]
-        blocks = [
-            (
-                tuple(range(upper_right_corners[i][0] + 1, upper_right_corner[0] + 1)),
-                tuple(range(upper_right_corner[1], max_y_index + 1)),
+
+        for block in blocks:
+            self._add_constraint_from_block(block)
+
+    def _add_corner_constraint_top_left_one_entry(self, z_index: int) -> None:
+        x_var_name = list(self.mpip.implying_variables.keys())[0]
+        y_var_name = list(self.mpip.implying_variables.keys())[1]
+        max_x_index = len(self.sep_implying_variables[x_var_name]) - 1
+        max_y_index = len(self.sep_implying_variables[y_var_name]) - 1
+
+        current_h = max_y_index + 1
+        blocks = []
+
+        for i in range(max_x_index + 1):
+            for j in range(current_h):
+                if z_index in self.mpip.relation.get((i, j), (z_index,)):
+                    new_h = j
+                    if i > 0:
+                        blocks.append(
+                            (
+                                tuple(range(0, i)),  # X: 0 to i-1
+                                tuple(range(0, current_h)),  # Y: 0 to current_h-1
+                            )
+                        )
+
+                    current_h = new_h
+                    break
+
+        if current_h > 0:
+            blocks.append(
+                (
+                    tuple(range(0, max_x_index + 1)),
+                    tuple(range(0, current_h)),
+                )
             )
-            for i, upper_right_corner in enumerate(upper_right_corners[1:])
-        ]
+
         for block in blocks:
             self._add_constraint_from_block(block)
 
@@ -150,7 +188,9 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
     ) -> None:
         """Add constraint for a specific block."""
         x_indices, y_indices = block
-        self.opt_model.add_constraint(
+        if x_indices == () or y_indices == ():
+            return
+        constraint = self.opt_model.add_constraint(
             sum(
                 self.mpip.implying_variables[
                     list(self.mpip.implying_variables.keys())[0]
@@ -185,6 +225,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
             <= len(self.mpip.implying_variables) - 1,
             name=f"corner_{block}_{self.mpip.mpip_id}".replace(" ", ""),
         )
+        constraint.lazy = 3
 
     def _generate_implying_combinations(
         self,
