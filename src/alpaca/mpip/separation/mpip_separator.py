@@ -113,7 +113,6 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
             return
         if checker == 0:
             self._add_vertical_bar_constraints()
-        if checker == 1:
             self._add_horizontal_bar_constraints()
 
     def _check_if_bar_applicable(self) -> int:
@@ -122,8 +121,8 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
         if self._check_vertical_bar_applicable():
             return 0
         if self._check_horizontal_bar_applicable():
-            return 1
-        return -1
+            return 0
+        return 0
 
     def _check_vertical_bar_applicable(self) -> bool:
         x_var_name = list(self.mpip.implying_variables.keys())[0]
@@ -164,22 +163,22 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
     @staticmethod
     def _get_bar_row_column_sets(
         item_entries: list[set[int]],
-    ) -> list:
+    ) -> set:
         bar_rc_sets = []
         z_index_sets = set(tuple(s) for s in item_entries)
         combined_z_index_sets = set(
             tuple(set(tuple_1 + tuple_2))
             for tuple_1, tuple_2 in itertools.combinations(z_index_sets, 2)
-            if bool(set(tuple_1) & set(tuple_2))
         )
         for z_index_set in z_index_sets | combined_z_index_sets:
             bar_rc_sets.append(
-                set(
+                tuple(set(
                     i
                     for i, entries in enumerate(item_entries)
                     if set(entries).issubset(z_index_set)
                 )
-            )
+            ))
+        bar_rc_sets = set(bar_rc_sets)
         return bar_rc_sets
 
     def _add_horizontal_bar_constraints(self) -> None:
@@ -200,7 +199,34 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
             for row_index in range(nr_of_rows)
         ]
         for row_set in self._get_bar_row_column_sets(entries_in_row):
-            self._add_constraint_from_block((row_set, tuple(range(nr_of_columns))))
+            constraint = self.opt_model.add_constraint(
+                sum(
+                    self.mpip.implying_variables[
+                        x_var_name
+                    ]
+                    .pwl.pwl_variables_binary[x_index]
+                    .solver_variable
+                    for x_index in row_set
+                )
+                - sum(
+                    self.mpip.implied_variable.pwl.pwl_variables_binary[
+                        implied_index
+                    ].solver_variable
+                    for implied_index in set(
+                        sum(
+                            {
+                                self.mpip.relation.get((x_index, y_index), ())
+                                for x_index in row_set
+                                for y_index in range(nr_of_columns)
+                            },
+                            (),
+                        )
+                    )
+                )
+                <= 0,
+                name=f"horizontal_bar_{row_set}_{self.mpip.mpip_id}".replace(" ", ""),
+            )
+            constraint.lazy = 3
 
     def _add_vertical_bar_constraints(self) -> None:
         """
@@ -220,9 +246,34 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
             for column_index in range(nr_of_columns)
         ]
         for column_set in self._get_bar_row_column_sets(entries_in_column):
-            self._add_constraint_from_block(
-                (tuple(range(nr_of_rows)), tuple(column_set))
+            constraint = self.opt_model.add_constraint(
+                sum(
+                    self.mpip.implying_variables[
+                        y_var_name
+                    ]
+                    .pwl.pwl_variables_binary[y_index]
+                    .solver_variable
+                    for y_index in column_set
+                )
+                - sum(
+                    self.mpip.implied_variable.pwl.pwl_variables_binary[
+                        implied_index
+                    ].solver_variable
+                    for implied_index in set(
+                        sum(
+                            {
+                                self.mpip.relation.get((x_index, y_index), ())
+                                for x_index in range(nr_of_rows)
+                                for y_index in column_set
+                            },
+                            (),
+                        )
+                    )
+                )
+                <= 0,
+                name=f"vertical_bar_{column_set}_{self.mpip.mpip_id}".replace(" ", ""),
             )
+            constraint.lazy = 3
 
     def add_corner_constraints(self) -> None:
         """Add corner constraints to optimization model."""
