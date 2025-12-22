@@ -74,7 +74,6 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
         self.point_to_be_separated = SeparatedPoint()
         self.opt_model = opt_model
         self.nr_of_cuts = 0
-        self.nr_of_not_cuts = 0
         self.used = 1
         self.unused = 0
         self.usefulness = 1
@@ -577,7 +576,6 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
             self.opt_model.add_cut(cut_to_separate)
             self.separated_cuts.append(cut_to_separate)
             return True
-        self.nr_of_not_cuts += 1
         self.unused += 1
         self.usefulness = self.used / (self.used + self.unused)
         return False
@@ -645,7 +643,6 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
             self.opt_model.add_cut(cut_to_separate)
             self.separated_cuts.append(cut_to_separate)
             return True
-        self.nr_of_not_cuts += 1
         self.unused += 1
         self.usefulness = self.used / (self.used + self.unused)
         return False
