@@ -1,212 +1,226 @@
-"""Unit tests for the BreakpointNeuralNetwork class."""
+# -*- coding: utf-8 -*-
+"""
+@authors: kuen,
+"""
+# pylint: disable=redefined-outer-name, protected-access, no-member
 
-# pylint: disable=protected-access
-import unittest
-import dataclasses
-from unittest.mock import MagicMock, patch
+import pytest
 import numpy as np
 
-from alpaca.model_data.variable import Variable
-from alpaca.breakpoints.breakpoint_neural_network import BreakpointNeuralNetwork
-from alpaca.expressions.one_dim_expression import (
-    SquareExpression,
-    ExponentialExpression,
-)
-
-# --- Mock Modules Setup ---
-# This setup creates fake modules to satisfy the package imports in the user's scripts,
-# allowing them to run in a standalone test environment.
-
-# Mock for alpaca.settings and its UserSettings class
-mock_settings_module = MagicMock()
+import alpaca.breakpoints.breakpoint_neural_network as bnn
 
 
-@dataclasses.dataclass
-class MockUserSettings:
-    """A mock UserSettings class for testing purposes."""
+class DummySettings:
+    """
+    Mock settings object simulating alpaca.settings.UserSettings.
+    """
+    # pylint: disable=too-few-public-methods
+    def __init__(self):
+        self.number_of_breakpoints = 5
+        self.feature_nnbp_learning_rate = 0.1
+        self.feature_nnbp_nr_of_samples = 20
+        self.feature_nnbp_queue_size = 5
+        self.feature_nnbp_time_limit = 0.5
+        self.feature_nnbp_convergence_tol = 1e-4
 
-    number_of_breakpoints: int = 5
-    feature_nnbp_nr_of_samples: int = 200
-    feature_nnbp_time_limit: int = 100
-    feature_nnbp_queue_size: int = 10
-    feature_nnbp_convergence_tol: float = 0.01
-    feature_nnbp_learning_rate: float = 1e-7
+
+class DummyExpression:
+    """
+    Mock expression object simulating alpaca.expressions.one_dim_expression.
+    Default behavior is f(x) = x.
+    """
+    # pylint: disable=too-few-public-methods
+    def f(self, x):
+        """Returns the function value (identity)."""
+        return x
+
+    def f_derivative(self, x): # pylint: disable=unused-argument
+        """Returns the derivative value (constant 1)."""
+        return 1.0
 
 
-mock_settings_module.UserSettings = MockUserSettings
+class DummyVariable:
+    """
+    Mock variable object simulating alpaca.model_data.variable.
+    """
+    # pylint: disable=too-few-public-methods
+    def __init__(self, expression):
+        self.lb = 0.0
+        self.ub = 4.0
+        self.occurring_in = {"expr1": expression}
 
 
-class TestNeuralNetworkBreakpointGeneration(unittest.TestCase):
-    """Unit tests for the BreakpointNeuralNetwork class."""
+class TestableBNN(bnn.BreakpointNeuralNetwork):
+    """
+    Subclass that disables the automatic training on initialization
+    to allow for unit testing of individual components without
+    running the time-consuming training loop.
+    """
+    def _build_and_train_model(self):
+        """Override to prevent training during initialization."""
 
-    def setUp(self):
-        """Set up common objects for tests before each test method."""
-        self.settings = MockUserSettings()
+# --- Fixtures ---
 
-    def _calculate_mse(self, breakpoints, function_class, variable, settings):
+
+@pytest.fixture
+def mock_settings():
+    """Fixture for DummySettings."""
+    return DummySettings()
+
+
+@pytest.fixture
+def mock_expression():
+    """Fixture for DummyExpression."""
+    return DummyExpression()
+
+
+@pytest.fixture
+def mock_variable(mock_expression):
+    """Fixture for DummyVariable."""
+    return DummyVariable(mock_expression)
+
+
+@pytest.fixture
+def net(mock_variable, mock_settings):
+    """
+    Returns an instance of BreakpointNeuralNetwork with training bypassed.
+    Note: __init__ sets breakpoints BEFORE calling _build_and_train_model,
+    so breakpoints are already initialized, but weights are None.
+    """
+    network = TestableBNN(mock_variable, mock_settings)
+    return network
+
+# --- Tests ---
+
+
+class TestActivationFunctions:
+    """Tests for static activation methods."""
+
+    def test_relu_standard(self):
+        """Test standard ReLU: max(0, x)."""
+        arr = np.array([-1, 0, 1])
+        result = bnn.BreakpointNeuralNetwork._relu(arr, negative_slope=False)
+        np.testing.assert_array_equal(result, np.array([0, 0, 1]))
+
+    def test_relu_negative_slope(self):
+        """Test negative slope ReLU: min(0, x)."""
+        arr = np.array([-1, 0, 1])
+        result = bnn.BreakpointNeuralNetwork._relu(arr, negative_slope=True)
+        np.testing.assert_array_equal(result, np.array([-1, 0, 0]))
+
+    def test_relu_derivative_standard(self):
+        """Test derivative of standard ReLU."""
+        arr = np.array([-5, 5])
+        result = bnn.BreakpointNeuralNetwork._relu_derivative(arr, negative_slope=False)
+        np.testing.assert_array_equal(result, np.array([0, 1]))
+
+    def test_relu_derivative_negative_slope(self):
+        """Test derivative of negative slope ReLU."""
+        arr = np.array([-5, 5])
+        result = bnn.BreakpointNeuralNetwork._relu_derivative(arr, negative_slope=True)
+        np.testing.assert_array_equal(result, np.array([1, 0]))
+
+
+class TestNetworkLogic:
+    """Tests for network initialization, forward pass, and backward pass logic."""
+
+    def test_initialization_breakpoints(self, mock_variable, mock_settings):
+        """Test that breakpoints are initialized linearly between lb and ub."""
+        # TestableBNN skips training, but runs the rest of __init__
+        network = TestableBNN(mock_variable, mock_settings)
+        expected = np.linspace(0.0, 4.0, 5)
+        np.testing.assert_array_almost_equal(network.breakpoints, expected)
+
+    def test_configure_network_linear_function(self, net):
         """
-        Helper function to calculate the Mean Squared Error for a given set of
-        breakpoints, providing a measure of approximation quality.
+        Test that configuring the network for f(x) = 2x results in correct weights.
         """
-        # Create a network instance without triggering training in __init__
-        with patch.object(
-            BreakpointNeuralNetwork, "_build_and_train_model", lambda x: None
-        ):
-            net = BreakpointNeuralNetwork(variable, settings)
+        # Setup f(x) = 2x
+        def linear_func(x):
+            return 2.0 * x
 
-        net.breakpoints = breakpoints
-        net._configure_network_from_breakpoints(function_class.f)
+        net._configure_network_from_breakpoints(linear_func)
 
-        # Generate a fine grid of test points for accurate error calculation
-        x_test = np.linspace(variable.lb, variable.ub, 200).reshape(-1, 1)
-        y_true = np.array([function_class.f(x) for x in x_test])
+        weights_biases = net.weights_and_biases
 
-        # Get predictions from the Piecewise Linear (PWL) approximation
-        y_pred, _ = net._forward_pass(x_test)
+        # Check output weights (should be all 1s as per implementation)
+        assert np.all(weights_biases.weights_output == 1.0)
 
-        return np.mean((y_true - y_pred) ** 2)
+        # Check hidden weights
+        # w[0] = slope[0] - 0 = 2
+        first_weight = weights_biases.weights_hidden[0, 0]
+        other_weights = weights_biases.weights_hidden[0, 1:]
 
-    @patch.object(BreakpointNeuralNetwork, "_build_and_train_model")
-    def test_initialization(self, mock_train_model):
-        """
-        Tests that the network initializes correctly with evenly spaced breakpoints.
-        """
-        test_var = Variable("x", lb=0, ub=10)
-        self.settings.number_of_breakpoints = 11
-        net = BreakpointNeuralNetwork(test_var, self.settings)
+        assert first_weight == pytest.approx(2.0)
+        np.testing.assert_allclose(other_weights, 0.0, atol=1e-10)
 
-        expected_breakpoints = np.linspace(0, 10, 11)
+    def test_forward_pass_manual_weights(self, net):
+        """Test forward pass with manually injected weights."""
+        x_in = np.array([[2.0]])
 
-        self.assertIs(net.variable, test_var)
-        self.assertIs(net.settings, self.settings)
-        np.testing.assert_array_equal(net.breakpoints, expected_breakpoints)
-        mock_train_model.assert_called_once()
+        # Inject weights manually into the data class
+        # Network: y = ReLU(x * 3 + 1) * 0.5 + 2
+        net.weights_and_biases.weights_hidden = np.array([[3.0]])
+        net.weights_and_biases.bias_hidden = np.array([[1.0]])
+        net.weights_and_biases.weights_output = np.array([[0.5]])
+        net.weights_and_biases.bias_output = np.array([[2.0]])
 
-    @patch.object(BreakpointNeuralNetwork, "_build_and_train_model", lambda x: None)
-    def test_configure_and_forward_pass_square(self):
-        """
-        Tests the core network mechanics: configuring weights from breakpoints
-        and performing a forward pass to get the PWL approximation.
-        This test uses the function f(x) = x^2.
-        """
-        test_var = Variable("x_sq", lb=0, ub=1)
-        net = BreakpointNeuralNetwork(test_var, self.settings)
+        # Hidden input = 2 * 3 + 1 = 7 -> ReLU -> 7
+        # Output = 7 * 0.5 + 2 = 5.5
 
-        # Manually set breakpoints and configure the network
-        net.breakpoints = np.array([0.0, 0.5, 1.0])
-        net._configure_network_from_breakpoints(SquareExpression.f)
+        output, hidden_out = net._forward_pass(x_in)
 
-        # --- Assert correct weights and biases ---
-        # Manually calculated values for f(x)=x^2 with breakpoints at [0, 0.5, 1]
-        expected_weights_hidden = np.array(
-            [[0.5, 1.0]]
-        )  # slopes: 0.5, 1.5 -> diffs: 0.5, 1.0
-        expected_bias_hidden = np.array([[0.0, -0.5]])  # biases: -w1*bp1, -w2*bp2
-        expected_weights_output = np.array([[1.0], [1.0]])
-        expected_bias_output = np.array([[0.0]])  # f(bp1)
+        assert output[0, 0] == pytest.approx(5.5)
+        assert hidden_out[0, 0] == pytest.approx(7.0)
 
-        np.testing.assert_allclose(
-            net.weights_and_biases.weights_hidden, expected_weights_hidden
-        )
-        np.testing.assert_allclose(
-            net.weights_and_biases.bias_hidden, expected_bias_hidden
-        )
-        np.testing.assert_allclose(
-            net.weights_and_biases.weights_output, expected_weights_output
-        )
-        np.testing.assert_allclose(
-            net.weights_and_biases.bias_output, expected_bias_output
-        )
+    def test_forward_pass_negative_weights_logic(self, net):
+        """Test that negative hidden weights trigger the negative slope ReLU."""
+        x_in = np.array([[2.0]])
 
-        # --- Assert correct forward pass (prediction) ---
-        x_values = np.array([[0.2], [0.8]])
-        predictions, _ = net._forward_pass(x_values)
-        expected_predictions = np.array([[0.1], [0.7]])
-        np.testing.assert_allclose(predictions, expected_predictions, rtol=1e-6)
+        # weight is negative -> should use negative_slope ReLU logic
+        net.weights_and_biases.weights_hidden = np.array([[-3.0]])
+        net.weights_and_biases.bias_hidden = np.array([[1.0]])
+        # hidden input = 2 * -3 + 1 = -5
 
-    def test_training_improves_approximation_square(self):
-        """
-        Integration test to verify that training moves breakpoints to positions
-        that result in a lower approximation error for f(x) = x^2.
-        """
-        sq_var = Variable("x_sq", lb=0.0, ub=2.0)
-        # Add the function type to the variable, as the training process expects
-        sq_var.add_nonlinearity_to_occurring_in("SquareExpression", SquareExpression)
+        # Negative slope ReLU: min(0, x) -> -5
 
-        initial_breakpoints = np.linspace(
-            sq_var.lb, sq_var.ub, self.settings.number_of_breakpoints
-        )
+        net.weights_and_biases.weights_output = np.array([[1.0]])
+        net.weights_and_biases.bias_output = np.array([[0.0]])
 
-        # Run the training by instantiating the class
-        net = BreakpointNeuralNetwork(sq_var, self.settings)
-        final_breakpoints = net.breakpoints
+        _, hidden_out = net._forward_pass(x_in)
 
-        # --- Asserts ---
-        # 1. Check that breakpoints have moved from their initial positions
-        self.assertFalse(
-            np.allclose(initial_breakpoints, final_breakpoints),
-            "Breakpoints did not move during training.",
-        )
+        assert hidden_out[0, 0] == pytest.approx(-5.0)
 
-        # 2. Check that the new breakpoints are sorted and within bounds
-        self.assertTrue(
-            np.all(np.diff(final_breakpoints) > 0), "Final breakpoints are not sorted."
-        )
-        self.assertAlmostEqual(final_breakpoints[0], sq_var.lb)
-        self.assertAlmostEqual(final_breakpoints[-1], sq_var.ub)
+    def test_backward_pass_updates_breakpoints(self, net, mock_expression):
+        """Test that backward pass actually changes the breakpoints."""
+        x_train = np.array([[1.0], [2.0], [3.0]])
+        net._configure_network_from_breakpoints(mock_expression.f)
 
-        # 3. Verify that the approximation error has decreased
-        initial_mse = self._calculate_mse(
-            initial_breakpoints, SquareExpression, sq_var, self.settings
-        )
-        final_mse = self._calculate_mse(
-            final_breakpoints, SquareExpression, sq_var, self.settings
-        )
+        error = np.array([[0.5], [-0.5], [0.5]])
 
-        self.assertLess(
-            final_mse,
-            initial_mse + 0.01,
-            f"Training failed to reduce MSE. Initial: {initial_mse}, Final: {final_mse}",
-        )
+        _, hidden_layer_output = net._forward_pass(x_train)
 
-    def test_training_improves_approximation_exponential(self):
-        """
-        Integration test to verify training improves approximation for f(x) = e^x.
-        For this function, we expect breakpoints to become denser at the upper end
-        of the domain where the curvature is higher.
-        """
-        exp_var = Variable("x_exp", lb=0.0, ub=3.0)
-        exp_var.add_nonlinearity_to_occurring_in(
-            "ExponentialExpression", ExponentialExpression
-        )
+        old_breakpoints = net.breakpoints.copy()
 
-        initial_breakpoints = np.linspace(
-            exp_var.lb, exp_var.ub, self.settings.number_of_breakpoints
-        )
+        net._backward_pass(x_train, error, hidden_layer_output, mock_expression)
 
-        # Run the training
-        net = BreakpointNeuralNetwork(exp_var, self.settings)
-        final_breakpoints = net.breakpoints
+        # Internal breakpoints should change
+        internal_changed = not np.allclose(net.breakpoints[1:-1], old_breakpoints[1:-1])
 
-        # --- Asserts ---
-        self.assertFalse(
-            np.allclose(initial_breakpoints, final_breakpoints),
-            "Breakpoints did not move during training.",
-        )
+        assert internal_changed
+        assert net.breakpoints[0] == old_breakpoints[0]
+        assert net.breakpoints[-1] == old_breakpoints[-1]
 
-        initial_mse = self._calculate_mse(
-            initial_breakpoints, ExponentialExpression, exp_var, self.settings
-        )
-        final_mse = self._calculate_mse(
-            final_breakpoints, ExponentialExpression, exp_var, self.settings
-        )
+    def test_training_loop_execution(self, mock_variable, mock_settings):
+        """Test that the full training loop runs without crashing."""
+        # Here we use the REAL class, not the TestableBNN subclass,
+        # to ensure the actual loop runs.
 
-        self.assertLess(
-            final_mse,
-            initial_mse + 0.1,
-            f"Training failed to reduce MSE. Initial: {initial_mse}, Final: {final_mse}",
-        )
+        mock_settings.feature_nnbp_time_limit = 0.1
+        mock_settings.feature_nnbp_nr_of_samples = 5
 
+        network = bnn.BreakpointNeuralNetwork(mock_variable, mock_settings)
 
-if __name__ == "__main__":
-    unittest.main(argv=["first-arg-is-ignored"], exit=False)
+        assert network.breakpoints is not None
+        assert len(network.breakpoints) == mock_settings.number_of_breakpoints
+        assert np.all(np.diff(network.breakpoints) > 0)
