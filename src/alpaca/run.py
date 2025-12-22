@@ -55,10 +55,6 @@ def run_optimization():
                 )
                 solver.mpip_separation_handler = mpip_separation_handler
         runtime = solver.solve_instance()
-        # if user_settings.feature_mpip:
-        #     visualizer = vis.Visualizer(user_settings)
-        #     visualizer.plot_blocks(mpip_handler)
-
         logger.info(lsf.info_optimization_finished(runtime))
     except Exception as ex:  # pylint: disable=broad-exception-caught
         logger.error(lsf.error_exception_occurred(ex))

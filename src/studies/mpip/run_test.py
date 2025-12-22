@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=duplicate-code, too-many-locals, too-many-branches
 """
-This script is a lightweight wrapper to run a single optimization instance.
-It takes a .osil file and several configuration settings as command-line arguments.
+@authors: kuen,
 """
 import logging
 import sys
