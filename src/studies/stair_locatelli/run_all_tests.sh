@@ -13,7 +13,7 @@ trap '' HUP
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
 # The project root is four levels up from the script's location
-PROJECT_ROOT=$(dirname "$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")")
+PROJECT_ROOT=$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")
 
 # Paths to the test instances and export directory
 IMPORT_PATH="$PROJECT_ROOT/data/import/instances"

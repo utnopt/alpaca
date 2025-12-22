@@ -16,7 +16,6 @@ import alpaca.settings as s
 from alpaca.utils import inout as ut_io, data_reading as ut_dr
 from alpaca.utils.logger import logger
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
-import alpaca.studies.mpip.visualizer as vis  # pylint: disable=unused-import
 
 
 def run_optimization():

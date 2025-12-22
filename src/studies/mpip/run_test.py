@@ -20,7 +20,7 @@ from alpaca.utils import inout as ut_io
 from alpaca.utils.logger import logger
 import alpaca.utils.error_handling as erh
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
-import alpaca.studies.mpip.visualizer as vis  # pylint: disable=unused-import
+import studies.mpip.visualizer as vis  # pylint: disable=unused-import
 
 
 def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
