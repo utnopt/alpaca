@@ -97,6 +97,9 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.feature_mpip_useless_threshold = float(
             config_dict.get("feature/mpip/useless_threshold", 0.1)
         )
+        self.feature_mpip_reset_interval = int(
+            config_dict.get("feature/mpip/reset_interval", 300)
+        )
         self.feature_mpip_frequency = int(config_dict.get("feature/mpip/frequency", 10))
         self.feature_mpip = (
             self.feature_mpip_separation

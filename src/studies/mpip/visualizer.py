@@ -21,7 +21,7 @@ class Visualizer:
 
     def __init__(self, user_settings: s.UserSettings):
         self.user_settings = user_settings
-        self.results_df: pd.DataFrame() | None = None
+        self.results_df: pd.DataFrame | None = None
 
     def plot_blocks(self, mpip_handler: mph.MPIPHandler):
         """Plots block structures for MPIP structures with 2 implying variables using TikZ."""
@@ -439,12 +439,9 @@ class Visualizer:
         )
 
         # Calculate Speedup
-        if "Standard" in pivot_df.columns and "MPIP" in pivot_df.columns:
-            pivot_df["Speedup"] = pivot_df["Standard"] / pivot_df["MPIP"]
-            pivot_df = pivot_df[["Standard", "MPIP", "Speedup"]]
-            pivot_df.sort_values(by="Speedup", ascending=False, inplace=True)
-        else:
-            print("Warning: Dataset missing either 'Standard' or 'MPIP' test cases.")
+        pivot_df["Speedup"] = pivot_df["Standard"] / pivot_df["MPIP"]
+        pivot_df = pivot_df[["Standard", "MPIP", "Speedup"]]
+        pivot_df.sort_values(by="Speedup", ascending=False, inplace=True)
 
         # Escape underscores for LaTeX compatibility
         pivot_df.index = pivot_df.index.str.replace("_", r"\_", regex=False)
@@ -510,10 +507,6 @@ class Visualizer:
         # Write to file
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(latex_content)
-
-        print(f"Successfully generated {output_file}")
-        print("\nPreview of the table content:\n")
-        print(latex_content)
 
 
 if __name__ == "__main__":
