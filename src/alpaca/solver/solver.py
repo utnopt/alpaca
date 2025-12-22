@@ -28,6 +28,14 @@ class Solver:
         runtime = time.time() - start_time
         return runtime
 
+    def compute_optimal_mip_start(self):
+        """Compute an optimal MIP start using the external solver."""
+        self.external_solver.opt_model.optimize(self.gurobi_callback_function)
+        self.external_solver.save_solution_to_mip_start()
+        self.external_solver.opt_model.reset_model()
+        self.external_solver.set_mip_start()
+        self.external_solver.opt_model.turn_off_heuristics()
+
     def _attach_event_handlers(self):
         if self.settings.external_solver == lsf.solver_name_scip():
             self._attach_event_handlers_scip()
@@ -40,11 +48,23 @@ class Solver:
                 logger.warning(lsf.warning_mpip_features_disabled_for_pwl_method_none())
                 return
             self.mpip_separation_handler.add_mc_cormick_constraints()
+        if self.settings.feature_mpip_corner:
+            if self.settings.pwl_method == lsf.pwl_method_none():
+                logger.warning(lsf.warning_mpip_features_disabled_for_pwl_method_none())
+                return
+            self.mpip_separation_handler.add_corner_constraints()
         if self.settings.feature_mpip_stripe:
             if self.settings.pwl_method == lsf.pwl_method_none():
                 logger.warning(lsf.warning_mpip_features_disabled_for_pwl_method_none())
                 return
             self.mpip_separation_handler.add_stripe_constraints()
+        if self.settings.feature_mpip_bar:
+            if self.settings.pwl_method != lsf.pwl_method_multiple_choice():
+                logger.warning(
+                    lsf.warning_mpip_features_enabled_only_for_pwl_method_mc()
+                )
+                return
+            self.mpip_separation_handler.add_bar_constraints()
 
     def _attach_event_handlers_scip(self):
         if self.settings.feature_mpip_separation:

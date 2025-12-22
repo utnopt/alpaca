@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-This script runs the stair_locatelli test case for a single .osil file.
-It executes the instance three times with different settings and outputs
-the objective values as a single CSV line.
+@authors: kuen,
 """
 import os
 import sys

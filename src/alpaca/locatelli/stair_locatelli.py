@@ -11,7 +11,6 @@ import alpaca.expressions.bilinear_expression as ble
 from alpaca.locatelli import (
     domain_projector as dop,
     locatelli_cut_generator as lcg,
-    visualizer as vis,
 )
 
 
@@ -26,7 +25,6 @@ class StairLocatelli:
         # Initialize components
         self.projector = dop.DomainProjector(model_data)
         self.cut_generator = lcg.LocatelliCutGenerator(model_data)
-        self.visualizer = vis.Visualizer(self.settings)
 
         # Storage for results
         self.bilinear_projected_domains: list[
@@ -50,10 +48,6 @@ class StairLocatelli:
             total_cuts += cuts_added
 
         logger.info(lsf.info_total_stair_locatelli_cuts_added(total_cuts))
-
-        # 3. Visualize (Optional)
-        # self.visualizer.plot_polygons(self.bilinear_projected_domains)
-        # self.visualizer.plot_cuts(self.bilinear_projected_domains)
 
     def calculate_mean_bilinear_relaxation_volume_and_max_diff_improvement(self):
         """Calculate metrics for the improvement provided by these cuts."""

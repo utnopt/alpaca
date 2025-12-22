@@ -32,15 +32,18 @@ class StaticSettings:
     log_rotation_type = "size"  # use "size", "time" or "none"
 
     # ===== Data settings =====
-    infinity = 1e7
+    infinity = 1e6
     feasibility_tolerance = 1e-3
 
     # ===== MPIP settings =====
     max_violation_relation = 1e-2
-    min_cut_violation = 1e-3
+    min_cut_violation = 1e-2
     rounding_precision = 5
-    mpip_sparsity = 0.45
+    maximum_mpip_implication_factor = 3
+    minimum_mpip_size = 2
     maximum_mpip_size = 5
+    mpip_interval_lp_time_limit = 1
+    nr_of_blocks_plotted = 5
 
 
 class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance-attributes
@@ -87,13 +90,24 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             config_dict.get("feature/mpip/separation", 0)
         )
         self.feature_mpip_mccormick = int(config_dict.get("feature/mpip/mccormick", 0))
+        self.feature_mpip_corner = int(config_dict.get("feature/mpip/corner", 0))
         self.feature_mpip_stair = int(config_dict.get("feature/mpip/stair", 0))
         self.feature_mpip_stripe = int(config_dict.get("feature/mpip/stripe", 0))
+        self.feature_mpip_bar = int(config_dict.get("feature/mpip/bar", 0))
+        self.feature_mpip_useless_threshold = float(
+            config_dict.get("feature/mpip/useless_threshold", 0.1)
+        )
+        self.feature_mpip_reset_interval = int(
+            config_dict.get("feature/mpip/reset_interval", 300)
+        )
+        self.feature_mpip_frequency = int(config_dict.get("feature/mpip/frequency", 10))
         self.feature_mpip = (
             self.feature_mpip_separation
             or self.feature_mpip_mccormick
             or self.feature_mpip_stair
             or self.feature_mpip_stripe
+            or self.feature_mpip_corner
+            or self.feature_mpip_bar
         )
         self.breakpoint_generation = int(
             config_dict.get("breakpoint_generation", 1)

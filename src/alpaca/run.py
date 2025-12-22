@@ -55,7 +55,6 @@ def run_optimization():
                 )
                 solver.mpip_separation_handler = mpip_separation_handler
         runtime = solver.solve_instance()
-
         logger.info(lsf.info_optimization_finished(runtime))
     except Exception as ex:  # pylint: disable=broad-exception-caught
         logger.error(lsf.error_exception_occurred(ex))

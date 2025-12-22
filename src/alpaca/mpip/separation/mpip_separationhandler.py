@@ -15,6 +15,7 @@ class MPIPSeparationHandler:
         self, mpip_handler: mph.MPIPHandler, opt_model: sw.SolverWrapper
     ) -> None:
         self.mpip_handler = mpip_handler
+        self.settings = mpip_handler.model_data.settings
         self.iteration = 0
         self.opt_model = opt_model
         self.nr_added_cuts = 0
@@ -33,16 +34,36 @@ class MPIPSeparationHandler:
             mpip.separator.add_mc_cormick_constraints()
 
     @dec.check_pwl_method_for_mpip_feature
+    def add_bar_constraints(self) -> None:
+        """Add bar constraints for all MPIPs."""
+        for mpip in self.mpip_handler.mpip_dict.values():
+            mpip.separator.add_bar_constraints()
+
+    @dec.check_pwl_method_for_mpip_feature
     def add_stripe_constraints(self) -> None:
         """Add stripe constraints for all MPIPs."""
         for mpip in self.mpip_handler.mpip_dict.values():
             mpip.separator.add_stripe_constraints()
+
+    @dec.check_pwl_method_for_mpip_feature
+    def add_corner_constraints(self) -> None:
+        """Add corner constraints for all MPIPs."""
+        for mpip in self.mpip_handler.mpip_dict.values():
+            if len(mpip.implying_variables) == 2:
+                mpip.separator.add_corner_constraints()
 
     def separate_solution(self) -> bool:
         """Perform separation for current solution."""
         self.iteration += 1
         separated = False
         for mpip in self.mpip_handler.mpip_dict.values():
+            if (
+                self.iteration % self.settings.feature_mpip_reset_interval
+                == 0
+            ):
+                mpip.separator.reset_useless_counter()
+            if mpip.separator.usefulness < self.settings.feature_mpip_useless_threshold:
+                continue
             if mpip.separator.separate_solution():
                 separated = True
         if separated:

@@ -65,21 +65,31 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
 
     def __init__(self, mpip: mp.MPIP, opt_model: sw.SolverWrapper) -> None:
         self.separation_model = sw.SolverWrapper(opt_model.mip_solver)
+        self.mpip = mpip
         self._setup_separation_model()
         self.separation_handler: None | sw.ScipSeparation = None
-        self.mpip = mpip
         self.relation_matrix_size = len(mpip.implied_variable.breakpoints) - 1
         self.sep_implying_variables: dict[str, list[Any]] = {}
         self.sep_implied_variables: list[Any] = []
         self.point_to_be_separated = SeparatedPoint()
         self.opt_model = opt_model
         self.nr_of_cuts = 0
+        self.used = 1
+        self.unused = 0
+        self.usefulness = 1
+        self.separated_cuts = []
 
     def _setup_separation_model(self) -> None:
         """Configure separation model settings."""
         self.separation_model.hide_output()
         self.separation_model.set_seed(42)
         self.separation_model.enable_reoptimization()
+
+    def reset_useless_counter(self) -> None:
+        """Reset the useless cut counter."""
+        self.used = 1
+        self.unused = 0
+        self.usefulness = 1
 
     def add_mc_cormick_constraints(self) -> None:
         """Add McCormick envelope constraints to optimization model."""
@@ -94,6 +104,247 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
             self._add_mccormick_constraint(
                 implying_indices, implying_variables, implied_variables
             )
+
+    def add_bar_constraints(self) -> None:
+        """Add bar constraints to optimization model."""
+        if len(self.mpip.implying_variables) != 2:
+            return
+        self._add_vertical_bar_constraints()
+        self._add_horizontal_bar_constraints()
+
+    @staticmethod
+    def _get_bar_row_column_sets(
+        item_entries: list[set[int]],
+    ) -> set:
+        bar_rc_sets = []
+        z_index_sets = set(tuple(s) for s in item_entries)
+        combined_z_index_sets = set(
+            tuple(set(tuple_1 + tuple_2))
+            for tuple_1, tuple_2 in itertools.combinations(z_index_sets, 2)
+        )
+        for z_index_set in z_index_sets | combined_z_index_sets:
+            bar_rc_sets.append(
+                tuple(
+                    set(
+                        i
+                        for i, entries in enumerate(item_entries)
+                        if set(entries).issubset(z_index_set)
+                    )
+                )
+            )
+        bar_rc_sets = set(bar_rc_sets)
+        return bar_rc_sets
+
+    def _add_horizontal_bar_constraints(self) -> None:
+        """
+        Generates inclusion maximal row sets based on entry containment.
+        """
+        x_var_name = list(self.mpip.implying_variables.keys())[0]
+        nr_of_rows = len(self.mpip.implying_variables[x_var_name].breakpoints) - 1
+        y_var_name = list(self.mpip.implying_variables.keys())[1]
+        nr_of_columns = len(self.mpip.implying_variables[y_var_name].breakpoints) - 1
+        entries_in_row: list[set[int]] = [
+            set().union(
+                *set(
+                    self.mpip.relation[(row_index, column_index)]
+                    for column_index in range(nr_of_columns)
+                )
+            )
+            for row_index in range(nr_of_rows)
+        ]
+        for row_set in self._get_bar_row_column_sets(entries_in_row):
+            constraint = self.opt_model.add_constraint(
+                sum(
+                    self.mpip.implying_variables[x_var_name]
+                    .pwl.pwl_variables_binary[x_index]
+                    .solver_variable
+                    for x_index in row_set
+                )
+                - sum(
+                    self.mpip.implied_variable.pwl.pwl_variables_binary[
+                        implied_index
+                    ].solver_variable
+                    for implied_index in set(
+                        sum(
+                            {
+                                self.mpip.relation.get((x_index, y_index), ())
+                                for x_index in row_set
+                                for y_index in range(nr_of_columns)
+                            },
+                            (),
+                        )
+                    )
+                )
+                <= 0,
+                name=f"horizontal_bar_{row_set}_{self.mpip.mpip_id}".replace(" ", ""),
+            )
+            constraint.lazy = 3
+
+    def _add_vertical_bar_constraints(self) -> None:
+        """
+        Generates inclusion maximal column sets based on entry containment.
+        """
+        x_var_name = list(self.mpip.implying_variables.keys())[0]
+        nr_of_rows = len(self.mpip.implying_variables[x_var_name].breakpoints) - 1
+        y_var_name = list(self.mpip.implying_variables.keys())[1]
+        nr_of_columns = len(self.mpip.implying_variables[y_var_name].breakpoints) - 1
+        entries_in_column: list[set[int]] = [
+            set().union(
+                *set(
+                    self.mpip.relation[(row_index, column_index)]
+                    for row_index in range(nr_of_rows)
+                )
+            )
+            for column_index in range(nr_of_columns)
+        ]
+        for column_set in self._get_bar_row_column_sets(entries_in_column):
+            constraint = self.opt_model.add_constraint(
+                sum(
+                    self.mpip.implying_variables[y_var_name]
+                    .pwl.pwl_variables_binary[y_index]
+                    .solver_variable
+                    for y_index in column_set
+                )
+                - sum(
+                    self.mpip.implied_variable.pwl.pwl_variables_binary[
+                        implied_index
+                    ].solver_variable
+                    for implied_index in set(
+                        sum(
+                            {
+                                self.mpip.relation.get((x_index, y_index), ())
+                                for x_index in range(nr_of_rows)
+                                for y_index in column_set
+                            },
+                            (),
+                        )
+                    )
+                )
+                <= 0,
+                name=f"vertical_bar_{column_set}_{self.mpip.mpip_id}".replace(" ", ""),
+            )
+            constraint.lazy = 3
+
+    def add_corner_constraints(self) -> None:
+        """Add corner constraints to optimization model."""
+        for z_index in range(len(self.mpip.implied_variable.breakpoints)):
+            self._add_corner_constraint_bottom_right_one_entry(z_index)
+            self._add_corner_constraint_top_left_one_entry(z_index)
+
+    def _add_corner_constraint_bottom_right_one_entry(self, z_index: int) -> None:
+        x_var_name = list(self.mpip.implying_variables.keys())[0]
+        y_var_name = list(self.mpip.implying_variables.keys())[1]
+        max_x_index = len(self.sep_implying_variables[x_var_name]) - 1
+        max_y_index = len(self.sep_implying_variables[y_var_name]) - 1
+
+        current_low_y = 0
+        blocks = []
+        for i in range(max_x_index, -1, -1):
+            for j in range(max_y_index, current_low_y - 1, -1):
+                if z_index in self.mpip.relation.get((i, j), (z_index,)):
+                    new_low_y = j + 1
+                    if i < max_x_index:
+                        blocks.append(
+                            (
+                                tuple(range(i + 1, max_x_index + 1)),  # X: i+1 to max_x
+                                tuple(
+                                    range(current_low_y, max_y_index + 1)
+                                ),  # Y: current_low_y to max_y
+                            )
+                        )
+
+                    current_low_y = new_low_y
+                    break
+
+        if current_low_y <= max_y_index:
+            blocks.append(
+                (
+                    tuple(range(0, max_x_index + 1)),
+                    tuple(range(current_low_y, max_y_index + 1)),
+                )
+            )
+
+        for block in blocks:
+            self._add_constraint_from_block(block)
+
+    def _add_corner_constraint_top_left_one_entry(self, z_index: int) -> None:
+        x_var_name = list(self.mpip.implying_variables.keys())[0]
+        y_var_name = list(self.mpip.implying_variables.keys())[1]
+        max_x_index = len(self.sep_implying_variables[x_var_name]) - 1
+        max_y_index = len(self.sep_implying_variables[y_var_name]) - 1
+
+        current_h = max_y_index + 1
+        blocks = []
+
+        for i in range(max_x_index + 1):
+            for j in range(current_h):
+                if z_index in self.mpip.relation.get((i, j), (z_index,)):
+                    new_h = j
+                    if i > 0:
+                        blocks.append(
+                            (
+                                tuple(range(0, i)),  # X: 0 to i-1
+                                tuple(range(0, current_h)),  # Y: 0 to current_h-1
+                            )
+                        )
+
+                    current_h = new_h
+                    break
+
+        if current_h > 0:
+            blocks.append(
+                (
+                    tuple(range(0, max_x_index + 1)),
+                    tuple(range(0, current_h)),
+                )
+            )
+
+        for block in blocks:
+            self._add_constraint_from_block(block)
+
+    def _add_constraint_from_block(
+        self, block: tuple[tuple[int, ...], tuple[int, ...]]
+    ) -> None:
+        """Add constraint for a specific block."""
+        x_indices, y_indices = block
+        if x_indices == () or y_indices == ():
+            return
+        constraint = self.opt_model.add_constraint(
+            sum(
+                self.mpip.implying_variables[
+                    list(self.mpip.implying_variables.keys())[0]
+                ]
+                .pwl.pwl_variables_binary[x_index]
+                .solver_variable
+                for x_index in x_indices
+            )
+            + sum(
+                self.mpip.implying_variables[
+                    list(self.mpip.implying_variables.keys())[1]
+                ]
+                .pwl.pwl_variables_binary[y_index]
+                .solver_variable
+                for y_index in y_indices
+            )
+            - sum(
+                self.mpip.implied_variable.pwl.pwl_variables_binary[
+                    implied_index
+                ].solver_variable
+                for implied_index in set(
+                    sum(
+                        {
+                            self.mpip.relation.get((x_index, y_index), ())
+                            for x_index in x_indices
+                            for y_index in y_indices
+                        },
+                        (),
+                    )
+                )
+            )
+            <= len(self.mpip.implying_variables) - 1,
+            name=f"corner_{block}_{self.mpip.mpip_id}".replace(" ", ""),
+        )
+        constraint.lazy = 3
 
     def _generate_implying_combinations(
         self,
@@ -286,7 +537,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
         """Generate cut based on separation solution multiple choice method."""
         cut_to_separate = self.opt_model.create_cut(
             self.separation_handler,
-            f"mpip{self.mpip.mpip_id}_x{self.nr_of_cuts}",
+            f"{self.mpip.mpip_id}_x_{self.nr_of_cuts}",
             lhs=None,
             rhs=len(self.sep_implying_variables) - 1,
             local=False,
@@ -320,8 +571,13 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
             violation -= solution_value * self.point_to_be_separated.implied_values[idx]
         if violation > s.StaticSettings.min_cut_violation:
             self.nr_of_cuts += 1
+            self.used += 1
+            self.usefulness = self.used / (self.used + self.unused)
             self.opt_model.add_cut(cut_to_separate)
+            self.separated_cuts.append(cut_to_separate)
             return True
+        self.unused += 1
+        self.usefulness = self.used / (self.used + self.unused)
         return False
 
     def _generate_cut_delta(self) -> bool:
@@ -374,7 +630,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
         if violation > s.StaticSettings.min_cut_violation:
             cut_to_separate = self.opt_model.create_cut(
                 self.separation_handler,
-                f"mpip{self.mpip.mpip_id}_x{self.nr_of_cuts}",
+                f"{self.mpip.mpip_id}_x_{self.nr_of_cuts}",
                 lhs=None,
                 rhs=cut_rhs,
                 local=False,
@@ -382,8 +638,13 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
             for coeff, cut_var in cut_variables:
                 self.opt_model.add_var_to_cut(cut_to_separate, cut_var, coeff)
             self.nr_of_cuts += 1
+            self.used += 1
+            self.usefulness = self.used / (self.used + self.unused)
             self.opt_model.add_cut(cut_to_separate)
+            self.separated_cuts.append(cut_to_separate)
             return True
+        self.unused += 1
+        self.usefulness = self.used / (self.used + self.unused)
         return False
 
     def separate_solution(self) -> bool:

@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=duplicate-code, too-many-locals
+# pylint: disable=duplicate-code, too-many-locals, too-many-branches
 """
-This script is a lightweight wrapper to run a single optimization instance.
-It takes a .osil file and several configuration settings as command-line arguments.
+@authors: kuen,
 """
 import logging
 import sys
@@ -20,6 +19,7 @@ from alpaca.utils import inout as ut_io
 from alpaca.utils.logger import logger
 import alpaca.utils.error_handling as erh
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+import studies.mpip.visualizer as vis  # pylint: disable=unused-import
 
 
 def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
@@ -47,19 +47,20 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
             "osil_file_name": osil_file_name,
             "number_of_breakpoints": args.breakpoints,
             "pwl_method": args.pwl_method,
-            "feature/mpip/separation": int(args.test_case.lower() == "mpip"),
+            "feature/mpip/bar": int(args.test_case.lower() == "mpip"),
             "seed": int(args.seed_value),
+            "feature/mpip/frequency": 50,
             "external_solver": "gurobi",
-            "solver_time_limit": 7200,
+            "solver_time_limit": 18000,
             "reformulate_multilinear_to_bilinear": 1,
-            "bilinear_handling": 1,
-            "breakpoint_generation": 1,
-            "feature/nnbp/time_limit": 300,
-            "bound_propagation": 1,
-            "bound_propagation_time_limit": 300,
+            "bilinear_handling": 2,
+            "breakpoint_generation": 0,
+            "feature/nnbp/time_limit": 3600,
+            "bound_propagation": 0,
+            "bound_propagation_time_limit": 3600,
         }
         user_settings = s.UserSettings(config_dict)
-        ut_io.config_console_logger(log_level=logging.ERROR)
+        ut_io.config_console_logger(log_level=logging.INFO)
         ut_io.config_file_logger(user_settings)
         user_settings.save_to_json()
         if hasattr(signal, "SIGALRM"):
@@ -71,6 +72,16 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
             # Disable the alarm once the operation is complete or has failed.
             if hasattr(signal, "SIGALRM"):
                 signal.alarm(0)
+
+        for variable in model_data.variables.values():
+            if variable.is_discretized:
+                if (
+                    variable.lb == -s.StaticSettings.infinity
+                    or variable.ub == s.StaticSettings.infinity
+                ):
+                    raise ValueError(
+                        f"Variable {variable.name} is discretized but has infinite bounds."
+                    )
 
         external_solver = mm.MIPModel(
             model_data,
@@ -93,6 +104,9 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
         seed_value = int(args.seed_value)
         solver.external_solver.opt_model.set_seed(seed_value)
         runtime = solver.solve_instance()
+        # if user_settings.feature_mpip:
+        #     visualizer = vis.Visualizer(user_settings)
+        #     visualizer.plot_blocks(mpip_handler)
         mip_gap = solver.external_solver.opt_model.get_mip_gap()
         nr_cuts = (
             0

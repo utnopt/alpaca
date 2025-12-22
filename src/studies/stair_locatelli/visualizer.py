@@ -11,6 +11,8 @@ from mpl_toolkits.mplot3d import Axes3D  # pylint: disable=unused-import
 import alpaca.utils.geometry as geo
 import alpaca.expressions.bilinear_expression as ble
 import alpaca.settings as s
+from alpaca.utils.logger import logger
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class Visualizer:
@@ -18,7 +20,7 @@ class Visualizer:
 
     def __init__(self, settings: s.UserSettings):
         self.settings = settings
-        self.plot_dir = os.path.join(settings.export_path, "stair_locatelli_plots")
+        self.plot_dir = settings.export_path + lsf.study_stair_locatelli_export_folder()
 
     def plot_polygons(
         self,
@@ -27,6 +29,7 @@ class Visualizer:
         ],
     ):
         """Plots 2D projection polygons."""
+        logger.info(lsf.study_stair_locatelli_info_plot_polygons())
         os.makedirs(self.plot_dir, exist_ok=True)
 
         for bilinear_expr, vertices in bilinear_projected_domains:
@@ -55,7 +58,10 @@ class Visualizer:
             ax.grid(True)
 
             plt.savefig(
-                os.path.join(self.plot_dir, f"polygons_{bilinear_expr.name}.png")
+                os.path.join(
+                    self.plot_dir,
+                    lsf.study_stair_locatelli_polygon_plot_name(bilinear_expr.name),
+                )
             )
             plt.close(fig)
 
@@ -66,6 +72,7 @@ class Visualizer:
         ],
     ):  # pylint: disable=too-many-locals
         """Plots 3D surfaces and cuts."""
+        logger.info(lsf.study_stair_locatelli_info_plot_cuts())
         os.makedirs(self.plot_dir, exist_ok=True)
         view_angles = [(30, -60), (30, 30), (60, -120)]
 
@@ -98,6 +105,9 @@ class Visualizer:
                 ax.set_zlabel(bilinear_expr.representative_variable.name)
                 ax.view_init(elev=elev, azim=azim)
                 plt.savefig(
-                    os.path.join(self.plot_dir, f"cuts_{bilinear_expr.name}_{i}.png")
+                    os.path.join(
+                        self.plot_dir,
+                        lsf.study_stair_locatelli_cut_plot_name(bilinear_expr.name, i),
+                    )
                 )
                 plt.close(fig)

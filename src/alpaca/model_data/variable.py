@@ -27,6 +27,7 @@ class Variable:  # pylint: disable=too-many-instance-attributes
         var_type: Variable type. Defaults to 'C'.
         is_discretized: Flag indicating if the variable has been discretized.
         breakpoints: Discretization points within the variable's domain.
+        mip_start: Optional starting value for MIP solvers.
     """
 
     def __init__(
@@ -53,6 +54,7 @@ class Variable:  # pylint: disable=too-many-instance-attributes
         self.breakpoints: list[float] = []
         self.occurring_in: dict = {}
         self.pwl: pwm.PWLMethod | None = None
+        self.mip_start: float | None = None
 
     def add_nonlinearity_to_occurring_in(
         self, nonlinearity_type, nonlinearity_function

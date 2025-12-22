@@ -13,7 +13,7 @@ trap '' HUP
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
 # The project root is four levels up from the script's location
-PROJECT_ROOT=$(dirname "$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")")
+PROJECT_ROOT=$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")
 
 # Paths to the test instances and export directory
 IMPORT_PATH="$PROJECT_ROOT/data/import"
@@ -32,32 +32,36 @@ mkdir -p "$EXPORT_PATH"
 # Create a timestamped results file and write the header
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 RESULTS_FILE="$EXPORT_PATH/mpip_results_${TIMESTAMP}.csv"
+ERROR_LOG_FILE="$EXPORT_PATH/mpip_errors_${TIMESTAMP}.log"
 # Added 'seed_value' to the CSV header
 echo "test_case,pwl_method,nr_of_breakpoints,seed,osil_file_name,runtime,mip_gap,mpip_cuts,mpip_cuts_applied,mpip_ratio" > "$RESULTS_FILE"
+touch "$ERROR_LOG_FILE"
 
 # --- Job Definition ---
 
 # Find all test instance directories (e.g., test_instances_5, test_instances_10)
 # and prepare the list of jobs to be executed.
 declare -a jobs
-for num_breakpoints in 5 15 25 50 100; do
+for dir in "$IMPORT_PATH"/test_instances_*; do
+    num_breakpoints=$(basename "$dir" | grep -o '[0-9]*$')
     while IFS= read -r file; do
     # For each file and each test case, create 5 jobs with different seeds.
-      for seed in $(seq 42 42); do
-        for pwl_method in "multiple_choice" "delta"; do
+      for seed in 0 1 2 3 4; do
+        for pwl_method in "delta" "multiple_choice"; do
           # Each job is defined by: file, number_of_breakpoints, test_case, mpip_stripe_flag, seed_value
           # Added seed_value to the job parameters
           jobs+=("$file $num_breakpoints MPIP $seed $pwl_method")
           jobs+=("$file $num_breakpoints Standard $seed $pwl_method")
         done
       done
-    done
-done < <(find "$IMPORT_PATH"/instances -name "*.osil")
+    done < <(find "$dir" -name "*.osil")
+done
 
 NUM_JOBS=${#jobs[@]}
 echo "Found $NUM_JOBS total jobs to run across all test configurations and seeds."
 echo "Running up to $MAX_PARALLEL_JOBS jobs in parallel, using $CORES_PER_JOB cores each."
 echo "Results will be saved to $RESULTS_FILE"
+echo "Errors will be saved to $ERROR_LOG_FILE"
 
 # --- Parallel Execution Engine ---
 
@@ -99,7 +103,7 @@ run_job() {
         --breakpoints "$breakpoints" \
         --test_case "$test_case" \
         --pwl_method "$pwl_method" \
-        --seed_value "$seed_value" >> "$RESULTS_FILE" 2>/dev/null
+        --seed_value "$seed_value" >> "$RESULTS_FILE" 2>> "$ERROR_LOG_FILE"
 
     # Return the slot to the semaphore, making it available for the next job
     echo "$slot" >&3
@@ -131,3 +135,4 @@ wait
 exec 3>&-
 
 echo "All optimization runs completed. Results saved to $RESULTS_FILE"
+echo "Errors:  $ERROR_LOG_FILE"

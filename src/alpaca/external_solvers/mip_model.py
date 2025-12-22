@@ -37,6 +37,19 @@ class MIPModel:
         self._add_objective()
         self._set_parameters()
 
+    def save_solution_to_mip_start(self):
+        """Save current solution as MIP start."""
+        for variable in self.data.variables.values():
+            variable.mip_start = self.opt_model.get_val(variable.solver_variable)
+
+    def set_mip_start(self):
+        """Set MIP start for the optimization model."""
+        for variable in self.data.variables.values():
+            if variable.mip_start is not None:
+                self.opt_model.set_mip_start(
+                    variable.solver_variable, variable.mip_start
+                )
+
     def _add_variables(self):
         for variable in self.data.variables.values():
             variable.solver_variable = self.opt_model.add_variable(
