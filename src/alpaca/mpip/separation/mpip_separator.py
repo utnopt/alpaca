@@ -172,12 +172,14 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
         )
         for z_index_set in z_index_sets | combined_z_index_sets:
             bar_rc_sets.append(
-                tuple(set(
-                    i
-                    for i, entries in enumerate(item_entries)
-                    if set(entries).issubset(z_index_set)
+                tuple(
+                    set(
+                        i
+                        for i, entries in enumerate(item_entries)
+                        if set(entries).issubset(z_index_set)
+                    )
                 )
-            ))
+            )
         bar_rc_sets = set(bar_rc_sets)
         return bar_rc_sets
 
@@ -201,9 +203,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
         for row_set in self._get_bar_row_column_sets(entries_in_row):
             constraint = self.opt_model.add_constraint(
                 sum(
-                    self.mpip.implying_variables[
-                        x_var_name
-                    ]
+                    self.mpip.implying_variables[x_var_name]
                     .pwl.pwl_variables_binary[x_index]
                     .solver_variable
                     for x_index in row_set
@@ -248,9 +248,7 @@ class MPIPSeparator:  # pylint: disable=too-many-instance-attributes
         for column_set in self._get_bar_row_column_sets(entries_in_column):
             constraint = self.opt_model.add_constraint(
                 sum(
-                    self.mpip.implying_variables[
-                        y_var_name
-                    ]
+                    self.mpip.implying_variables[y_var_name]
                     .pwl.pwl_variables_binary[y_index]
                     .solver_variable
                     for y_index in column_set

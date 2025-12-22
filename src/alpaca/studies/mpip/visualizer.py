@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=too-many-locals
 """
 @authors: kuen,
 """
 import os
 import datetime
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 import numpy as np
 import pandas as pd
-import seaborn as sns
 
 import alpaca.settings as s
 from alpaca.mpip import mpip_handler as mph, mpip as mpi
@@ -26,7 +24,7 @@ class Visualizer:
         self.results_df: pd.DataFrame() | None = None
 
     def plot_blocks(self, mpip_handler: mph.MPIPHandler):
-        """Plots block structures for MPIP structures with 2 implying variables."""
+        """Plots block structures for MPIP structures with 2 implying variables using TikZ."""
         logger.info(lsf.study_mpip_info_plot_blocks())
         out_path = (
             self.user_settings.export_path + lsf.study_mpip_export_folder_blocks()
@@ -37,7 +35,7 @@ class Visualizer:
                 continue
             for cut in self._find_good_cuts(mpip.separator):
                 blocks = self._get_block_structure(mpip, cut)
-                self._plot_blocks(mpip, out_path, cut.name, blocks)
+                self._plot_blocks_tikz(mpip, out_path, cut.name, blocks)
 
     @staticmethod
     def _find_good_cuts(separator: mse.MPIPSeparator):
@@ -73,16 +71,16 @@ class Visualizer:
         return blocks
 
     @staticmethod
-    def _plot_blocks(
+    def _plot_blocks_tikz(
         mpip: mpi.MPIP,
         out_path: str,
         cut_name: str,
         blocks: list[list[tuple[str, str]]],
-    ):  # pylint: disable=too-many-locals
-        num_blocks = s.StaticSettings.nr_of_blocks_plotted
-        _, axes = plt.subplots(1, num_blocks, figsize=(5 * num_blocks, 5))
-        if num_blocks == 1:
-            axes = [axes]  # Ensure axes is iterable even for 1 plot
+    ):
+        """
+        Generates a LaTeX TikZ file for the block structure.
+        """
+        file_path = os.path.join(out_path, f"{cut_name}.tex")
 
         implying_vars = list(mpip.implying_variables.values())
         x_vars_list = implying_vars[0].pwl.pwl_variables_binary
@@ -91,67 +89,72 @@ class Visualizer:
         n_rows = len(x_vars_list)
         n_cols = len(y_vars_list)
 
-        # Map colors to numerical values for imshow
-        cmap = mcolors.ListedColormap(["white", "blue"])
-        bounds = [-0.5, 0.5, 1.5]
-        norm = mcolors.BoundaryNorm(bounds, cmap.N)
+        latex_content = [
+            r"\documentclass[tikz, border=10pt]{standalone}",
+            r"\begin{document}",
+            r"\begin{tabular}{" + "c" * len(blocks) + "}",
+        ]
+
+        row_content = []
 
         for block_idx, block in enumerate(blocks):
-            ax = axes[block_idx]
-
-            # Initialize matrix for colors (0 for white, 1 for blue)
-            color_matrix = np.zeros((n_rows, n_cols))
-
-            # Iterate through all cells to determine color and draw labels
+            tikz_code = [
+                r"\begin{tikzpicture}[scale=0.5, font=\tiny]",
+                # Draw grid
+                f"\\draw[step=1.0,gray,thin] (0,0) grid ({n_cols},{n_rows});",
+            ]
             for i in range(n_rows):
                 for j in range(n_cols):
                     x_var = x_vars_list[i]
                     y_var = y_vars_list[j]
-
-                    # Core logic from the user's snippet
-                    if (x_var.name, y_var.name) in block:
-                        color_matrix[i, j] = 1  # Blue
-                        color = "white"  # Text color
-                    else:
-                        color_matrix[i, j] = 0  # White
-                        color = "black"  # Text color
+                    x_coord = j
+                    y_coord = (n_rows - 1) - i
 
                     label = mpip.relation[(i, j)]
 
-                    # Draw the label text
-                    ax.text(
-                        j,
-                        i,
-                        str(label),
-                        ha="center",
-                        va="center",
-                        color=color,
-                        fontsize=8,
-                        fontweight="bold",
+                    if (x_var.name, y_var.name) in block:
+                        # Blue cell with white text
+                        tikz_code.append(
+                            f"\\fill[blue] ({x_coord},{y_coord}) rectangle ++(1,1);"
+                        )
+                        text_color = "white"
+                    else:
+                        # White cell (default) with black text
+                        text_color = "black"
+
+                    # Escape underscores in label for LaTeX
+                    safe_label = str(label).replace("_", r"\_")
+                    tikz_code.append(
+                        f"\\node[text={text_color}, anchor=center] at"
+                        f" ({x_coord + 0.5},{y_coord + 0.5}) {{{safe_label}}};"
                     )
-            ax.imshow(
-                color_matrix,
-                cmap=cmap,
-                norm=norm,
-                origin="upper",
-                extent=[-0.5, n_cols - 0.5, n_rows - 0.5, -0.5],
-                aspect="auto",
+
+            # Axes ticks (simplified)
+            for j in range(n_cols):
+                tikz_code.append(f"\\draw ({j + 0.5}, -0.1) -- ({j + 0.5}, 0);")
+            for i in range(n_rows):
+                y_coord = (n_rows - 1) - i
+                tikz_code.append(
+                    f"\\draw (-0.1, {y_coord + 0.5}) -- (0, {y_coord + 0.5});"
+                )
+
+            tikz_code.append(
+                f"\\node[anchor=south] at ({n_cols / 2}, {n_rows}) {{Block {block_idx + 1}}};"
             )
-            ax.set_xticks(np.arange(n_cols + 1) - 0.5, minor=True)
-            ax.set_yticks(np.arange(n_rows + 1) - 0.5, minor=True)
-            ax.grid(which="minor", color="gray", linestyle="-", linewidth=1)
-            ax.tick_params(which="minor", size=0)
-            ax.set_title(f"Block {block_idx + 1}")
-        plt.suptitle(f"Block Decomposition for Cut: {cut_name}", fontsize=16)
-        plt.tight_layout(
-            rect=(0.0, 0.0, 1.0, 0.95)
-        )  # Adjust layout to make space for subtitle
-        plt.savefig(out_path + f"{cut_name}.png")
-        plt.close()
+            tikz_code.append(r"\end{tikzpicture}")
+
+            row_content.append("\n".join(tikz_code))
+
+        latex_content.append(" & ".join(row_content) + r" \\")
+        latex_content.append(r"\end{tabular}")
+        latex_content.append(r"\end{document}")
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(latex_content))
 
     def create_performance_plots(self, results_csv: str):
         """
-        Creates performance plots from the CSV results.
+        Creates performance plots (TikZ) from the CSV results.
         """
         logger.info(lsf.study_mpip_info_plot_performance())
         input_csv = s.StaticSettings.import_path + results_csv
@@ -159,15 +162,34 @@ class Visualizer:
             self.user_settings.export_path + lsf.study_mpip_export_folder_performance()
         )
         self._load_and_prep_data(input_csv)
+
         if self.results_df is not None:
-            self._plot_performance_profile(
-                out_path + lsf.study_mpip_performance_plot_name()
+            def to_tex(filename):
+                base = os.path.splitext(filename)[0]
+                return base + ".tex"
+
+            self._plot_performance_profile_tikz(
+                out_path + to_tex(lsf.study_mpip_performance_plot_name())
             )
-            self._plot_runtime_by_breakpoints(
-                out_path + lsf.study_mpip_runtime_scaling_plot_name()
+            self._plot_runtime_by_breakpoints_tikz(
+                out_path + to_tex(lsf.study_mpip_runtime_scaling_plot_name())
             )
-            self._plot_instances_solved_over_time(
-                out_path + lsf.study_mpip_solved_instances_plot_name()
+            self._plot_instances_solved_over_time_tikz(
+                out_path + to_tex(lsf.study_mpip_solved_instances_plot_name())
+            )
+
+    def create_latex_tables(self, results_csv: str):
+        """
+        Creates LaTeX tables from the CSV results."""
+        logger.info(lsf.study_mpip_info_plot_performance())
+        input_csv = s.StaticSettings.import_path + results_csv
+        out_path = (
+            self.user_settings.export_path + lsf.study_mpip_export_folder_latex_tables()
+        )
+        self._load_and_prep_data(input_csv)
+        if self.results_df is not None:
+            self._generate_latex_table_runtime(
+                out_path + lsf.study_mpip_runtime_table_name()
             )
 
     def _load_and_prep_data(self, filepath):
@@ -178,12 +200,8 @@ class Visualizer:
             return
 
         df = pd.read_csv(filepath)
-
-        # Create a combined column for the legend (e.g., "Standard delta")
         df["Method"] = df["test_case"] + " " + df["pwl_method"]
-
-        # Create a unique identifier for each problem instance
-        # An instance is defined by the file name, number of breakpoints, and the random seed
+        df["Method"] = df["Method"].apply(lambda m: m.replace("_", r"\_"))
         df["Instance"] = (
             df["osil_file_name"]
             + "_"
@@ -191,131 +209,311 @@ class Visualizer:
             + "_"
             + df["seed"].astype(str)
         )
+        df["runtime"] = df["runtime"].apply(lambda r: r if r <= 18000 else 18000)
         self.results_df = df
 
-    def _plot_performance_profile(self, output_file):
+    def _plot_performance_profile_tikz(self, output_file):
         """
-        Generates a Dolan-More performance profile.
+        Generates a Dolan-More performance profile as a standalone TikZ file.
         """
-
-        # 1. Pivot the data: Rows = Instances, Columns = Methods, Values = Runtime
         pivot_df = self.results_df.pivot(
             index="Instance", columns="Method", values="runtime"
         )
-
-        # Handle missing values (if a method failed to run on an instance, treat as inf)
         pivot_df = pivot_df.fillna(np.inf)
-
-        # 2. Calculate the best (minimum) time for each instance
         min_times = pivot_df.min(axis=1)
-
-        # 3. Calculate ratios: (Time for Method M) / (Best Time for Instance)
         ratios = pivot_df.div(min_times, axis=0)
-
-        # 4. Plotting
-        plt.figure(figsize=(10, 6))
-        sns.set_style("whitegrid")
-
-        # Plot a step line for each method
         methods = pivot_df.columns
-        # custom_palette = sns.color_palette("husl", len(methods))
+
+        latex = [
+            r"\begin{tikzpicture}",
+            r"\begin{axis}[",
+            r"    width=\textwidth,",
+            r"    height=8cm,",
+            r"    xmode=log,",
+            r"    xlabel={Performance Ratio ($\tau$)},",
+            r"    ylabel={Fraction of problems solved within factor $\tau$},",
+            r"    title={Performance Profile (Runtime)},",
+            r"    grid=major,",
+            r"    xmin=1, xmax=100,",
+            r"    legend pos=south east,",
+            r"]",
+        ]
 
         for method in methods:
             method_ratios = ratios[method]
-
-            # Sort ratios
             sorted_ratios = np.sort(method_ratios)
-
-            # Y-axis: Fraction of problems solved within that ratio
             yvals = np.arange(1, len(sorted_ratios) + 1) / len(sorted_ratios)
 
-            # Add a point at the end to extend the line to the edge of the plot if needed
-            plt.step(sorted_ratios, yvals, where="post", label=method, linewidth=2)
+            # Construct coordinate string for tikz
+            coords = []
+            for r, y in zip(sorted_ratios, yvals):
+                if r <= 100:  # Optimization: Don't plot extremely large ratios
+                    coords.append(f"({r:.4f}, {y:.4f})")
 
-        plt.xscale("log")
-        plt.xlabel(r"Performance Ratio ($\tau$)", fontsize=12)
-        plt.ylabel(r"Fraction of problems solved within factor $\tau$", fontsize=12)
-        plt.title("Performance Profile (Runtime)", fontsize=14)
-        plt.legend(title="Configuration")
-        plt.grid(True, which="both", ls="-", alpha=0.5)
+            # Ensure the line extends to the end if max ratio < xmax
+            if len(sorted_ratios) > 0 and sorted_ratios[-1] < 100:
+                coords.append(f"(100, {yvals[-1]:.4f})")
 
-        # Limit x-axis to reasonable bounds (e.g., up to 10x slower) to keep plot readable
-        # You can remove this or adjust the limit
-        plt.xlim(1, 100)
+            coord_str = " ".join(coords)
+            latex.append(f"\\addplot[const plot, thick] coordinates {{ {coord_str} }};")
+            latex.append(f"\\addlegendentry{{{method}}}")
 
-        plt.tight_layout()
-        plt.savefig(output_file, dpi=300)
-        plt.close()
+        latex.append(r"\end{axis}")
+        latex.append(r"\end{tikzpicture}")
 
-    def _plot_runtime_by_breakpoints(self, output_file):
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write("\n".join(latex))
+
+    def _plot_runtime_by_breakpoints_tikz(self, output_file):
         """
-        Generates a boxplot comparing runtimes across different breakpoint counts.
+        Generates a Boxplot comparing runtimes using PGFPlots.
+        Since pgfplots statistics can be heavy, we pre-calculate quantiles in Python.
         """
+        latex = [
+            r"\begin{tikzpicture}",
+            r"\begin{axis}[",
+            r"    ymode=log,",
+            r"    width=\textwidth,",
+            r"    height=8cm,",
+            r"    xlabel={Number of Breakpoints},",
+            r"    ylabel={Runtime (s) [Log Scale]},",
+            r"    title={Runtime Distribution by Breakpoint Count},",
+            r"    grid=major,",
+            r"    xtick=data,",
+            r"    legend style={at={(1.05,1)}, anchor=north west},",
+            r"    width=12cm, height=8cm,",
+            r"]",
+        ]
 
-        plt.figure(figsize=(12, 7))
-        sns.set_style("whitegrid")
+        # Group data
+        methods = self.results_df["Method"].unique()
+        breakpoints = sorted(self.results_df["nr_of_breakpoints"].unique())
 
-        # Create boxplot
-        sns.boxplot(
-            data=self.results_df,
-            x="nr_of_breakpoints",
-            y="runtime",
-            hue="Method",
-            palette="Set2",
-            showfliers=False,  # Hide extreme outliers to keep the scale readable
+        # We need to manually dodge the boxplots.
+        # Base x-locations are the breakpoints. We add offsets.
+        num_methods = len(methods)
+        # width of a group of boxplots
+        width_per_group = (
+            0.8 * (breakpoints[1] - breakpoints[0]) if len(breakpoints) > 1 else 1.0
         )
+        # width of a single boxplot
+        box_width = width_per_group / (num_methods + 1)
 
-        plt.yscale("log")  # Log scale is usually best for solver runtimes
-        plt.xlabel("Number of Breakpoints", fontsize=12)
-        plt.ylabel("Runtime (s) [Log Scale]", fontsize=12)
-        plt.title("Runtime Distribution by Breakpoint Count", fontsize=14)
-        plt.legend(title="Configuration", loc="upper left", bbox_to_anchor=(1, 1))
+        # Define a color cycle manually or use cycle list
+        colors = ["blue", "red", "green", "orange", "purple"]
 
-        plt.tight_layout()
-        plt.savefig(output_file, dpi=300)
-        plt.close()
+        for idx, method in enumerate(methods):
+            color = colors[idx % len(colors)]
+            latex.append(f"% Method: {method}")
 
-    def _plot_instances_solved_over_time(self, output_file):
+            # For each breakpoint, calculate stats
+            for bp in breakpoints:
+                subset = self.results_df[
+                    (self.results_df["Method"] == method)
+                    & (self.results_df["nr_of_breakpoints"] == bp)
+                ]["runtime"]
+
+                if subset.empty:
+                    continue
+
+                # Calculate boxplot statistics
+                q1 = subset.quantile(0.25)
+                q3 = subset.quantile(0.75)
+                median = subset.median()
+                # Whiskers (1.5 IQR)
+                iqr = q3 - q1
+                lower_whisker = subset[subset >= q1 - 1.5 * iqr].min()
+                upper_whisker = subset[subset <= q3 + 1.5 * iqr].max()
+
+                # If whiskers are empty (single point), clamp to median
+                if pd.isna(lower_whisker):
+                    lower_whisker = median
+                if pd.isna(upper_whisker):
+                    upper_whisker = median
+
+                offset = (idx - (num_methods - 1) / 2) * (
+                    box_width if len(breakpoints) > 1 else 0.2
+                )
+                draw_at = bp + offset
+
+                latex.append(
+                    f"\\addplot+ ["
+                    f"boxplot prepared={{"
+                    f"lower whisker={lower_whisker}, upper whisker={upper_whisker}, "
+                    f"lower quartile={q1}, upper quartile={q3}, "
+                    f"median={median}"
+                    f"}}, "
+                    f"draw={color}, fill={color}!20, solid, mark=*, "
+                    f"boxplot/draw position={draw_at}, "
+                    f"boxplot/box extend={box_width * 0.8}"
+                    f"] coordinates {{}};"
+                )
+
+            # Dummy legend entry (pgfplots boxplots are tricky with legends,
+            # we add a dummy plot for the legend)
+            latex.append(f"\\addlegendimage{{fill={color}!20, draw={color}}}")
+            latex.append(f"\\addlegendentry{{{method}}}")
+
+        latex.append(r"\end{axis}")
+        latex.append(r"\end{tikzpicture}")
+
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write("\n".join(latex))
+
+    def _plot_instances_solved_over_time_tikz(self, output_file):
         """
-        Generates a plot showing the number of instances solved over time (Cactus plot).
+        Generates a Cactus plot (Instances Solved vs Time) using TikZ.
         """
-        plt.figure(figsize=(10, 6))
-        sns.set_style("whitegrid")
+        latex = [
+            r"\begin{figure}",
+            r"\centering",
+            r"\begin{tikzpicture}",
+            r"\begin{axis}[",
+            r"    width=\textwidth,",
+            r"    height=8cm,",
+            r"    xlabel={Time (s)},",
+            r"    ylabel={Number of Instances Solved},",
+            r"    title={Instances Solved over Time},",
+            r"    grid=major,",
+            r"    legend pos=south east,",
+            r"]",
+        ]
 
         methods = self.results_df["Method"].unique()
-
-        # Determine the global max runtime to set x-axis limit consistently if needed
-        # max_runtime = self.results_df["runtime"].max()
-
-        for method in methods:
-            # Get runtimes for this method
+        runtimes = []
+        colors = ["blue", "red", "green", "orange", "purple"]
+        for j, method in enumerate(methods):
+            # Get runtimes
             method_data = self.results_df[self.results_df["Method"] == method]
             runtimes = method_data["runtime"].values
-
-            # Sort runtimes
             runtimes.sort()
 
-            # Filter out unsolved instances (assuming unsolved are marked as inf or very large,
-            # though here we just take valid runtimes from the dataframe. If your DF includes
-            # failed runs as NaNs or Infs, ensure they are handled.
+            # Filter valid runtimes
             solved_runtimes = runtimes[np.isfinite(runtimes)]
 
-            # Y-axis: Number of instances solved
-            # We add 0 at the start to make the line start from origin or near it
-            x_vals = np.concatenate(([0], solved_runtimes))
-            y_vals = np.arange(0, len(solved_runtimes) + 1)
+            # Create coordinates: (0,0), (t1, 1), (t2, 2)...
+            coords = ["(0,0)"]
+            for i, time in enumerate(solved_runtimes):
+                coords.append(f"({time:.4f}, {i + 1})")
 
-            plt.step(x_vals, y_vals, where="post", label=method, linewidth=2)
+            coord_str = " ".join(coords)
+            latex.append(
+                f"\\addplot[const plot, thick, color={colors[j]}] coordinates {{ {coord_str} }};"
+            )
+            latex.append(f"\\addlegendentry{{{method}}}")
 
-        plt.xlabel("Time (s)", fontsize=12)
-        plt.ylabel("Number of Instances Solved", fontsize=12)
-        plt.title("Instances Solved over Time", fontsize=14)
-        plt.legend(title="Configuration")
-        plt.grid(True, which="both", ls="-", alpha=0.5)
+        figure_caption = (
+            f"Number of instances solved over time for different methods."
+            f"Total number of instances: {len(runtimes)}"
+        )
 
-        plt.tight_layout()
-        plt.savefig(output_file, dpi=300)
-        plt.close()
+        latex.append(r"\end{axis}")
+        latex.append(r"\end{tikzpicture}")
+        latex.append(f"\\caption{{{figure_caption}}}")
+        latex.append(r"\end{figure}")
+
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write("\n".join(latex))
+
+    def _generate_latex_table_runtime(self, output_file):
+        # Filter for relevant test cases
+        df = self.results_df[
+            self.results_df["test_case"].isin(["Standard", "MPIP"])
+        ].copy()
+
+        # Create unique row names
+        df["row_name"] = (
+            df["osil_file_name"] + " | " + df["nr_of_breakpoints"].astype(str)
+        )
+
+        def gmean(x):
+            # Calculate geometric mean, ignoring non-positive values and NaNs
+            data = x[x > 0].dropna()
+            if len(data) == 0:
+                return np.nan
+            return np.exp(np.log(data).mean())
+
+        # Pivot the table to get instances as rows and test cases as columns
+        pivot_df = df.pivot_table(
+            index="row_name", columns="test_case", values="runtime", aggfunc=gmean
+        )
+
+        # Calculate Speedup
+        if "Standard" in pivot_df.columns and "MPIP" in pivot_df.columns:
+            pivot_df["Speedup"] = pivot_df["Standard"] / pivot_df["MPIP"]
+            pivot_df = pivot_df[["Standard", "MPIP", "Speedup"]]
+            pivot_df.sort_values(by="Speedup", ascending=False, inplace=True)
+        else:
+            print("Warning: Dataset missing either 'Standard' or 'MPIP' test cases.")
+
+        # Escape underscores for LaTeX compatibility
+        pivot_df.index = pivot_df.index.str.replace("_", r"\_", regex=False)
+
+        # --- Calculate Overall Geometric Means ---
+        overall_std = (
+            gmean(pivot_df["Standard"]) if "Standard" in pivot_df.columns else np.nan
+        )
+        overall_mpip = gmean(pivot_df["MPIP"]) if "MPIP" in pivot_df.columns else np.nan
+        overall_speedup = (
+            gmean(pivot_df["Speedup"]) if "Speedup" in pivot_df.columns else np.nan
+        )
+
+        # --- Generate LaTeX Content ---
+        latex_content = "\\begin{table}[htbp]\n"
+        latex_content += "  \\centering\n"
+        latex_content += ("  \\caption{Geometric mean runtime (s) comparison "
+                          "between Standard and MPIP methods over all seeds.}\n")
+        latex_content += "  \\label{tab:runtime_comparison}\n"
+        latex_content += "  \\begin{tabular}{lrrr}\n"
+        latex_content += "    \\toprule\n"
+        latex_content += ("    \\textbf{Instance} & \\textbf{Standard (s)} "
+                          "& \\textbf{MPIP (s)} & \\textbf{Speedup} \\\\\n")
+        latex_content += "    \\midrule\n"
+
+        # Add data rows
+        for instance, row in pivot_df.iterrows():
+            std_val = (
+                f"{row['Standard']:.2f}" if not pd.isna(row["Standard"]) else "N/A"
+            )
+            mpip_val = f"{row['MPIP']:.2f}" if not pd.isna(row["MPIP"]) else "N/A"
+
+            if "Speedup" in pivot_df.columns:
+                speedup_val = (
+                    f"{row['Speedup']:.2f}" if not pd.isna(row["Speedup"]) else "-"
+                )
+                latex_content += (
+                    f"    {instance} & {std_val} & {mpip_val} & {speedup_val} \\\\\n"
+                )
+            else:
+                latex_content += f"    {instance} & {std_val} & {mpip_val} \\\\\n"
+
+        # Add Overall Summary Row
+        latex_content += "    \\midrule\n"
+
+        ov_std_str = f"{overall_std:.2f}" if not pd.isna(overall_std) else "N/A"
+        ov_mpip_str = f"{overall_mpip:.2f}" if not pd.isna(overall_mpip) else "N/A"
+
+        if "Speedup" in pivot_df.columns:
+            ov_speedup_str = (
+                f"{overall_speedup:.2f}" if not pd.isna(overall_speedup) else "-"
+            )
+            latex_content += (f"    \\textbf{{Overall}} & \\textbf{{{ov_std_str}}} "
+                              f"& \\textbf{{{ov_mpip_str}}} & \\textbf{{{ov_speedup_str}}} \\\\\n")
+        else:
+            latex_content += (f"    \\textbf{{Overall}} & \\textbf{{{ov_std_str}}} "
+                              f"& \\textbf{{{ov_mpip_str}}} \\\\\n")
+
+        latex_content += "    \\bottomrule\n"
+        latex_content += "  \\end{tabular}\n"
+        latex_content += "\\end{table}"
+
+        # Write to file
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(latex_content)
+
+        print(f"Successfully generated {output_file}")
+        print("\nPreview of the table content:\n")
+        print(latex_content)
 
 
 if __name__ == "__main__":
@@ -329,4 +527,10 @@ if __name__ == "__main__":
         u_settings.export_path + lsf.study_mpip_export_folder_performance(),
         exist_ok=True,
     )
-    visualizer.create_performance_plots("mpip_results_2025-12-08_16-08-27.csv")
+    os.makedirs(
+        u_settings.export_path + lsf.study_mpip_export_folder_latex_tables(),
+        exist_ok=True,
+    )
+    RESULTS_FILE = "mpip_results_2025-12-20_13-16-54.csv"
+    visualizer.create_latex_tables(RESULTS_FILE)
+    visualizer.create_performance_plots(RESULTS_FILE)

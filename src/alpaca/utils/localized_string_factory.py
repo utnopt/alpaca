@@ -796,6 +796,10 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return "performance_plots/"
 
     @classmethod
+    def study_mpip_export_folder_latex_tables(cls) -> str:
+        return "latex_tables/"
+
+    @classmethod
     def study_mpip_performance_plot_name(cls) -> str:
         return "performance_profile_comparison.png"
 
@@ -806,6 +810,10 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
     @classmethod
     def study_mpip_solved_instances_plot_name(cls) -> str:
         return "solved_instances_over_time.png"
+
+    @classmethod
+    def study_mpip_runtime_table_name(cls) -> str:
+        return "runtime.tex"
 
     @classmethod
     def study_mpip_info_plot_blocks(cls) -> str:
