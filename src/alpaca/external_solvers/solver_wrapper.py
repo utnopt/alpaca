@@ -33,9 +33,9 @@ class SolverWrapper:
         """Optimize the model."""
         if self.mip_solver == lsf.solver_name_gurobi():
             self.model.optimize(callback_function)
-            if self.model.Status == gp.GRB.INFEASIBLE:
-                self.model.computeIIS()
-                self.model.write("model.ilp")
+            # if self.model.Status == gp.GRB.INFEASIBLE:
+            #     self.model.computeIIS()
+            #     self.model.write("model.ilp")
         else:  # scip
             self.model.optimize()
             self.model.printStatistics()

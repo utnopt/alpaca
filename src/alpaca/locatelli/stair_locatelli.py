@@ -40,7 +40,11 @@ class StairLocatelli:
 
         for expr in self.model_data.expressions.bilinear_expressions.values():
             # 1. Project Domain (Solver)
-            vertices = self.projector.get_projected_vertices(expr)
+            vertices = (
+                self.projector.get_projected_vertices(expr)
+                if self.settings.feature_stair_locatelli <= 2
+                else self.projector.get_projected_vertices_indicator(expr)
+            )
             self.bilinear_projected_domains.append((expr, vertices))
 
             # 2. Generate Cuts (Constraint creation)

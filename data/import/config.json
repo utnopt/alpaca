@@ -1,18 +1,19 @@
 {
-      "osil_file_name": "kriging_peaks-red020",
-      "number_of_breakpoints": 30,
-      "pwl_method": "multiple_choice",
+      "osil_file_name": "pooling_sppb5tp",
+      "number_of_breakpoints": 10,
+      "pwl_method": "none",
       "feature/mpip/separation": 0,
       "feature/mpip/frequency": 50,
       "feature/mpip/corner": 0,
-      "feature/mpip/bar": 1,
+      "feature/mpip/bar": 0,
       "seed": 1,
       "external_solver": "gurobi",
       "solver_time_limit": 2000,
       "reformulate_multilinear_to_bilinear": 1,
-      "bilinear_handling": 2,
+      "bilinear_handling": 3,
       "breakpoint_generation": 0,
       "feature/nnbp/time_limit": 3600,
-      "bound_propagation": 0,
-      "bound_propagation_time_limit": 3600
+      "bound_propagation": 1,
+      "bound_propagation_time_limit": 3600,
+      "feature/stair_locatelli": 0
 }

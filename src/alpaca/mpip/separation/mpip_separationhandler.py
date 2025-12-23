@@ -57,10 +57,7 @@ class MPIPSeparationHandler:
         self.iteration += 1
         separated = False
         for mpip in self.mpip_handler.mpip_dict.values():
-            if (
-                self.iteration % self.settings.feature_mpip_reset_interval
-                == 0
-            ):
+            if self.iteration % self.settings.feature_mpip_reset_interval == 0:
                 mpip.separator.reset_useless_counter()
             if mpip.separator.usefulness < self.settings.feature_mpip_useless_threshold:
                 continue
