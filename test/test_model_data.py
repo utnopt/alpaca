@@ -22,6 +22,8 @@ def run_model_test(instance_name, approximation, reformulate_multilinear):
     user_settings = s.UserSettings(config_dict)
 
     model_data = mda.ModelData(user_settings)
+    model_data.read_model_from_osil_data()
+    model_data.build_pwl_relaxation_model()
 
     external_solver = mm.MIPModel(model_data, nonlinear=False)
     solver = slv.Solver(external_solver)
@@ -32,13 +34,9 @@ def run_model_test(instance_name, approximation, reformulate_multilinear):
     solver.mpip_separation_handler = mpip_separation_handler
 
 
-@pytest.mark.parametrize("instance_name", [
-    "alkyl",
-    "least",
-    "chance",
-    "chem",
-    "st_glmp_kk92"
-])
+@pytest.mark.parametrize(
+    "instance_name", ["alkyl", "least", "chance", "chem", "st_glmp_kk92"]
+)
 @pytest.mark.parametrize("approximation", [0, 1])
 @pytest.mark.parametrize("reformulate_multilinear", [0, 1])
 def test_model_data(instance_name, approximation, reformulate_multilinear):

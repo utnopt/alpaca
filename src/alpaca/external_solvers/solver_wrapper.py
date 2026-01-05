@@ -241,6 +241,7 @@ class SolverWrapper:
         if self.mip_solver == lsf.solver_name_gurobi():
             variable.LB = lb
         else:
+            self.model.freeReoptSolve()
             self.model.chgVarLb(variable, lb)
 
     def set_variable_ub(self, variable: Any, ub: float) -> None:

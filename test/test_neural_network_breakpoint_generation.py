@@ -14,6 +14,7 @@ class DummySettings:
     """
     Mock settings object simulating alpaca.settings.UserSettings.
     """
+
     # pylint: disable=too-few-public-methods
     def __init__(self):
         self.number_of_breakpoints = 5
@@ -29,12 +30,13 @@ class DummyExpression:
     Mock expression object simulating alpaca.expressions.one_dim_expression.
     Default behavior is f(x) = x.
     """
+
     # pylint: disable=too-few-public-methods
     def f(self, x):
         """Returns the function value (identity)."""
         return x
 
-    def f_derivative(self, x): # pylint: disable=unused-argument
+    def f_derivative(self, x):  # pylint: disable=unused-argument
         """Returns the derivative value (constant 1)."""
         return 1.0
 
@@ -43,6 +45,7 @@ class DummyVariable:
     """
     Mock variable object simulating alpaca.model_data.variable.
     """
+
     # pylint: disable=too-few-public-methods
     def __init__(self, expression):
         self.lb = 0.0
@@ -56,8 +59,10 @@ class TestableBNN(bnn.BreakpointNeuralNetwork):
     to allow for unit testing of individual components without
     running the time-consuming training loop.
     """
+
     def _build_and_train_model(self):
         """Override to prevent training during initialization."""
+
 
 # --- Fixtures ---
 
@@ -89,6 +94,7 @@ def net(mock_variable, mock_settings):
     """
     network = TestableBNN(mock_variable, mock_settings)
     return network
+
 
 # --- Tests ---
 
@@ -135,6 +141,7 @@ class TestNetworkLogic:
         """
         Test that configuring the network for f(x) = 2x results in correct weights.
         """
+
         # Setup f(x) = 2x
         def linear_func(x):
             return 2.0 * x

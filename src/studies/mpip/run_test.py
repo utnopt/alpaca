@@ -68,6 +68,8 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
             signal.alarm(3600)
         try:
             model_data = mda.ModelData(user_settings)
+            model_data.read_model_from_osil_data()
+            model_data.build_pwl_relaxation_model()
         finally:
             # Disable the alarm once the operation is complete or has failed.
             if hasattr(signal, "SIGALRM"):

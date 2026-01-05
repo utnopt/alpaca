@@ -164,6 +164,7 @@ class Visualizer:
         self._load_and_prep_data(input_csv)
 
         if self.results_df is not None:
+
             def to_tex(filename):
                 base = os.path.splitext(filename)[0]
                 return base + ".tex"
@@ -458,13 +459,17 @@ class Visualizer:
         # --- Generate LaTeX Content ---
         latex_content = "\\begin{table}[htbp]\n"
         latex_content += "  \\centering\n"
-        latex_content += ("  \\caption{Geometric mean runtime (s) comparison "
-                          "between Standard and MPIP methods over all seeds.}\n")
+        latex_content += (
+            "  \\caption{Geometric mean runtime (s) comparison "
+            "between Standard and MPIP methods over all seeds.}\n"
+        )
         latex_content += "  \\label{tab:runtime_comparison}\n"
         latex_content += "  \\begin{tabular}{lrrr}\n"
         latex_content += "    \\toprule\n"
-        latex_content += ("    \\textbf{Instance} & \\textbf{Standard (s)} "
-                          "& \\textbf{MPIP (s)} & \\textbf{Speedup} \\\\\n")
+        latex_content += (
+            "    \\textbf{Instance} & \\textbf{Standard (s)} "
+            "& \\textbf{MPIP (s)} & \\textbf{Speedup} \\\\\n"
+        )
         latex_content += "    \\midrule\n"
 
         # Add data rows
@@ -494,11 +499,15 @@ class Visualizer:
             ov_speedup_str = (
                 f"{overall_speedup:.2f}" if not pd.isna(overall_speedup) else "-"
             )
-            latex_content += (f"    \\textbf{{Overall}} & \\textbf{{{ov_std_str}}} "
-                              f"& \\textbf{{{ov_mpip_str}}} & \\textbf{{{ov_speedup_str}}} \\\\\n")
+            latex_content += (
+                f"    \\textbf{{Overall}} & \\textbf{{{ov_std_str}}} "
+                f"& \\textbf{{{ov_mpip_str}}} & \\textbf{{{ov_speedup_str}}} \\\\\n"
+            )
         else:
-            latex_content += (f"    \\textbf{{Overall}} & \\textbf{{{ov_std_str}}} "
-                              f"& \\textbf{{{ov_mpip_str}}} \\\\\n")
+            latex_content += (
+                f"    \\textbf{{Overall}} & \\textbf{{{ov_std_str}}} "
+                f"& \\textbf{{{ov_mpip_str}}} \\\\\n"
+            )
 
         latex_content += "    \\bottomrule\n"
         latex_content += "  \\end{tabular}\n"

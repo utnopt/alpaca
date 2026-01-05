@@ -64,6 +64,8 @@ def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting)
         user_settings.save_to_json()
 
         model_data = mda.ModelData(user_settings)
+        model_data.read_model_from_osil_data()
+        model_data.build_pwl_relaxation_model()
         volume_improvement, max_diff_improvement = 0.0, 0.0
         if user_settings.feature_stair_locatelli:
             stair_locatelli = slo.StairLocatelli(model_data)

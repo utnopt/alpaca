@@ -119,8 +119,13 @@ class MIPModel:
             )
 
     def _add_objective(self):
+        objective = (
+            0
+            if lsf.objective_var() not in self.data.variables
+            else self.data.variables[lsf.objective_var()].solver_variable
+        )
         self.opt_model.set_objective(
-            self.data.variables[lsf.objective_var()].solver_variable,
+            objective,
             sense=lsf.objective_sense_minimize(),
         )
 
