@@ -37,12 +37,18 @@ class BoundPropagator:
         logger.info(lsf.info_apply_obbt())
         external_solver = mm.MIPModel(self.model_data)
         external_solver.opt_model.hide_output()
+        variables_in_bilinear_terms = []
+        for expression in self.model_data.expressions.bilinear_expressions.values():
+            variables_in_bilinear_terms.append(expression.variables[0].name)
+            variables_in_bilinear_terms.append(expression.variables[1].name)
+        variables_in_bilinear_terms = set(variables_in_bilinear_terms)
         external_solver.opt_model.set_time_limit(
             self.model_data.settings.bound_propagation_obbt_time_limit
-            / len(self.model_data.variables)
+            / len(variables_in_bilinear_terms)
         )
-        for variable in self.model_data.variables.values():
-            if variable.var_type != lsf.var_type_binary():
+        for variable_name in variables_in_bilinear_terms:
+            variable = self.model_data.variables[variable_name]
+            if variable.var_type != lsf.var_type_binary() and variable.name != lsf.objective_var():
                 self._tighten_bounds_via_obbt(variable, external_solver.opt_model)
 
     @staticmethod

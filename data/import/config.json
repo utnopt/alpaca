@@ -1,6 +1,6 @@
 {
-      "osil_file_name": "pooling_sppb5tp",
-      "number_of_breakpoints": 10,
+      "osil_file_name": "pooling_foulds3stp",
+      "number_of_breakpoints": 50,
       "pwl_method": "none",
       "feature/mpip/separation": 0,
       "feature/mpip/frequency": 50,
@@ -14,6 +14,6 @@
       "breakpoint_generation": 0,
       "feature/nnbp/time_limit": 3600,
       "bound_propagation": 1,
-      "bound_propagation_time_limit": 3600,
+      "bound_propagation_obbt_time_limit": 3600,
       "feature/stair_locatelli": 0
 }
