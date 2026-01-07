@@ -19,7 +19,7 @@ import alpaca.settings as s
         ode.SineExpression,
         ode.AbsExpression,
         ode.SquareExpression,
-        ode.TangensHExpression
+        ode.TangensHExpression,
     ],
 )
 def test_approximation_accuracy(method, one_dim_expression):
