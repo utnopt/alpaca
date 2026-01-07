@@ -111,7 +111,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             or self.feature_mpip_bar
         )
         self.breakpoint_generation = int(
-            config_dict.get("breakpoint_generation", 2)
+            config_dict.get("breakpoint_generation", 0)
         )  # 0: equal, 1: neural networks (nnbp), 2: adaptive
         self.feature_nnbp_learning_rate = float(
             config_dict.get("feature/nnbp/learning_rate", 1e-7)
