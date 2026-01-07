@@ -57,6 +57,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.solver_thread_limit = int(config_dict.get("solver_thread_limit", 4))
         self.osil_file_name = str(config_dict.get("osil_file_name", "st_e41"))
         self.number_of_breakpoints = int(config_dict.get("number_of_breakpoints", 5))
+        self.relaxation_tolerance = float(config_dict.get("relaxation_tolerance", 1e-4))
         self.pwl_method = str(config_dict.get("pwl_method", "multiple_choice"))
         self.approximation = int(config_dict.get("approximation", 0))
         self.external_solver = str(config_dict.get("external_solver", "scip"))
@@ -110,8 +111,8 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             or self.feature_mpip_bar
         )
         self.breakpoint_generation = int(
-            config_dict.get("breakpoint_generation", 1)
-        )  # 0: equal, 1: neural networks (nnbp)
+            config_dict.get("breakpoint_generation", 2)
+        )  # 0: equal, 1: neural networks (nnbp), 2: adaptive
         self.feature_nnbp_learning_rate = float(
             config_dict.get("feature/nnbp/learning_rate", 1e-7)
         )

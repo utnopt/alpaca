@@ -21,7 +21,12 @@ SAMPLE_BOUND_DATA = [
             {"name": "x_1", "lb": 0.0, "ub": 10.0},
         ],
         "linear_constraints": [
-            {"name": "c1", "coeffs": {"x_0": 1.0, "x_1": 2.0}, "sense": "==", "rhs": 10.0}
+            {
+                "name": "c1",
+                "coeffs": {"x_0": 1.0, "x_1": 2.0},
+                "sense": "==",
+                "rhs": 10.0,
+            }
         ],
         "xml": None,
         "expected_bounds": {
@@ -38,7 +43,12 @@ SAMPLE_BOUND_DATA = [
             {"name": "x_1", "lb": 0.0, "ub": 5.0},
         ],
         "linear_constraints": [
-            {"name": "c1", "coeffs": {"x_0": 1.0, "x_1": -1.0}, "sense": "<=", "rhs": 2.0}
+            {
+                "name": "c1",
+                "coeffs": {"x_0": 1.0, "x_1": -1.0},
+                "sense": "<=",
+                "rhs": 2.0,
+            }
         ],
         "xml": None,
         # x - y <= 2  =>  x <= 2 + y. Max x = 2 + 5 = 7 (capped at 5).
@@ -99,7 +109,7 @@ SAMPLE_BOUND_DATA = [
     {
         "name": "expression_linear_structure",
         "description": "z = 2*x + 3*y + 5. x in [0,1], "
-                       "y in [1,2]. z in [2*0+3*1+5, 2*1+3*2+5] = [8, 13].",
+        "y in [1,2]. z in [2*0+3*1+5, 2*1+3*2+5] = [8, 13].",
         "settings": {"bound_propagation_rounds": 1},
         "variables": [
             {"name": "x_0", "lb": 0.0, "ub": 1.0},
@@ -126,14 +136,19 @@ SAMPLE_BOUND_DATA = [
     {
         "name": "combined_linear_and_expression",
         "description": "Constraint x = y. Expression z = x*y. x in [1, 2], y in [0, 10]. "
-                       "Constraint propagates y->[1,2]. Expr z->[1,4].",
+        "Constraint propagates y->[1,2]. Expr z->[1,4].",
         "settings": {"bound_propagation_rounds": 3},
         "variables": [
             {"name": "x_0", "lb": 1.0, "ub": 2.0},
             {"name": "x_1", "lb": 0.0, "ub": 10.0},
         ],
         "linear_constraints": [
-            {"name": "c1", "coeffs": {"x_0": 1.0, "x_1": -1.0}, "sense": "==", "rhs": 0.0}
+            {
+                "name": "c1",
+                "coeffs": {"x_0": 1.0, "x_1": -1.0},
+                "sense": "==",
+                "rhs": 0.0,
+            }
         ],
         "xml": """
         <nl idx="-1">
