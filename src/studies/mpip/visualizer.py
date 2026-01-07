@@ -164,7 +164,6 @@ class Visualizer:
         self._load_and_prep_data(input_csv)
 
         if self.results_df is not None:
-
             def to_tex(filename):
                 base = os.path.splitext(filename)[0]
                 return base + ".tex"
