@@ -9,7 +9,10 @@ import numpy as np
 from alpaca.utils.logger import logger
 import alpaca.model_data.variable as var
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
-import alpaca.breakpoints.breakpoint_neural_network as bnn
+from alpaca.breakpoints import (
+    breakpoint_neural_network as bnn,
+    breakpoint_adaptive as bad,
+)
 import alpaca.settings as s
 
 if TYPE_CHECKING:
@@ -40,6 +43,8 @@ class BreakpointGenerator:
             return np.linspace(
                 variable.lb, variable.ub, self.model_data.settings.number_of_breakpoints
             ).tolist()
-        return bnn.BreakpointNeuralNetwork(
-            variable, self.model_data.settings
-        ).breakpoints.tolist()
+        if self.model_data.settings.breakpoint_generation == 1:
+            return bnn.BreakpointNeuralNetwork(
+                variable, self.model_data.settings
+            ).breakpoints.tolist()
+        return bad.BreakpointAdaptive(variable, self.model_data.settings).breakpoints

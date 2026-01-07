@@ -53,12 +53,13 @@ class OneDimExpression(exn.Expression):
             self.__class__.__name__, self.__class__
         )
 
+    @classmethod
     def get_linear_approximation_function_parameters_for_segment(
-        self, var_lb: float, var_ub: float
+        cls, var_lb: float, var_ub: float
     ) -> tuple[float, float]:
         """Calculate slope and intercept of the linear approximation over [var_lb, var_ub]."""
-        slope = (self.f(var_ub) - self.f(var_lb)) / (var_ub - var_lb)
-        intercept = self.f(var_lb) - slope * var_lb
+        slope = (cls.f(var_ub) - cls.f(var_lb)) / (var_ub - var_lb)
+        intercept = cls.f(var_lb) - slope * var_lb
         return slope, intercept
 
     def __repr__(self) -> str:
@@ -79,16 +80,21 @@ class OneDimExpression(exn.Expression):
         """Evaluates the function f'(x) for the expression."""
         raise NotImplementedError(lsf.error_subclasses_must_implement_method())
 
-    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
-        """Solves f'(x) = m for x."""
+    @classmethod
+    def _solve_for_f_prime_equals_m_in_interval(
+        cls, m: float, lb: float, ub: float
+    ) -> List[float]:
+        """Solves f'(x) = m for x. Checks in interval lb to ub."""
         raise NotImplementedError(lsf.error_subclasses_must_implement_method())
 
-    def _get_deviation(self, x: float, m: float, t: float) -> float:
+    @classmethod
+    def get_deviation(cls, x: float, m: float, t: float) -> float:
         """Helper method to calculate the deviation f(x) - m*x - t."""
-        return self.f(x) - m * x - t
+        return cls.f(x) - m * x - t
 
+    @classmethod
     def get_min_max_deviation(
-        self, var_lb: float, var_ub: float, m: float, t: float
+        cls, var_lb: float, var_ub: float, m: float, t: float
     ) -> Tuple[float, float]:
         """
         Calculates the min and max values of f(x) - m*x - t in [var_lb, var_ub].
@@ -98,15 +104,10 @@ class OneDimExpression(exn.Expression):
         derivative f'(x) equals m.
         """
         points_to_check = [var_lb, var_ub]
-        critical_points = self._solve_for_f_prime_equals_m(m)
-        for p in critical_points:
-            if var_lb <= p <= var_ub:
-                points_to_check.append(p)
+        critical_points = cls._solve_for_f_prime_equals_m_in_interval(m, var_lb, var_ub)
+        points_to_check.extend(critical_points)
 
-        if not points_to_check:
-            return float(lsf.numpy_infinity()), -float(lsf.numpy_infinity())
-
-        deviations = [self._get_deviation(p, m, t) for p in points_to_check]
+        deviations = [cls.get_deviation(p, m, t) for p in points_to_check]
 
         return min(deviations), max(deviations)
 
@@ -134,9 +135,12 @@ class SquareExpression(OneDimExpression):
     def f_derivative(cls, x: float) -> float:
         return 2 * x
 
-    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+    @classmethod
+    def _solve_for_f_prime_equals_m_in_interval(
+        cls, m: float, lb: float, ub: float
+    ) -> List[float]:
         # f'(x) = 2x.  2x = m => x = m/2
-        return [m / 2.0]
+        return [p for p in [m / 2.0] if lb <= p <= ub]
 
 
 class ExponentialExpression(OneDimExpression):
@@ -165,10 +169,13 @@ class ExponentialExpression(OneDimExpression):
         except OverflowError:
             return s.StaticSettings.infinity
 
-    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+    @classmethod
+    def _solve_for_f_prime_equals_m_in_interval(
+        cls, m: float, lb: float, ub: float
+    ) -> List[float]:
         # f'(x) = e^x. e^x = m => x = ln(m). Requires m > 0.
         if m > 0:
-            return [math.log(m)]
+            return [p for p in [math.log(m)] if lb <= p <= ub]
         return []
 
 
@@ -194,10 +201,13 @@ class LnExpression(OneDimExpression):
     def f_derivative(cls, x: float) -> float:
         return 1 / x
 
-    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+    @classmethod
+    def _solve_for_f_prime_equals_m_in_interval(
+        cls, m: float, lb: float, ub: float
+    ) -> List[float]:
         # f'(x) = 1/x. 1/x = m => x = 1/m. Requires m != 0.
         if m != 0:
-            return [1.0 / m]
+            return [p for p in [1.0 / m] if lb <= p <= ub]
         return []
 
 
@@ -223,10 +233,13 @@ class SquareRootExpression(OneDimExpression):
     def f_derivative(cls, x: float) -> float:
         return 0 if x == 0 else 1 / (2 * math.sqrt(x))
 
-    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+    @classmethod
+    def _solve_for_f_prime_equals_m_in_interval(
+        cls, m: float, lb: float, ub: float
+    ) -> List[float]:
         # f'(x) = 1/(2*sqrt(x)). 1/(2*sqrt(x)) = m => x = (1/(2m))^2. Requires m > 0.
         if m > 0:
-            return [(0.5 / m) ** 2]
+            return [p for p in [(0.5 / m) ** 2] if lb <= p <= ub]
         return []
 
 
@@ -250,7 +263,10 @@ class SineExpression(OneDimExpression):
     def f_derivative(cls, x: float) -> float:
         return math.cos(x)
 
-    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+    @classmethod
+    def _solve_for_f_prime_equals_m_in_interval(
+        cls, m: float, lb: float, ub: float
+    ) -> List[float]:
         # f'(x) = cos(x). cos(x) = m. Requires |m| <= 1.
         if not -1.0 <= m <= 1.0:
             return []
@@ -259,7 +275,7 @@ class SineExpression(OneDimExpression):
         x0 = math.acos(m)  # Principal value in [0, pi]
 
         # General solutions are 2*k*pi +/- x0. Find all in variable's bounds.
-        var_lb, var_ub = self.variable.lb, self.variable.ub
+        var_lb, var_ub = lb, ub
 
         # Type 1 solutions: 2*k*pi + x0
         k_min = (var_lb - x0) / (2 * math.pi)
@@ -274,7 +290,7 @@ class SineExpression(OneDimExpression):
             for k in range(math.ceil(k_min), math.floor(k_max) + 1):
                 solutions.append(2 * k * math.pi - x0)
 
-        return list(set(solutions))
+        return [p for p in set(solutions) if lb <= p <= ub]
 
 
 class CosineExpression(OneDimExpression):
@@ -297,7 +313,10 @@ class CosineExpression(OneDimExpression):
     def f_derivative(cls, x: float) -> float:
         return -math.sin(x)
 
-    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+    @classmethod
+    def _solve_for_f_prime_equals_m_in_interval(
+        cls, m: float, lb: float, ub: float
+    ) -> List[float]:
         # f'(x) = -sin(x). -sin(x) = m => sin(x) = -m. Requires |m| <= 1.
         m_prime = -m
         if not -1.0 <= m_prime <= 1.0:
@@ -307,7 +326,7 @@ class CosineExpression(OneDimExpression):
         x0 = math.asin(m_prime)  # Principal value in [-pi/2, pi/2]
 
         # General solutions for sin(x)=y are 2k*pi+x0 and (2k+1)*pi-x0
-        var_lb, var_ub = self.variable.lb, self.variable.ub
+        var_lb, var_ub = lb, ub
 
         # Type 1: 2*k*pi + x0
         k_min = (var_lb - x0) / (2 * math.pi)
@@ -322,7 +341,7 @@ class CosineExpression(OneDimExpression):
         for k in range(math.ceil(k_min), math.floor(k_max) + 1):
             solutions.append(2 * k * math.pi + pi_minus_x0)
 
-        return list(set(solutions))
+        return [p for p in set(solutions) if lb <= p <= ub]
 
 
 class LogExpression(OneDimExpression):
@@ -347,10 +366,13 @@ class LogExpression(OneDimExpression):
     def f_derivative(cls, x: float) -> float:
         return 1 / (x * math.log(10))
 
-    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+    @classmethod
+    def _solve_for_f_prime_equals_m_in_interval(
+        cls, m: float, lb: float, ub: float
+    ) -> List[float]:
         # f'(x) = 1/(x*ln(10)). 1/(x*ln(10)) = m => x = 1/(m*ln(10)).
         if m != 0:
-            return [1.0 / (m * math.log(10))]
+            return [p for p in [1.0 / (m * math.log(10))] if lb <= p <= ub]
         return []
 
 
@@ -426,8 +448,9 @@ class AbsExpression(OneDimExpression):
     def f_derivative(cls, x: float) -> float:
         return 1.0 if x > 0 else -1.0 if x < 0 else 0.0
 
+    @classmethod
     def get_min_max_deviation(
-        self, var_lb: float, var_ub: float, m: float, t: float
+        cls, var_lb: float, var_ub: float, m: float, t: float
     ) -> Tuple[float, float]:
         """
         Specialized calculation for |x| - m*x - t.
@@ -441,7 +464,10 @@ class AbsExpression(OneDimExpression):
         deviations = [abs(p) - m * p - t for p in points_to_check]
         return min(deviations), max(deviations)
 
-    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+    @classmethod
+    def _solve_for_f_prime_equals_m_in_interval(
+        cls, m: float, lb: float, ub: float
+    ) -> List[float]:
         return []
 
 
@@ -465,7 +491,10 @@ class TangensHExpression(OneDimExpression):
     def f_derivative(cls, x: float) -> float:
         return 1 - math.tanh(x) ** 2
 
-    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+    @classmethod
+    def _solve_for_f_prime_equals_m_in_interval(
+        cls, m: float, lb: float, ub: float
+    ) -> List[float]:
         # f'(x) = 1 - tanh^2(x). 1 - tanh^2(x) = m => tanh^2(x) = 1 - m.
         # f'(x) is in (0, 1], so m must be in (0, 1].
         if not 0.0 < m <= 1.0:
@@ -477,7 +506,7 @@ class TangensHExpression(OneDimExpression):
         # x = atanh(y) = 0.5 * log((1+y)/(1-y))
         sol1 = math.atanh(val)
         sol2 = -sol1  # atanh is an odd function
-        return [sol1, sol2]
+        return [p for p in [sol1, sol2] if lb <= p <= ub]
 
 
 class InverseExpression(OneDimExpression):
@@ -502,12 +531,15 @@ class InverseExpression(OneDimExpression):
     def f_derivative(cls, x: float) -> float:
         return -1.0 / (x**2)
 
-    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+    @classmethod
+    def _solve_for_f_prime_equals_m_in_interval(
+        cls, m: float, lb: float, ub: float
+    ) -> List[float]:
         # f'(x) = -1/x^2. -1/x^2 = m => x^2 = -1/m. Requires m < 0.
         if m >= 0:
             return []
         val = math.sqrt(-1.0 / m)
-        return [val, -val]
+        return [p for p in [val, -val] if lb <= p <= ub]
 
 
 class PowerExpression(OneDimExpression):
@@ -578,7 +610,9 @@ class PowerExpression(OneDimExpression):
         except OverflowError:
             return s.StaticSettings.infinity
 
-    def _solve_for_f_prime_equals_m(self, m: float) -> List[float]:
+    def _solve_for_f_prime_equals_m_in_interval(  # pylint: disable=arguments-differ
+        self, m: float, lb: float, ub: float
+    ) -> List[float]:
         """
         Solves f'(x) = m for x, i.e., y * x^(y-1) = m.
         """
@@ -606,4 +640,4 @@ class PowerExpression(OneDimExpression):
         ):
             if x_sol != 0:
                 solutions.append(-x_sol)
-        return list(set(solutions))
+        return [p for p in set(solutions) if lb <= p <= ub]
