@@ -26,7 +26,7 @@ class BreakpointAdaptive:
             refinement_intervals = self._find_refinement_intervals()
 
     def _find_refinement_intervals(self) -> set[int]:
-        refinement_intervals = []
+        refinement_intervals = set()
         for expression in self.variable.occurring_in.values():
             for i, bp in enumerate(self.breakpoints[:-1]):
                 slope, intercept = (
@@ -41,8 +41,8 @@ class BreakpointAdaptive:
                     abs(min_deviation) > self.settings.relaxation_tolerance
                     or abs(max_deviation) > self.settings.relaxation_tolerance
                 ):
-                    refinement_intervals.append(i)
-        return set(refinement_intervals)
+                    refinement_intervals.add(i)
+        return refinement_intervals
 
     def _refine_intervals(self, refinement_intervals: set[int]) -> None:
         new_breakpoints = []

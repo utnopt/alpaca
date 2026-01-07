@@ -107,9 +107,6 @@ class OneDimExpression(exn.Expression):
         critical_points = cls._solve_for_f_prime_equals_m_in_interval(m, var_lb, var_ub)
         points_to_check.extend(critical_points)
 
-        if not points_to_check:
-            return float(lsf.numpy_infinity()), -float(lsf.numpy_infinity())
-
         deviations = [cls.get_deviation(p, m, t) for p in points_to_check]
 
         return min(deviations), max(deviations)
