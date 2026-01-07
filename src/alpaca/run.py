@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=duplicate-code
 """
 @authors: kuen,
 """
@@ -33,6 +34,8 @@ def run_optimization():
         user_settings.save_to_json()
 
         model_data = mda.ModelData(user_settings)
+        model_data.read_model_from_osil_data()
+        model_data.build_pwl_relaxation_model()
 
         if user_settings.feature_stair_locatelli:
             slo.StairLocatelli(model_data)

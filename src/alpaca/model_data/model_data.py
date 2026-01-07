@@ -48,7 +48,6 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         }
         self.constraints: dict[str, con.LinearConstraint] = {}
         self.expressions = eco.ExpressionContainer()
-        self._build_model_from_osil_data()
 
     def add_constraint(self, constraint: con.LinearConstraint) -> con.LinearConstraint:
         """Add a constraint to the model.
@@ -284,33 +283,22 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         self.expressions.linear_expressions[name] = linear_expression
         return linear_expression
 
-    def _build_model_from_osil_data(self) -> None:
-        """Create a complete model from an OSiL data file.
-
-        This method orchestrates the entire process of reading an OSiL file,
-        building variables, constraints, and expressions, propagating bounds,
-        and preparing the model for optimization using dedicated handler classes.
-        """
-
-        # Step 1: Read OSiL file and build the basic model structure.
-        # This includes variables, objective, constraints, and all expressions.
+    def read_model_from_osil_data(self) -> None:
+        """Reads and builds the model from OSiL data."""
         osr.OsilReader(self).build_from_osil()
-
-        # Step 3: Decompose complex nonlinear expression trees.
         etr.ExpressionTree(self).decompose()
 
-        # Step 4: Handle multilinear and bilinear terms based on settings.
+    def build_pwl_relaxation_model(self) -> None:
+        """Builds the piecewise linear relaxation model."""
         multilinear_handler = mlh.MultilinearHandler(self)
         multilinear_handler.handle()
 
-        # Step 5: Propagate variable bounds through the expression structures.
         bound_propagator = bpr.BoundPropagator(self)
         bound_propagator.propagate_bounds()
         if self.settings.bound_propagation == 1:
             self._translate_linear_expressions_to_constraints()
             bound_propagator.apply_obbt()
 
-        # Step 6: Add McCormick envelopes for bilinear terms if specified.
         if self.settings.bilinear_handling == 0:
             multilinear_handler.add_mccormick_envelopes()
 
@@ -318,13 +306,10 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             self._translate_linear_expressions_to_constraints()
             return
 
-        # Step 7: Discretize variables that are part of nonlinear terms.
         dis.BreakpointGenerator(self).generate_breakpoints()
 
-        # Step 8: Apply piecewise relaxations for remaining nonlinear expressions.
         pwh.PWLHandler(self).apply_relaxations()
 
-        # Step 9: Convert any remaining linear expression objects into standard constraints.
         self._translate_linear_expressions_to_constraints()
 
     def _translate_linear_expressions_to_constraints(

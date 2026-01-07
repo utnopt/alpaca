@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=duplicate-code
 """
 @authors: kuen,
 """
-import unittest
+import pytest
 
 import alpaca.model_data.model_data as mda
 from alpaca.external_solvers import mip_model as mm
@@ -13,77 +12,33 @@ import alpaca.mpip.separation.mpip_separationhandler as msh
 import alpaca.settings as s
 
 
-class TestModelData(unittest.TestCase):
-    """Unit test for the model data buildup."""
+def run_model_test(instance_name, approximation, reformulate_multilinear):
+    """Helper method to test model creation for a given instance."""
+    config_dict = {
+        "osil_file_name": instance_name,
+        "approximation": approximation,
+        "reformulate_multilinear": reformulate_multilinear,
+    }
+    user_settings = s.UserSettings(config_dict)
 
-    def setUp(self):
-        """Common setup for all test methods."""
+    model_data = mda.ModelData(user_settings)
+    model_data.read_model_from_osil_data()
+    model_data.build_pwl_relaxation_model()
 
-    @staticmethod
-    def _run_model_test(instance_name, approximation, reformulate_multilinear):
-        """Helper method to test model creation for a given instance."""
-        config_dict = {
-            "osil_file_name": instance_name,
-            "approximation": approximation,
-            "reformulate_multilinear": reformulate_multilinear,
-        }
-        user_settings = s.UserSettings(config_dict)
-
-        model_data = mda.ModelData(user_settings)
-
-        external_solver = mm.MIPModel(model_data, nonlinear=False)
-        solver = slv.Solver(external_solver)
-        mpip_handler = mph.MPIPHandler(model_data)
-        mpip_separation_handler = msh.MPIPSeparationHandler(
-            mpip_handler, external_solver.opt_model
-        )
-        solver.mpip_separation_handler = mpip_separation_handler
-
-    def test_alkyl_model_data_creation(self):
-        """Test model data creation for alkyl instance."""
-        for approx in [0, 1]:
-            for reformulate in [0, 1]:
-                with self.subTest(
-                    approximation=approx, reformulate_multilinear=reformulate
-                ):
-                    self._run_model_test("alkyl", approx, reformulate)
-
-    def test_least_model_data_creation(self):
-        """Test model data creation for least instance."""
-        for approx in [0, 1]:
-            for reformulate in [0, 1]:
-                with self.subTest(
-                    approximation=approx, reformulate_multilinear=reformulate
-                ):
-                    self._run_model_test("least", approx, reformulate)
-
-    def test_chance_model_data_creation(self):
-        """Test model data creation for chance instance."""
-        for approx in [0, 1]:
-            for reformulate in [0, 1]:
-                with self.subTest(
-                    approximation=approx, reformulate_multilinear=reformulate
-                ):
-                    self._run_model_test("chance", approx, reformulate)
-
-    def test_chem_model_data_creation(self):
-        """Test model data creation for chem instance."""
-        for approx in [0, 1]:
-            for reformulate in [0, 1]:
-                with self.subTest(
-                    approximation=approx, reformulate_multilinear=reformulate
-                ):
-                    self._run_model_test("chem", approx, reformulate)
-
-    def test_st_glmp_kk92_model_data_creation(self):
-        """Test model data creation for st_glmp_kk92 instance."""
-        for approx in [0, 1]:
-            for reformulate in [0, 1]:
-                with self.subTest(
-                    approximation=approx, reformulate_multilinear=reformulate
-                ):
-                    self._run_model_test("st_glmp_kk92", approx, reformulate)
+    external_solver = mm.MIPModel(model_data, nonlinear=False)
+    solver = slv.Solver(external_solver)
+    mpip_handler = mph.MPIPHandler(model_data)
+    mpip_separation_handler = msh.MPIPSeparationHandler(
+        mpip_handler, external_solver.opt_model
+    )
+    solver.mpip_separation_handler = mpip_separation_handler
 
 
-if __name__ == "__main__":
-    unittest.main()
+@pytest.mark.parametrize(
+    "instance_name", ["alkyl", "least", "chance", "chem", "st_glmp_kk92"]
+)
+@pytest.mark.parametrize("approximation", [0, 1])
+@pytest.mark.parametrize("reformulate_multilinear", [0, 1])
+def test_model_data(instance_name, approximation, reformulate_multilinear):
+    """Test model data creation for various instances and configurations."""
+    run_model_test(instance_name, approximation, reformulate_multilinear)
