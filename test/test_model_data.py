@@ -2,6 +2,7 @@
 """
 @authors: kuen,
 """
+import pathlib
 import pytest
 
 import alpaca.model_data.model_data as mda
@@ -14,16 +15,18 @@ import alpaca.settings as s
 
 def run_model_test(instance_name, approximation, reformulate_multilinear):
     """Helper method to test model creation for a given instance."""
-    test_instances_path = "test_instances/"
+    base_dir = pathlib.Path(__file__).parent
+    file_path = str(base_dir / "test_instances" / f"{instance_name}.osil")
     config_dict = {
         "osil_file_name": instance_name,
         "approximation": approximation,
         "reformulate_multilinear": reformulate_multilinear,
+        "allow_infinite_bounds": 1,
     }
     user_settings = s.UserSettings(config_dict)
 
     model_data = mda.ModelData(user_settings)
-    model_data.read_model_from_osil_data(test_instances_path + instance_name + ".osil")
+    model_data.read_model_from_osil_data(file_path)
     model_data.build_pwl_relaxation_model()
 
     external_solver = mm.MIPModel(model_data, nonlinear=False)
