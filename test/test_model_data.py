@@ -14,6 +14,7 @@ import alpaca.settings as s
 
 def run_model_test(instance_name, approximation, reformulate_multilinear):
     """Helper method to test model creation for a given instance."""
+    test_instances_path = "test_instances/"
     config_dict = {
         "osil_file_name": instance_name,
         "approximation": approximation,
@@ -22,7 +23,7 @@ def run_model_test(instance_name, approximation, reformulate_multilinear):
     user_settings = s.UserSettings(config_dict)
 
     model_data = mda.ModelData(user_settings)
-    model_data.read_model_from_osil_data()
+    model_data.read_model_from_osil_data(test_instances_path + instance_name + ".osil")
     model_data.build_pwl_relaxation_model()
 
     external_solver = mm.MIPModel(model_data, nonlinear=False)

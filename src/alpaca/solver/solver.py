@@ -43,6 +43,8 @@ class Solver:
             self._attach_event_handlers_gurobi()
 
     def _activate_mpip_features(self):
+        if not self.mpip_separation_handler.mpip_handler.mpip_dict:
+            return
         if self.settings.feature_mpip_mccormick:
             if self.settings.pwl_method == lsf.pwl_method_none():
                 logger.warning(lsf.warning_mpip_features_disabled_for_pwl_method_none())

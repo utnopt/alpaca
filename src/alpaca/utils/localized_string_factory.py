@@ -256,6 +256,10 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return f"Nonlinearity '{nonlinearity_type}' not implemented."
 
     @classmethod
+    def error_infinite_bounds_discretized_var(cls, variable_name: str) -> str:
+        return f"Variable {variable_name} is discretized but has infinite bounds."
+
+    @classmethod
     def warning_expression_type_not_supported(cls, expr_type: str) -> str:
         return f"Expression type '{expr_type}' is not supported."
 

@@ -2,7 +2,7 @@
 """
 @authors: kuen,
 """
-from alpaca.settings import UserSettings
+from alpaca.settings import UserSettings, StaticSettings
 from alpaca.model_data import (
     variable as var,
     constraint as con,
@@ -283,9 +283,9 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         self.expressions.linear_expressions[name] = linear_expression
         return linear_expression
 
-    def read_model_from_osil_data(self) -> None:
+    def read_model_from_osil_data(self, path: str) -> None:
         """Reads and builds the model from OSiL data."""
-        osr.OsilReader(self).build_from_osil()
+        osr.OsilReader(self, path).build_from_osil()
         etr.ExpressionTree(self).decompose()
 
     def build_pwl_relaxation_model(self) -> None:
@@ -299,6 +299,9 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             self._translate_linear_expressions_to_constraints()
             bound_propagator.apply_obbt()
 
+        if not self.settings.allow_infinite_bounds:
+            self._check_infinite_bounds()
+
         if self.settings.bilinear_handling == 0:
             multilinear_handler.add_mccormick_envelopes()
 
@@ -311,6 +314,17 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         pwh.PWLHandler(self).apply_relaxations()
 
         self._translate_linear_expressions_to_constraints()
+
+    def _check_infinite_bounds(self) -> None:
+        for variable in self.variables.values():
+            if variable.is_discretized:
+                if (
+                    variable.lb == -StaticSettings.infinity
+                    or variable.ub == StaticSettings.infinity
+                ):
+                    raise ValueError(
+                        lsf.error_infinite_bounds_discretized_var(variable.name)
+                    )
 
     def _translate_linear_expressions_to_constraints(
         self,

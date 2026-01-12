@@ -3,16 +3,15 @@
 @authors: kuen,
 """
 import logging
-from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
-import os
+from logging.handlers import RotatingFileHandler
+import json
 import pathlib
 
-from alpaca.settings import StaticSettings, UserSettings
 from alpaca.utils.logger import logger
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
-def config_console_logger(log_level=logging.INFO):
+def config_console_logger(log_level):
     """
     function that configures a logger:
     ->for the console
@@ -23,20 +22,12 @@ def config_console_logger(log_level=logging.INFO):
     )
 
 
-def config_file_logger(
-    settings: UserSettings,
-    log_folder_name: str = None,  # overwrite for scenario based logging
-    log_file_name: str = None,
-):
+def config_file_logger(path: str, level: str = "INFO"):
     """
     function that configures a logger:
     ->for a log-file
     """
-    if log_folder_name is None:
-        log_folder_name = settings.export_path
-    if log_file_name is None:
-        log_file_name = StaticSettings.project_name + ".log"
-
+    log_file_path = pathlib.Path(path)
     for hdlr in logger.handlers:
         # remove previous file handler (in case we run multiple scenario files)
         if issubclass(type(hdlr), logging.FileHandler):
@@ -54,27 +45,15 @@ def config_file_logger(
                     )
                 )
 
-    # Create folder if it doesn't exists:
-    if not os.path.exists(log_folder_name):
-        os.makedirs(log_folder_name, exist_ok=True)
+    log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if StaticSettings.log_rotation_type.lower() == lsf.log_rotation_type_size():
-        handler = RotatingFileHandler(
-            log_folder_name + log_file_name,
-            maxBytes=5 * 1024 * 1024,  # store up 5 MB per file
-            backupCount=5,  # keep up to 5 files
-        )
-    elif StaticSettings.log_rotation_type.lower() == lsf.log_rotation_type_time():
-        handler = TimedRotatingFileHandler(
-            log_folder_name + log_file_name,
-            when="midnight",  # you can also use 'W0' for rotating each Monday
-            interval=1,
-            backupCount=30,  # keep for 30 days
-        )
-    else:  # ordinary file handler
-        handler = logging.FileHandler(log_folder_name + log_file_name, "a")
+    handler = RotatingFileHandler(
+        log_file_path,
+        maxBytes=5 * 1024 * 1024,  # store up 5 MB per file
+        backupCount=5,  # keep up to 5 files
+    )
 
-    handler.setLevel(StaticSettings.log_file_level)
+    handler.setLevel(level)
     handler.setFormatter(
         logging.Formatter("%(asctime)s - %(levelname)-8s:   %(message)s")
     )
@@ -100,3 +79,13 @@ def create_folder_if_not_exists(path: str):
     if path.exists() and not path.is_dir():
         raise FileExistsError(lsf.error_path_exists(path.as_posix()))
     path.mkdir(parents=True, exist_ok=True)
+
+
+def read_config_file(path: str) -> dict:
+    """Read config data file to dictionary."""
+    with open(
+        path,
+        lsf.file_mode_read(),
+        encoding=lsf.file_encoding_utf8(),
+    ) as file:
+        return json.load(file)

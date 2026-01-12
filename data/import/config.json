@@ -1,5 +1,4 @@
 {
-      "osil_file_name": "kriging_peaks-red020",
       "number_of_breakpoints": 4,
       "pwl_method": "multiple_choice",
       "feature/mpip/separation": 0,
@@ -11,7 +10,7 @@
       "solver_time_limit": 2000,
       "reformulate_multilinear_to_bilinear": 1,
       "bilinear_handling": 1,
-      "breakpoint_generation": 2,
+      "breakpoint_generation": 0,
       "feature/nnbp/time_limit": 3600,
       "bound_propagation": 0,
       "bound_propagation_time_limit": 3600

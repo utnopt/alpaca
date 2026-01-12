@@ -3,9 +3,6 @@
 @authors: kuen,
 """
 import json
-import logging
-import os
-import time
 
 from alpaca.utils.logger import logger
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
@@ -17,19 +14,6 @@ class StaticSettings:
     """
 
     project_name = lsf.project_name()
-    # ===== Paths to (static) input files =====
-    base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    data_path = base_path + "/data/"
-    import_path = data_path + "/import/"
-    export_path = data_path + "/export/"
-    instances_path = import_path + "/instances/"
-    test_files_path = import_path + "/test_instances/"
-    config_file_path = import_path + "config.json"
-
-    # ===== Logging settings ====
-    log_console_level = logging.DEBUG
-    log_file_level = logging.INFO
-    log_rotation_type = "size"  # use "size", "time" or "none"
 
     # ===== Data settings =====
     infinity = 1e6
@@ -67,16 +51,12 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.bound_propagation_obbt_time_limit = int(
             config_dict.get("bound_propagation_obbt_time_limit", 300)
         )
+        self.allow_infinite_bounds = int(config_dict.get("allow_infinite_bounds", 0))
         self.feature_stair_locatelli_obbt_time_limit = int(
             config_dict.get("feature/stair_locatelli/obbt_time_limit", 1800)
         )
         self.feature_stair_locatelli_evaluation_grid_size = int(
             config_dict.get("feature/stair_locatelli/evaluation_grid_size", 100)
-        )
-        self.export_path = (
-            StaticSettings.base_path
-            + f"/data/export/{time.strftime('%Y-%m-%d_%H-%M-%S')}_"
-            f"Result_{StaticSettings.project_name}/"
         )
         self.reformulate_multilinear_to_bilinear = int(
             config_dict.get("reformulate_multilinear_to_bilinear", 1)
@@ -136,11 +116,18 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             config_dict.get("feature/stair_locatelli/grid_size", 10)
         )  # grid size for stair locatelli
 
-    def save_to_json(self):
+    def update_from_other(self, other_settings):
+        """
+        Function that updates the self-object with another settings object
+        """
+        for key, value in other_settings.__dict__.items():
+            setattr(self, key, value)
+
+    def save_to_json(self, out_path: str):
         """
         Function that saves the self-object as a dict to json
         """
         logger.info(lsf.info_save_settings_json())
         json_data = self.__dict__
-        with open(self.export_path + "config.json", "w", encoding="utf8") as json_file:
+        with open(out_path + "config.json", "w", encoding="utf8") as json_file:
             json.dump(json_data, json_file, indent=4)

@@ -23,12 +23,10 @@ class Visualizer:
         self.user_settings = user_settings
         self.results_df: pd.DataFrame | None = None
 
-    def plot_blocks(self, mpip_handler: mph.MPIPHandler):
+    def plot_blocks(self, mpip_handler: mph.MPIPHandler, out_path: str):
         """Plots block structures for MPIP structures with 2 implying variables using TikZ."""
         logger.info(lsf.study_mpip_info_plot_blocks())
-        out_path = (
-            self.user_settings.export_path + lsf.study_mpip_export_folder_blocks()
-        )
+        out_path = out_path + lsf.study_mpip_export_folder_blocks()
         os.makedirs(out_path, exist_ok=True)
         for mpip in mpip_handler.mpip_dict.values():
             if len(mpip.implying_variables) != 2:
@@ -152,16 +150,13 @@ class Visualizer:
         with open(file_path, "w", encoding="utf-8") as f:
             f.write("\n".join(latex_content))
 
-    def create_performance_plots(self, results_csv: str):
+    def create_performance_plots(self, results_csv: str, out_path: str):
         """
         Creates performance plots (TikZ) from the CSV results.
         """
         logger.info(lsf.study_mpip_info_plot_performance())
-        input_csv = s.StaticSettings.import_path + results_csv
-        out_path = (
-            self.user_settings.export_path + lsf.study_mpip_export_folder_performance()
-        )
-        self._load_and_prep_data(input_csv)
+        out_path = out_path + lsf.study_mpip_export_folder_performance()
+        self._load_and_prep_data(results_csv)
 
         if self.results_df is not None:
 
@@ -179,15 +174,12 @@ class Visualizer:
                 out_path + to_tex(lsf.study_mpip_solved_instances_plot_name())
             )
 
-    def create_latex_tables(self, results_csv: str):
+    def create_latex_tables(self, results_csv: str, out_path: str):
         """
         Creates LaTeX tables from the CSV results."""
         logger.info(lsf.study_mpip_info_plot_performance())
-        input_csv = s.StaticSettings.import_path + results_csv
-        out_path = (
-            self.user_settings.export_path + lsf.study_mpip_export_folder_latex_tables()
-        )
-        self._load_and_prep_data(input_csv)
+        out_path = out_path + lsf.study_mpip_export_folder_latex_tables()
+        self._load_and_prep_data(results_csv)
         if self.results_df is not None:
             self._generate_latex_table_runtime(
                 out_path + lsf.study_mpip_runtime_table_name()
@@ -519,20 +511,18 @@ class Visualizer:
 
 
 if __name__ == "__main__":
-    from alpaca.utils import inout as ut_io
-
-    ut_io.config_console_logger()
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     u_settings = s.UserSettings({})
     visualizer = Visualizer(u_settings)
+    EXPORT_PATH = "../data/export/"
     os.makedirs(
-        u_settings.export_path + lsf.study_mpip_export_folder_performance(),
+        EXPORT_PATH + lsf.study_mpip_export_folder_performance(),
         exist_ok=True,
     )
     os.makedirs(
-        u_settings.export_path + lsf.study_mpip_export_folder_latex_tables(),
+        EXPORT_PATH + lsf.study_mpip_export_folder_latex_tables(),
         exist_ok=True,
     )
-    RESULTS_FILE = "mpip_results_2025-12-20_13-16-54.csv"
-    visualizer.create_latex_tables(RESULTS_FILE)
-    visualizer.create_performance_plots(RESULTS_FILE)
+    RESULTS_FILE = "../data/import/mpip_results_2025-12-20_13-16-54.csv"
+    visualizer.create_latex_tables(RESULTS_FILE, EXPORT_PATH)
+    visualizer.create_performance_plots(RESULTS_FILE, EXPORT_PATH)

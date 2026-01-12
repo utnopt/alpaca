@@ -49,7 +49,7 @@ class StairLocatelli:
 
         logger.info(lsf.info_total_stair_locatelli_cuts_added(total_cuts))
 
-    def calculate_mean_bilinear_relaxation_volume_and_max_diff_improvement(self):
+    def calculate_metrics(self):
         """Calculate metrics for the improvement provided by these cuts."""
         total_volume_imp = 0.0
         total_diff_imp = 0.0
