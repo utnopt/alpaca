@@ -21,7 +21,8 @@ class Solver:
     def solve_instance(self):
         """Solve instance."""
         logger.info(lsf.info_init_solver())
-        self._activate_mpip_features()
+        if self.settings.feature_mpip:
+            self._activate_mpip_features()
         self._attach_event_handlers()
         start_time = time.time()
         self.external_solver.opt_model.optimize(self.gurobi_callback_function)
