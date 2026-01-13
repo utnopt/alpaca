@@ -116,7 +116,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             config_dict.get("feature/stair_locatelli/grid_size", 10)
         )  # grid size for stair locatelli
 
-    def update_from_other(self, other_settings):
+    def update_from_other(self, other_settings: "UserSettings") -> None:
         """
         Function that updates the self-object with another settings object
         """

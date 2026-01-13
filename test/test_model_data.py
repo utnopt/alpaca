@@ -18,7 +18,6 @@ def run_model_test(instance_name, approximation, reformulate_multilinear):
     base_dir = pathlib.Path(__file__).parent
     file_path = str(base_dir / "test_instances" / f"{instance_name}.osil")
     config_dict = {
-        "osil_file_name": instance_name,
         "approximation": approximation,
         "reformulate_multilinear": reformulate_multilinear,
         "allow_infinite_bounds": 1,

@@ -48,9 +48,11 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
         alpaca.customize_settings(config_dict)
         alpaca.build_pwl_relaxation_solver()
         alpaca.solver.external_solver.opt_model.hide_output()
-        mpip_handler = alpaca.solver.mpip_separation_handler.mpip_handler
-        if len(mpip_handler.mpip_dict) == 0 and alpaca.user_settings.feature_mpip:
-            raise ValueError("No MPIP structures found.")
+        mpip_handler = None
+        if alpaca.user_settings.feature_mpip:
+            mpip_handler = alpaca.solver.mpip_separation_handler.mpip_handler
+            if len(mpip_handler.mpip_dict) == 0:
+                raise ValueError("No MPIP structures found.")
         alpaca.solver.external_solver.opt_model.set_seed(int(args.seed_value))
         alpaca.solve()
         opt_model = alpaca.solver.external_solver.opt_model

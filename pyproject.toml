@@ -12,7 +12,7 @@ license = { text = "MIT" }
 
 authors = [
   { name = "Tobias Kuen" },
-    { name = "Robert Burlacu" }
+  { name = "Robert Burlacu" }
 ]
 
 dependencies = [

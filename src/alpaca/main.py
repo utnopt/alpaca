@@ -15,10 +15,27 @@ from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class Alpaca:
-    """Main Alpaca class."""
+    """The main entry point for the Alpaca optimization framework.
+
+    This class orchestrates the loading of model data, configuration of settings,
+    construction of the piecewise linear (PWL) relaxation solver, and the
+    execution of the optimization process.
+
+    Attributes:
+        user_settings (s.UserSettings): Configuration object for the solver behavior.
+        model_data (mda.ModelData): Data structure holding the optimization model.
+        stair_locatelli (slo.StairLocatelli | None): Handler for Stair-Locatelli features.
+        solver (slv.Solver | None): The initialized solver instance.
+        runtime (float | None): The duration of the last solve operation in seconds.
+    """
 
     def __init__(self, settings_path: str | None = None) -> None:
-        """Initializes the Alpaca class."""
+        """Initializes the Alpaca instance with optional external settings.
+
+        Args:
+            settings_path: Filesystem path to a configuration file (e.g., JSON/YAML).
+                If None, default settings are used.
+        """
         ut_io.config_console_logger("INFO")
         config_dict = (
             ut_io.read_config_file(settings_path) if settings_path is not None else {}
@@ -27,16 +44,26 @@ class Alpaca:
         self.model_data = mda.ModelData(self.user_settings)
         self.stair_locatelli: slo.StairLocatelli | None = None
         self.solver: slv.Solver | None = None
-        self.runtime: int | None = None
+        self.runtime: float | None = None
 
-    @staticmethod
-    def configure_logging(path: str, level: str = "INFO") -> None:
-        """Configures logging settings."""
+    @classmethod
+    def configure_logging(cls, path: str, level: str = "INFO") -> None:
+        """Configures global logging for both console and file output.
+
+        Args:
+            path: Path where the log file should be saved.
+            level: Logging threshold level (e.g., "DEBUG", "INFO", "WARNING").
+        """
         ut_io.config_console_logger(level)
         ut_io.config_file_logger(path, level)
 
     def customize_settings(self, settings_import: str | dict) -> None:
-        """Customizes settings from a given path."""
+        """Merges new settings into the current user configuration.
+
+        Args:
+            settings_import: Either a dictionary of settings or a path to a
+                configuration file to be parsed.
+        """
         if isinstance(settings_import, dict):
             new_settings = s.UserSettings(settings_import)
         else:
@@ -44,7 +71,13 @@ class Alpaca:
         self.user_settings.update_from_other(new_settings)
 
     def build_pwl_relaxation_solver(self) -> None:
-        """Builds the PWL relaxation solver."""
+        """Constructs the solver using a Piecewise Linear (PWL) relaxation model.
+
+        This method initializes the internal model data, configures Stair-Locatelli
+        heuristics if enabled, sets up the external MIP solver, and handles
+        MPIP (Mixed-Integer Programming Partitioning) separation logic based
+        on the user settings.
+        """
         self.model_data.build_pwl_relaxation_model()
 
         if self.user_settings.feature_stair_locatelli:
@@ -69,13 +102,33 @@ class Alpaca:
                 self.solver.mpip_separation_handler = mpip_separation_handler
 
     def solve(self):
-        """Solves the optimization problem."""
+        """Executes the optimization process for the built model.
+
+        Returns:
+            float: The runtime of the optimization instance.
+
+        Raises:
+            RuntimeError: If called before 'build_pwl_relaxation_solver'.
+        """
+        if self.solver is None:
+            raise RuntimeError(
+                "Solver is not initialized. "
+                "Call 'build_pwl_relaxation_solver' before calling 'solve'."
+            )
         self.runtime = self.solver.solve_instance()
         logger.info(lsf.info_optimization_finished(self.runtime))
+        return self.runtime
 
 
 def read_model_from_osil(path: str) -> Alpaca:
-    """Reads and parses a model from an OSIL file."""
+    """Creates an Alpaca instance and populates it with data from an OSIL file.
+
+    Args:
+        path: Filesystem path to the .osil file.
+
+    Returns:
+        Alpaca: An initialized instance with loaded model data.
+    """
     alp = Alpaca()
     alp.model_data.read_model_from_osil_data(path)
     return alp
