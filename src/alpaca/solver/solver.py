@@ -21,7 +21,8 @@ class Solver:
     def solve_instance(self):
         """Solve instance."""
         logger.info(lsf.info_init_solver())
-        self._activate_mpip_features()
+        if self.settings.feature_mpip:
+            self._activate_mpip_features()
         self._attach_event_handlers()
         start_time = time.time()
         self.external_solver.opt_model.optimize(self.gurobi_callback_function)
@@ -43,6 +44,8 @@ class Solver:
             self._attach_event_handlers_gurobi()
 
     def _activate_mpip_features(self):
+        if not self.mpip_separation_handler.mpip_handler.mpip_dict:
+            return
         if self.settings.feature_mpip_mccormick:
             if self.settings.pwl_method == lsf.pwl_method_none():
                 logger.warning(lsf.warning_mpip_features_disabled_for_pwl_method_none())
@@ -71,7 +74,9 @@ class Solver:
             if self.settings.pwl_method == lsf.pwl_method_none():
                 logger.warning(lsf.warning_mpip_features_disabled_for_pwl_method_none())
                 return
-            scip_mpip_separation = sw.ScipSeparation(self.mpip_separation_handler)
+            scip_mpip_separation = sw.ScipSeparation(  # pylint: disable=not-callable
+                self.mpip_separation_handler
+            )
             for mpip in self.mpip_separation_handler.mpip_handler.mpip_dict.values():
                 mpip.separator.separation_handler = scip_mpip_separation
             self.external_solver.opt_model.model.includeSepa(

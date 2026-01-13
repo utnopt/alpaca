@@ -3,23 +3,13 @@
 """
 @authors: kuen,
 """
-import logging
+import time
 import sys
 import os
 import argparse
-import signal
 
-import alpaca.model_data.model_data as mda
-from alpaca.external_solvers import mip_model as mm
-import alpaca.solver.solver as slv
-import alpaca.mpip.mpip_handler as mph
-import alpaca.mpip.separation.mpip_separationhandler as msh
-import alpaca.settings as s
-from alpaca.utils import inout as ut_io
+import alpaca as alp
 from alpaca.utils.logger import logger
-import alpaca.utils.error_handling as erh
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
-import studies.mpip.visualizer as vis  # pylint: disable=unused-import
 
 
 def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
@@ -31,20 +21,11 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
     """
     osil_full_path = args.file
     osil_file_name = "unknown"
-    original_instances_path = s.StaticSettings.instances_path
 
     try:
-        # Get the directory and filename from the full path
-        osil_dir = os.path.dirname(osil_full_path)
         osil_file_name_with_ext = os.path.basename(osil_full_path)
         osil_file_name = os.path.splitext(osil_file_name_with_ext)[0]
-
-        # Temporarily set the instance path to the directory of the current file
-        s.StaticSettings.instances_path = osil_dir + "/"
-
-        # Load base user settings from the default config file
         config_dict = {
-            "osil_file_name": osil_file_name,
             "number_of_breakpoints": args.breakpoints,
             "pwl_method": args.pwl_method,
             "feature/mpip/bar": int(args.test_case.lower() == "mpip"),
@@ -58,69 +39,35 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
             "feature/nnbp/time_limit": 3600,
             "bound_propagation": 0,
             "bound_propagation_time_limit": 3600,
+            "allow_infinite_bounds": 0,
         }
-        user_settings = s.UserSettings(config_dict)
-        ut_io.config_console_logger(log_level=logging.INFO)
-        ut_io.config_file_logger(user_settings)
-        user_settings.save_to_json()
-        if hasattr(signal, "SIGALRM"):
-            signal.signal(signal.SIGALRM, erh.timeout_handler)
-            signal.alarm(3600)
-        try:
-            model_data = mda.ModelData(user_settings)
-            model_data.read_model_from_osil_data()
-            model_data.build_pwl_relaxation_model()
-        finally:
-            # Disable the alarm once the operation is complete or has failed.
-            if hasattr(signal, "SIGALRM"):
-                signal.alarm(0)
-
-        for variable in model_data.variables.values():
-            if variable.is_discretized:
-                if (
-                    variable.lb == -s.StaticSettings.infinity
-                    or variable.ub == s.StaticSettings.infinity
-                ):
-                    raise ValueError(
-                        f"Variable {variable.name} is discretized but has infinite bounds."
-                    )
-
-        external_solver = mm.MIPModel(
-            model_data,
-            nonlinear=user_settings.pwl_method == lsf.pwl_method_none(),
-            bilinear=user_settings.bilinear_handling == 3,
+        alpaca = alp.read_model_from_osil(osil_full_path)
+        alpaca.configure_logging(
+            f"../../data/export/logs/{time.strftime('%Y%m%d-%H%M%S')}.log"
         )
-
-        external_solver.opt_model.hide_output()
-
-        solver = slv.Solver(external_solver)
-
-        if user_settings.feature_mpip:
-            mpip_handler = mph.MPIPHandler(model_data)
+        alpaca.customize_settings(config_dict)
+        alpaca.build_pwl_relaxation_solver()
+        alpaca.solver.external_solver.opt_model.hide_output()
+        mpip_handler = None
+        if alpaca.user_settings.feature_mpip:
+            mpip_handler = alpaca.solver.mpip_separation_handler.mpip_handler
             if len(mpip_handler.mpip_dict) == 0:
                 raise ValueError("No MPIP structures found.")
-            mpip_separation_handler = msh.MPIPSeparationHandler(
-                mpip_handler, external_solver.opt_model
-            )
-            solver.mpip_separation_handler = mpip_separation_handler
-        seed_value = int(args.seed_value)
-        solver.external_solver.opt_model.set_seed(seed_value)
-        runtime = solver.solve_instance()
-        # if user_settings.feature_mpip:
-        #     visualizer = vis.Visualizer(user_settings)
-        #     visualizer.plot_blocks(mpip_handler)
-        mip_gap = solver.external_solver.opt_model.get_mip_gap()
+        alpaca.solver.external_solver.opt_model.set_seed(int(args.seed_value))
+        alpaca.solve()
+        opt_model = alpaca.solver.external_solver.opt_model
+        mip_gap = opt_model.get_mip_gap()
         nr_cuts = (
             0
-            if not user_settings.feature_mpip
+            if not alpaca.user_settings.feature_mpip
             else sum(
                 mpip.separator.nr_of_cuts for mpip in mpip_handler.mpip_dict.values()
             )
         )
-        nr_applied_cuts = solver.external_solver.opt_model.get_nr_of_applied_cuts()
+        nr_applied_cuts = opt_model.get_nr_of_applied_cuts()
         mpip_ratio = (
             0
-            if not user_settings.feature_mpip
+            if not alpaca.user_settings.feature_mpip
             else round(
                 sum(
                     mpip.calculate_relation_ratio()
@@ -130,7 +77,14 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
                 3,
             )
         )
-        return osil_file_name, runtime, mip_gap, nr_cuts, nr_applied_cuts, mpip_ratio
+        return (
+            osil_file_name,
+            alpaca.runtime,
+            mip_gap,
+            nr_cuts,
+            nr_applied_cuts,
+            mpip_ratio,
+        )
 
     except Exception as ex:  # pylint: disable=broad-exception-caught
         # Log and print an error message if the optimization fails
@@ -138,10 +92,6 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
             "Error occurred while running optimization for %s: %s", osil_file_name, ex
         )
         return osil_file_name + "_ERROR", -1.0, -1.0, -1, -1, -1.0
-
-    finally:
-        # Restore the original instances path to avoid side effects
-        s.StaticSettings.instances_path = original_instances_path
 
 
 if __name__ == "__main__":

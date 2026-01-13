@@ -6,13 +6,9 @@ import os
 import sys
 import argparse
 import traceback
+import time
 
-import alpaca.model_data.model_data as mda
-from alpaca.external_solvers import mip_model as mm
-import alpaca.solver.solver as slv
-import alpaca.locatelli.stair_locatelli as slo
-import alpaca.settings as s
-from alpaca.utils import inout as ut_io
+import alpaca as alp
 from alpaca.utils.logger import logger
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
@@ -28,24 +24,15 @@ def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting)
     Returns:
         float or str: The objective bound value or 'ERROR' if it fails.
     """
-    original_instances_path = s.StaticSettings.instances_path
-    instance_dir = os.path.dirname(instance_full_path)
     instance_name = os.path.splitext(os.path.basename(instance_full_path))[0]
 
     try:
-        # Temporarily set the instance path to the directory of the current file
-        s.StaticSettings.instances_path = instance_dir + "/"
-
-        ut_io.config_console_logger()
-        logger.info(
-            "Testing instance: %s with stair_locatelli=%d",
-            instance_name,
-            stair_locatelli_setting,
+        alpaca = alp.read_model_from_osil(instance_full_path)
+        alpaca.configure_logging(
+            f"../../data/export/logs/{time.strftime('%Y%m%d-%H%M%S')}.log"
         )
-
         config_dict = {
             "solver_time_limit": 100,
-            "osil_file_name": instance_name,
             "external_solver": "gurobi",
             "reformulate_multilinear_to_bilinear": 1,
             "bilinear_handling": 0,
@@ -57,37 +44,25 @@ def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting)
             "bound_propagation": 1,
             "bound_propagation_time_limit": 3600,
             "feature/stair_locatelli/obbt_time_limit": 3600,
+            "allow_infinite_bounds": 1,
         }
+        alpaca.customize_settings(config_dict)
+        alpaca.build_pwl_relaxation_solver()
 
-        user_settings = s.UserSettings(config_dict)
-        ut_io.config_file_logger(user_settings)
-        user_settings.save_to_json()
-
-        model_data = mda.ModelData(user_settings)
-        model_data.read_model_from_osil_data()
-        model_data.build_pwl_relaxation_model()
         volume_improvement, max_diff_improvement = 0.0, 0.0
-        if user_settings.feature_stair_locatelli:
-            stair_locatelli = slo.StairLocatelli(model_data)
+        if alpaca.user_settings.feature_stair_locatelli:
             volume_improvement, max_diff_improvement = (
-                stair_locatelli.calculate_mean_bilinear_relaxation_volume_and_max_diff_improvement()
+                alpaca.stair_locatelli.calculate_metrics()
             )
+        opt_model = alpaca.solver.external_solver.opt_model
+        opt_model.model.setParam("NodeLimit", 0)
+        opt_model.model.setParam("Cuts", 0)
+        opt_model.hide_output()
+        alpaca.solve()
 
-        external_solver = mm.MIPModel(
-            model_data,
-            nonlinear=user_settings.pwl_method == lsf.pwl_method_none(),
-            bilinear=user_settings.bilinear_handling == 3,
-        )
-
-        external_solver.opt_model.model.setParam("NodeLimit", 0)
-        external_solver.opt_model.model.setParam("Cuts", 0)
-
-        solver = slv.Solver(external_solver)
-        runtime = solver.solve_instance()
-
-        logger.info(lsf.info_optimization_finished(runtime))
+        logger.info(lsf.info_optimization_finished(alpaca.runtime))
         return (
-            external_solver.opt_model.model.ObjBound,
+            opt_model.model.ObjBound,
             volume_improvement,
             max_diff_improvement,
         )
@@ -96,9 +71,6 @@ def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting)
         logger.error("Error running instance %s", instance_name)
         logger.error(traceback.format_exc())
         return "ERROR", "ERROR", "ERROR"
-    finally:
-        # Restore original path to avoid side effects
-        s.StaticSettings.instances_path = original_instances_path
 
 
 if __name__ == "__main__":
