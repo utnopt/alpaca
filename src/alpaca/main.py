@@ -46,8 +46,7 @@ class Alpaca:
         self.solver: slv.Solver | None = None
         self.runtime: float | None = None
 
-    @classmethod
-    def configure_logging(cls, path: str, level: str = "INFO") -> None:
+    def configure_logging(self, path: str, level: str = "INFO") -> None:
         """Configures global logging for both console and file output.
 
         Args:

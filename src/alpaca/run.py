@@ -10,7 +10,7 @@ import time
 import alpaca as alp
 
 IMPORT_PATH = "../../data/import/"
-LOGGING_PATH = "../../export/data/logs/"
+LOGGING_PATH = "../../data/export/logs/"
 CONFIG_FILE = IMPORT_PATH + "config.json"
 INSTANCES_PATH = IMPORT_PATH + "instances/"
 INSTANCE_FILE = INSTANCES_PATH + "alkyl.osil"

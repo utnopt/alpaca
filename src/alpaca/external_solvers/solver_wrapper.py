@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=protected-access, invalid-name,
-# pylint: disable=redefined-outer-name, global-statement, import-outside-toplevel,
+# pylint: disable=protected-access, invalid-name
+# pylint: disable=redefined-outer-name, global-statement, import-outside-toplevel
 # pylint: disable=too-many-public-methods, not-callable, unused-variable
 """
 @authors: kuen,
