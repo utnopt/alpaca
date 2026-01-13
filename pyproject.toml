@@ -7,7 +7,7 @@ name = "alpaca"
 version = "0.1.0"
 description = "ALPACA – Optimization tools for OSIL / SCIP-based models"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 license = { text = "MIT" }
 
 authors = [

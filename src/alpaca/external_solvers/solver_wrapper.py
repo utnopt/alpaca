@@ -1,16 +1,95 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=protected-access
+# pylint: disable=protected-access, invalid-name,
+# pylint: disable=redefined-outer-name, global-statement, import-outside-toplevel,
+# pylint: disable=too-many-public-methods, not-callable, unused-variable
 """
 @authors: kuen,
 """
-# pylint: disable=too-many-public-methods
-from typing import Any
-import gurobipy as gp
-from gurobipy import nlfunc
-import pyscipopt as scip
-from pyscipopt import SCIP_RESULT
+from typing import Any, TYPE_CHECKING
 
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+
+if TYPE_CHECKING:
+    import gurobipy as gp
+    import pyscipopt as scip
+else:
+    gp = None
+    scip = None
+    nlfunc = None
+    SCIP_RESULT = None
+
+# Initialize placeholders for classes that depend on solvers
+GurobiCut = None
+ScipSeparation = None
+
+
+def load_solver_backend(solver_name: str) -> None:
+    """
+    Imports the required solver library into the global scope based on the solver name.
+    Also defines solver-specific classes upon successful import.
+
+    Args:
+        solver_name: The name of the solver to load (e.g., "gurobi", "scip").
+    """
+    global gp, nlfunc, scip, SCIP_RESULT, GurobiCut, ScipSeparation
+
+    solver_name = solver_name.lower()
+
+    if solver_name == lsf.solver_name_gurobi():
+        if gp is None:
+            import gurobipy as gp_module
+            from gurobipy import nlfunc as nlfunc_module
+
+            gp = gp_module
+            nlfunc = nlfunc_module
+
+            # Define GurobiCut only when Gurobi is loaded
+            class GurobiCut:
+                """A class representing a cut in Gurobi."""
+
+                def __init__(  # pylint: disable=too-many-arguments, too-many-positional-arguments
+                    self,
+                    separation_handler: Any,
+                    name: str,
+                    lhs: "gp.LinExpr | None" = None,
+                    rhs: float | None = None,
+                    local=False,
+                ) -> None:
+                    self.separation_handler = separation_handler
+                    self.name = name
+                    self.lhs = lhs if lhs is not None else gp.LinExpr()
+                    self.rhs = rhs if rhs is not None else 0.0
+                    self.local = local
+
+                def __repr__(self):
+                    return (
+                        f"GurobiCut(name={self.name}, lhs={self.lhs}, rhs={self.rhs})"
+                    )
+
+    elif solver_name == lsf.solver_name_scip():
+        if scip is None:
+            import pyscipopt as scip_module
+            from pyscipopt import SCIP_RESULT as SCIP_RESULT_module
+
+            scip = scip_module
+            SCIP_RESULT = SCIP_RESULT_module
+
+            # Define ScipSeparation only when SCIP is loaded so it can inherit from scip.Sepa
+            class ScipSeparation(scip.Sepa):
+                """Wrapper for SCIP separation handler."""
+
+                def __init__(self, mpip_separation_handler: Any) -> None:
+                    self.mpip_separation_handler = mpip_separation_handler
+                    scip.Eventhdlr.__init__(mpip_separation_handler.opt_model.model)
+
+                def sepaexeclp(self):
+                    """Run callback event."""
+                    self.mpip_separation_handler.opt_model = self.model
+                    return (
+                        {lsf.scip_result_tag(): SCIP_RESULT.SEPARATED}
+                        if self.mpip_separation_handler.separate_solution()
+                        else {lsf.scip_result_tag(): SCIP_RESULT.DIDNOTFIND}
+                    )
 
 
 class SolverWrapper:
@@ -18,10 +97,14 @@ class SolverWrapper:
 
     def __init__(self, mip_solver: str):
         self.mip_solver = mip_solver.lower()
+
+        # Load the backend imports globally and define helper classes
+        load_solver_backend(self.mip_solver)
+
         if self.mip_solver == lsf.solver_name_gurobi():
-            self.model: gp.Model | scip.Model | scip.Eventhdlr = gp.Model()
+            self.model: "gp.Model | scip.Model | scip.Eventhdlr" = gp.Model()
         elif self.mip_solver == lsf.solver_name_scip():
-            self.model: gp.Model | scip.Model | scip.Eventhdlr = scip.Model()
+            self.model: "gp.Model | scip.Model | scip.Eventhdlr" = scip.Model()
         else:
             raise ValueError(
                 lsf.error_input_choice_invalid(
@@ -177,6 +260,11 @@ class SolverWrapper:
     ) -> Any:
         """Create a cut object."""
         if self.mip_solver == lsf.solver_name_gurobi():
+            # Ensure GurobiCut is loaded
+            if GurobiCut is None:
+                raise RuntimeError(
+                    "GurobiCut not loaded. Initialize with gurobi first."
+                )
             return GurobiCut(separation_handler, name, lhs=lhs, rhs=rhs, local=local)
         return self.model.createEmptyRowSepa(
             separation_handler,
@@ -275,46 +363,10 @@ class SolverWrapper:
         return self.model.getStatus() == lsf.scip_status_optimal()
 
 
-class GurobiCut:
-    """A class representing a cut in Gurobi."""
-
-    def __init__(  # pylint: disable=too-many-arguments, too-many-positional-arguments
-        self,
-        separation_handler: Any,
-        name: str,
-        lhs: gp.LinExpr | None = None,
-        rhs: float | None = None,
-        local=False,
-    ) -> None:
-        self.separation_handler = separation_handler
-        self.name = name
-        self.lhs = lhs if lhs is not None else gp.LinExpr()
-        self.rhs = rhs if rhs is not None else 0.0
-        self.local = local
-
-    def __repr__(self):
-        return f"GurobiCut(name={self.name}, lhs={self.lhs}, rhs={self.rhs})"
-
-
-class ScipSeparation(scip.Sepa):
-    """Wrapper for SCIP separation handler."""
-
-    def __init__(self, mpip_separation_handler: Any) -> None:
-        self.mpip_separation_handler = mpip_separation_handler
-        scip.Eventhdlr.__init__(mpip_separation_handler.opt_model.model)
-
-    def sepaexeclp(self):
-        """Run callback event."""
-        self.mpip_separation_handler.opt_model = self.model
-        return (
-            {lsf.scip_result_tag(): SCIP_RESULT.SEPARATED}
-            if self.mpip_separation_handler.separate_solution()
-            else {lsf.scip_result_tag(): SCIP_RESULT.DIDNOTFIND}
-        )
-
-
 def gurobi_separation_callback(grb_model, where):
     """Callback for mpip separation"""
+    if gp is None:
+        return
     if where == gp.GRB.Callback.MIPNODE:
         if grb_model.cbGet(gp.GRB.Callback.MIPNODE_STATUS) == gp.GRB.Status.OPTIMAL:
             if (
