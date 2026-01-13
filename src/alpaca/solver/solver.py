@@ -73,7 +73,9 @@ class Solver:
             if self.settings.pwl_method == lsf.pwl_method_none():
                 logger.warning(lsf.warning_mpip_features_disabled_for_pwl_method_none())
                 return
-            scip_mpip_separation = sw.ScipSeparation(self.mpip_separation_handler)
+            scip_mpip_separation = sw.ScipSeparation(  # pylint: disable=not-callable
+                self.mpip_separation_handler
+            )
             for mpip in self.mpip_separation_handler.mpip_handler.mpip_dict.values():
                 mpip.separator.separation_handler = scip_mpip_separation
             self.external_solver.opt_model.model.includeSepa(
