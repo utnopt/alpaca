@@ -10,7 +10,6 @@ import time
 
 import alpaca as alp
 from alpaca.utils.logger import logger
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting):
@@ -39,8 +38,7 @@ def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting)
             "pwl_method": "none",
             "feature/stair_locatelli": stair_locatelli_setting,
             "feature/stair_locatelli/grid_size": 5,
-            "breakpoint_generation": 1,
-            "feature/nnbp/time_limit": 300,
+            "breakpoint_generation": 0,
             "bound_propagation": 1,
             "bound_propagation_time_limit": 3600,
             "feature/stair_locatelli/obbt_time_limit": 3600,
@@ -49,22 +47,20 @@ def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting)
         alpaca.customize_settings(config_dict)
         alpaca.build_pwl_relaxation_solver()
 
-        volume_improvement, max_diff_improvement = 0.0, 0.0
+        volume_improvement = 0.0
         if alpaca.user_settings.feature_stair_locatelli:
-            volume_improvement, max_diff_improvement = (
-                alpaca.stair_locatelli.calculate_metrics()
+            volume_improvement = (
+                alpaca.stair_locatelli.calculate_mean_bilinear_relaxation_volume_improvement()
             )
         opt_model = alpaca.solver.external_solver.opt_model
         opt_model.model.setParam("NodeLimit", 0)
         opt_model.model.setParam("Cuts", 0)
         opt_model.hide_output()
         alpaca.solve()
-
-        logger.info(lsf.info_optimization_finished(alpaca.runtime))
         return (
+            alpaca.runtime,
             opt_model.model.ObjBound,
             volume_improvement,
-            max_diff_improvement,
         )
 
     except Exception:  # pylint: disable=broad-except
@@ -93,17 +89,22 @@ if __name__ == "__main__":
             with open(os.devnull, "w", encoding="utf-8") as devnull:
                 sys.stdout = devnull
                 # Run for all three settings
-                obj_without, _, _ = run_single_stair_locatelli_test(parsed_args.file, 0)
+                (runtime_without, obj_without, _) = run_single_stair_locatelli_test(
+                    parsed_args.file, 0
+                )
+                (runtime_locatelli, obj_locatelli, volume_improvement_locatelli) = (
+                    run_single_stair_locatelli_test(parsed_args.file, 1)
+                )
                 (
-                    obj_locatelli,
-                    volume_improvement_locatelli,
-                    max_diff_improvement_locatelli,
-                ) = run_single_stair_locatelli_test(parsed_args.file, 1)
-                (
+                    runtime_stair_locatelli,
                     obj_stair_locatelli,
                     volume_improvement_stair_locatelli,
-                    max_diff_improvement_stair_locatelli,
                 ) = run_single_stair_locatelli_test(parsed_args.file, 2)
+                (
+                    runtime_indicator_locatelli,
+                    obj_indicator_locatelli,
+                    volume_improvement_indicator_locatelli,
+                ) = run_single_stair_locatelli_test(parsed_args.file, 3)
         finally:
             # Restore the original standard output
             sys.stdout = original_stdout
@@ -111,9 +112,14 @@ if __name__ == "__main__":
         # Print the results as a single CSV line. The calling shell script
         # will handle directing this to the results file.
         print(
-            f"{instance_name_only},{obj_without},{obj_locatelli},{obj_stair_locatelli}"
-            f",{volume_improvement_locatelli},{max_diff_improvement_locatelli}"
-            f",{volume_improvement_stair_locatelli},{max_diff_improvement_stair_locatelli}"
+            f"{instance_name_only},"
+            f"{runtime_without},{obj_without},"
+            f"{runtime_locatelli},{obj_locatelli},"
+            f"{volume_improvement_locatelli},"
+            f"{runtime_stair_locatelli},{obj_stair_locatelli},"
+            f"{volume_improvement_stair_locatelli},"
+            f"{runtime_indicator_locatelli},{obj_indicator_locatelli},"
+            f"{volume_improvement_indicator_locatelli}"
         )
 
     else:

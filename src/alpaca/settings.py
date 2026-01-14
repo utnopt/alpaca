@@ -110,11 +110,15 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         )
         self.feature_stair_locatelli = int(
             config_dict.get("feature/stair_locatelli", 0)
-        )  # 0: disabled, 1: locatelli, 2: stair locatelli
+        )  # 0: disabled, 1: locatelli, 2: stair locatelli, 3: indicator locatelli
 
         self.feature_stair_locatelli_grid_size = int(
             config_dict.get("feature/stair_locatelli/grid_size", 10)
         )  # grid size for stair locatelli
+
+        self.feature_stair_locatelli_mu = float(
+            config_dict.get("feature/stair_locatelli/mu", 1e-3)
+        )  # distance from lb for stair locatelli
 
     def update_from_other(self, other_settings: "UserSettings") -> None:
         """

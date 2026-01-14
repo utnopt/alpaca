@@ -27,15 +27,73 @@ class DomainProjector:
         bilinear_count = len(self.model_data.expressions.bilinear_expressions)
         if bilinear_count == 0:
             return
-        limit = self.settings.feature_stair_locatelli_obbt_time_limit / (
-            bilinear_count * 2 * self.settings.feature_stair_locatelli_grid_size
+        limit = (
+            self.settings.feature_stair_locatelli_obbt_time_limit
+            / (bilinear_count * 2 * self.settings.feature_stair_locatelli_grid_size)
+            if self.settings.feature_stair_locatelli <= 2
+            else int(
+                self.settings.feature_stair_locatelli_obbt_time_limit
+                * 0.5
+                / bilinear_count
+            )
         )
         self.external_solver.opt_model.set_time_limit(limit)
         self.external_solver.opt_model.hide_output()
 
-    def get_projected_vertices(
+    def get_projected_vertices_indicator(
         self, bilinear_expression: ble.BilinearExpression
-    ):  # pylint: disable=too-many-locals, too-many-statements, too-many-branches
+    ) -> list[tuple[float, float]]:
+        """
+        Compute polygon for indicator bilinear terms.
+        """
+        x, y = tuple(bilinear_expression.variables)
+
+        self.external_solver.opt_model.set_variable_lb(
+            x.solver_variable, x.lb + self.settings.feature_stair_locatelli_mu
+        )
+        self.external_solver.opt_model.set_objective(
+            y.solver_variable, sense=lsf.objective_sense_maximize()
+        )
+        self.external_solver.opt_model.optimize()
+        y_ub = (
+            self.external_solver.opt_model.get_objective_bound()
+            if not self.external_solver.opt_model.is_infeasible()
+            else None
+        )
+        self.external_solver.opt_model.set_variable_lb(x.solver_variable, x.lb)
+        if y_ub is None:
+            self.external_solver.opt_model.model.write("infeasible_y.ilp")
+            return [(x.lb, y.lb), (x.lb, y.ub)]
+
+        self.external_solver.opt_model.set_variable_lb(
+            y.solver_variable, y.lb + self.settings.feature_stair_locatelli_mu
+        )
+        self.external_solver.opt_model.set_objective(
+            x.solver_variable, sense=lsf.objective_sense_maximize()
+        )
+        self.external_solver.opt_model.optimize()
+        x_ub = (
+            self.external_solver.opt_model.get_objective_bound()
+            if not self.external_solver.opt_model.is_infeasible()
+            else None
+        )
+        self.external_solver.opt_model.set_variable_lb(y.solver_variable, y.lb)
+        if x_ub is None:
+            return [(x.lb, y.lb), (x.ub, y.lb)]
+        return geo.filter_equal_vertices(
+            [
+                (x.lb, y.lb),
+                (x.lb, y.ub),
+                (x.lb, y_ub),
+                (x_ub, y_ub),
+                (x_ub, y.lb),
+                (x.ub, y.lb),
+            ]
+        )
+
+    def get_projected_vertices(  # pylint: disable=too-many-locals, too-many-statements, too-many-branches
+        self, bilinear_expression: ble.BilinearExpression
+    ) -> list[tuple[float, float]]:
         """
         Main entry point to find the feasible polygon for a bilinear expression.
         Executes the exact scanning and tracing logic from the original StairLocatelli.
@@ -251,7 +309,7 @@ class DomainProjector:
         self, feasible_grid_points: list[tuple[float, float]]
     ):  # pylint: disable=too-many-branches
         """
-        Exact reproduction of the 'wall follower' logic from original code.
+        Left hand rule for mazes.
         """
         start_vertex = self._find_start_vertex(feasible_grid_points)
         if start_vertex == (None, None):
