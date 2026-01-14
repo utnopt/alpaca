@@ -167,10 +167,12 @@ class StairLocatelli:
         return mc_upper - mc_lower
 
     @staticmethod
-    def _calculate_improvement_stats(mc_volumes: list[float], locatelli_volume: float):
+    def _calculate_improvement_stats(
+        mc_volumes: list[float], locatelli_volume: float
+    ) -> float:
         """Calculates the final volume and max difference improvement metrics."""
         total_mc_volume = sum(mc_volumes)
         if total_mc_volume == 0:
-            return 0, 0
+            return 0.0
         volume_improvement = (total_mc_volume - locatelli_volume) / total_mc_volume
         return volume_improvement
