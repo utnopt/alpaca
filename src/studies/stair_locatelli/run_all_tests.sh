@@ -33,7 +33,8 @@ mkdir -p "$EXPORT_PATH"
 # Create a timestamped results file and write the header
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 RESULTS_FILE="$EXPORT_PATH/stair_locatelli_results_${TIMESTAMP}.csv"
-echo "instance_name,obj_without,obj_locatelli,obj_stair_locatelli,volume_improvement_locatelli,max_diff_improvement_locatelli,volume_improvement_stair_locatelli,max_diff_improvement_stair_locatelli" > "$RESULTS_FILE"
+
+echo "instance_name,runtime_without,obj_without,runtime_locatelli,obj_locatelli,volume_improvement_locatelli,runtime_stair_locatelli,obj_stair_locatelli,volume_improvement_stair_locatelli,runtime_indicator_locatelli,obj_indicator_locatelli,volume_improvement_indicator_locatelli" > "$RESULTS_FILE"
 
 # --- Job Definition ---
 

@@ -48,7 +48,10 @@ class BoundPropagator:
         )
         for variable_name in variables_in_bilinear_terms:
             variable = self.model_data.variables[variable_name]
-            if variable.var_type != lsf.var_type_binary() and variable.name != lsf.objective_var():
+            if (
+                variable.var_type != lsf.var_type_binary()
+                and variable.name != lsf.objective_var()
+            ):
                 self._tighten_bounds_via_obbt(variable, external_solver.opt_model)
 
     @staticmethod

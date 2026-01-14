@@ -3,6 +3,7 @@
 @authors: kuen,
 """
 import numpy as np
+from scipy.spatial import ConvexHull, Delaunay  # pylint: disable=no-name-in-module
 
 
 def calculate_hyperplane_for_vertex_triple(v1, v2, v3):
@@ -107,3 +108,92 @@ def filter_collinear_vertices(vertices, tolerance=1e-5):
             indices_to_keep.append((i + 1) % len(vertices))
 
     return [vertices[i] for i in indices_to_keep]
+
+
+def calculate_locatelli_volume(
+    x_range: np.ndarray,
+    y_range: np.ndarray,
+    domain_vertices: list[tuple[float, float]],
+    is_polytope: bool,
+) -> float:
+    """
+    Calculates the volume of the convex hull of points mapped to z = x*y over a specific domain.
+    """
+    # Get the valid (x, y) points within the specified domain
+    valid_points = calculate_x_y_domain(x_range, y_range, domain_vertices, is_polytope)
+
+    # Create 3D points (x, y, x*y)
+    point_cloud = np.column_stack(
+        (
+            valid_points[:, 0],
+            valid_points[:, 1],
+            valid_points[:, 0] * valid_points[:, 1],
+        )
+    )
+
+    if len(point_cloud) < 4:
+        return 0.0
+
+    hull = ConvexHull(point_cloud)
+    return hull.volume
+
+
+def calculate_x_y_domain(
+    x_range: np.ndarray,
+    y_range: np.ndarray,
+    domain_vertices: list[tuple[float, float]],
+    is_polytope: bool,
+) -> np.ndarray:
+    """Calculate (x, y) points inside a polygon or polytope defined by domain_vertices."""
+    if is_polytope:
+        return calculate_x_y_domain_polytope(x_range, y_range, domain_vertices)
+    return calculate_x_y_domain_polygon(x_range, y_range, domain_vertices)
+
+
+def calculate_x_y_domain_polygon(  # pylint: disable=too-many-locals
+    x_range: np.ndarray, y_range: np.ndarray, domain_vertices: list[tuple[float, float]]
+) -> np.ndarray:
+    """Calculate (x, y) points inside a polygon defined by domain_vertices."""
+    vertices_arr = np.array(domain_vertices)
+
+    x_points, y_points = np.meshgrid(x_range, y_range, indexing="xy")
+    points = np.column_stack([x_points.ravel(), y_points.ravel()])
+
+    x, y = points[:, 0], points[:, 1]
+    xp, yp = vertices_arr[:, 0], vertices_arr[:, 1]
+
+    inside = np.zeros(len(points), dtype=bool)
+    j = len(vertices_arr) - 1
+
+    # Ray casting algorithm (even-odd rule)
+    for i in range(len(vertices_arr)):
+        xi, yi = xp[i], yp[i]
+        xj, yj = xp[j], yp[j]
+
+        intersect = ((yi > y) != (yj > y)) & (
+            x < (xj - xi) * (y - yi) / (yj - yi + 1e-15) + xi
+        )
+        inside ^= intersect
+        j = i
+
+    return points[inside]
+
+
+def calculate_x_y_domain_polytope(
+    x_range: np.ndarray, y_range: np.ndarray, domain_vertices: list[tuple[float, float]]
+) -> np.ndarray:
+    """
+    Calculate the (x, y) points within a polytope defined by domain_vertices.
+    Uses Delaunay triangulation to determine if points are inside the convex hull.
+    """
+    vertices_arr = np.array(domain_vertices)
+
+    x_points, y_points = np.meshgrid(x_range, y_range, indexing="xy")
+    points = np.column_stack([x_points.ravel(), y_points.ravel()])
+
+    hull = ConvexHull(vertices_arr)
+
+    tri = Delaunay(vertices_arr[hull.vertices])
+
+    inside = tri.find_simplex(points) >= 0
+    return points[inside]
