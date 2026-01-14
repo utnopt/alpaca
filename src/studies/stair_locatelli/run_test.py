@@ -10,7 +10,6 @@ import time
 
 import alpaca as alp
 from alpaca.utils.logger import logger
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
 
 def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting):
@@ -58,8 +57,6 @@ def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting)
         opt_model.model.setParam("Cuts", 0)
         opt_model.hide_output()
         alpaca.solve()
-
-        logger.info(lsf.info_optimization_finished(alpaca.runtime))
         return (
             alpaca.runtime,
             opt_model.model.ObjBound,
