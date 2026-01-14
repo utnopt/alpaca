@@ -23,8 +23,9 @@ if TYPE_CHECKING:
 class OsilReader:
     """Reads and parses an OSiL file to populate the model data."""
 
-    def __init__(self, model_data: ModelData):
+    def __init__(self, model_data: ModelData, path: str):
         self.model_data = model_data
+        self.path = path
 
     def build_from_osil(self):
         """Reads the OSiL file and builds the initial model structure."""
@@ -40,9 +41,7 @@ class OsilReader:
     def _read_osil_file(self) -> BeautifulSoup:
         """Reads the OSiL file and returns its parsed XML content."""
         with open(
-            StaticSettings.instances_path
-            + self.model_data.settings.osil_file_name
-            + lsf.osil_file_suffix(),
+            self.path,
             lsf.file_mode_read(),
             encoding=lsf.file_encoding_utf8(),
         ) as f:

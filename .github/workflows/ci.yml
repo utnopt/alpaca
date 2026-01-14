@@ -82,42 +82,47 @@ jobs:
             public
             codeclimate.json
 
-  unittest:
-    needs: setup
-    runs-on: ubuntu-latest
-    container:
-      image: continuumio/miniconda3:latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Conda environment
-        shell: bash -el {0}
-        run: |
-          conda env create -f $CONDA_ENV_FILE -n $CONDA_ENV_NAME
-          conda activate $CONDA_ENV_NAME
-      - name: Install coverage
-        shell: bash -el {0}
-        run: |
-          conda activate $CONDA_ENV_NAME
-          conda install -c conda-forge coverage=7.4.3 coverage-badge
-      - name: Run unit tests with coverage
-        shell: bash -el {0}
-        run: |
-          conda activate $CONDA_ENV_NAME
-          export PYTHONPATH=$SOURCE_FOLDER:./test
-          python -m coverage run --source=$SOURCE_FOLDER,./test -m unittest discover
-      - name: Coverage report and badge
-        shell: bash -el {0}
-        run: |
-          conda activate $CONDA_ENV_NAME
-          coverage report -m
-          coverage html
-          mkdir -p public
-          coverage-badge -o public/coverage.svg
-      - name: Upload test artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-artifacts
-          path: |
-            htmlcov
-            public
+  pytest:
+      needs: setup
+      runs-on: ubuntu-latest
+      container:
+        image: continuumio/miniconda3:latest
+      steps:
+        - uses: actions/checkout@v4
 
+        - name: Set up Conda environment
+          shell: bash -el {0}
+          run: |
+            conda env create -f $CONDA_ENV_FILE -n $CONDA_ENV_NAME
+            conda activate $CONDA_ENV_NAME
+
+        - name: Install pytest and coverage
+          shell: bash -el {0}
+          run: |
+            conda activate $CONDA_ENV_NAME
+            # We add pytest and pytest-cov for a smoother integration
+            conda install -c conda-forge pytest pytest-cov coverage-badge
+
+        - name: Run tests with pytest
+          shell: bash -el {0}
+          run: |
+            conda activate $CONDA_ENV_NAME
+            export PYTHONPATH=$SOURCE_FOLDER:./test
+            # --cov specifies the source to measure, --cov-report generates the HTML
+            pytest --cov=$SOURCE_FOLDER --cov-report=html:htmlcov --cov-report=term test/
+
+        - name: Generate Coverage Badge
+          shell: bash -el {0}
+          run: |
+            conda activate $CONDA_ENV_NAME
+            mkdir -p public
+            # Generate the badge from the .coverage file created by pytest-cov
+            coverage-badge -o public/coverage.svg
+
+        - name: Upload test artifacts
+          uses: actions/upload-artifact@v4
+          with:
+            name: test-artifacts
+            path: |
+              htmlcov
+              public

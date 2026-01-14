@@ -10,7 +10,6 @@ from mpl_toolkits.mplot3d import Axes3D  # pylint: disable=unused-import
 
 import alpaca.utils.geometry as geo
 import alpaca.expressions.bilinear_expression as ble
-import alpaca.settings as s
 from alpaca.utils.logger import logger
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 
@@ -18,19 +17,18 @@ from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 class Visualizer:
     """Visualizer for Stair Locatelli projected domains and cuts."""
 
-    def __init__(self, settings: s.UserSettings):
-        self.settings = settings
-        self.plot_dir = settings.export_path + lsf.study_stair_locatelli_export_folder()
-
+    @classmethod
     def plot_polygons(
-        self,
+        cls,
         bilinear_projected_domains: list[
             tuple[ble.BilinearExpression, list[tuple[float, float]]]
         ],
+        out_path: str,
     ):
         """Plots 2D projection polygons."""
+        out_path = out_path + lsf.study_stair_locatelli_export_folder()
         logger.info(lsf.study_stair_locatelli_info_plot_polygons())
-        os.makedirs(self.plot_dir, exist_ok=True)
+        os.makedirs(out_path, exist_ok=True)
 
         for bilinear_expr, vertices in bilinear_projected_domains:
             if not vertices:
@@ -59,21 +57,24 @@ class Visualizer:
 
             plt.savefig(
                 os.path.join(
-                    self.plot_dir,
+                    out_path,
                     lsf.study_stair_locatelli_polygon_plot_name(bilinear_expr.name),
                 )
             )
             plt.close(fig)
 
+    @classmethod
     def plot_cuts(
-        self,
+        cls,
         bilinear_projected_domains: list[
             tuple[ble.BilinearExpression, list[tuple[float, float]]]
         ],
+        out_path: str,
     ):  # pylint: disable=too-many-locals
         """Plots 3D surfaces and cuts."""
+        out_path = out_path + lsf.study_stair_locatelli_export_folder()
         logger.info(lsf.study_stair_locatelli_info_plot_cuts())
-        os.makedirs(self.plot_dir, exist_ok=True)
+        os.makedirs(out_path, exist_ok=True)
         view_angles = [(30, -60), (30, 30), (60, -120)]
 
         for bilinear_expr, vertices in bilinear_projected_domains:
@@ -106,7 +107,7 @@ class Visualizer:
                 ax.view_init(elev=elev, azim=azim)
                 plt.savefig(
                     os.path.join(
-                        self.plot_dir,
+                        out_path,
                         lsf.study_stair_locatelli_cut_plot_name(bilinear_expr.name, i),
                     )
                 )
