@@ -48,10 +48,10 @@ def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting)
         alpaca.customize_settings(config_dict)
         alpaca.build_pwl_relaxation_solver()
 
-        volume_improvement, max_diff_improvement = 0.0, 0.0
+        volume_improvement = 0.0
         if alpaca.user_settings.feature_stair_locatelli:
-            volume_improvement, max_diff_improvement = (
-                alpaca.stair_locatelli.calculate_metrics()
+            volume_improvement = (
+                alpaca.stair_locatelli.calculate_mean_bilinear_relaxation_volume_improvement()
             )
         opt_model = alpaca.solver.external_solver.opt_model
         opt_model.model.setParam("NodeLimit", 0)
@@ -61,6 +61,7 @@ def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting)
 
         logger.info(lsf.info_optimization_finished(alpaca.runtime))
         return (
+            alpaca.runtime,
             opt_model.model.ObjBound,
             volume_improvement,
         )
