@@ -31,7 +31,7 @@ class DomainProjector:
             self.settings.feature_stair_locatelli_obbt_time_limit
             / (bilinear_count * 2 * self.settings.feature_stair_locatelli_grid_size)
             if self.settings.feature_stair_locatelli <= 2
-            else int(
+            else (
                 self.settings.feature_stair_locatelli_obbt_time_limit
                 * 0.5
                 / bilinear_count
@@ -62,7 +62,7 @@ class DomainProjector:
         )
         self.external_solver.opt_model.set_variable_lb(x.solver_variable, x.lb)
         if y_ub is None:
-            self.external_solver.opt_model.model.write("infeasible_y.ilp")
+            # self.external_solver.opt_model.model.write("infeasible_y.ilp")
             return [(x.lb, y.lb), (x.lb, y.ub)]
 
         self.external_solver.opt_model.set_variable_lb(
