@@ -89,7 +89,39 @@ class StairLocatelli:
         ):
             return 0.0
 
-        mc_cormick_volumes = []
+        comparison_volume = (
+            uge.calculate_locatelli_volume_polytope(
+                bilinear_expression,
+                domain_vertices,
+                grid_size=self.model_data.settings.feature_stair_locatelli_evaluation_grid_size,
+            )
+            if self.settings.feature_stair_locatelli == 1
+            else self.calculate_3d_volume_polygon(bilinear_expression, domain_vertices)
+        )
+        return self._calculate_improvement_stats(
+            self._calculate_3d_volume_mc_cormick(bilinear_expression),
+            comparison_volume,
+        )
+
+    def _calculate_3d_volume_mc_cormick(
+        self, bilinear_expression: ble.BilinearExpression
+    ) -> float:
+        """Calculates the 3D volume under the McCormick envelope over the grid."""
+        cell_area, x_range, y_range = self._create_evaluation_grid(bilinear_expression)
+        mc_cormick_volume = 0.0
+        for x_grid in x_range:
+            for y_grid in y_range:
+                mc_height = self._calculate_mc_cormick_size_at_point(
+                    (x_grid, y_grid), bilinear_expression
+                )
+                # Multiply height by area to get volume of the column
+                mc_cormick_volume += mc_height * cell_area
+        return mc_cormick_volume
+
+    def _create_evaluation_grid(self, bilinear_expression: ble.BilinearExpression):
+        """Creates the evaluation grid for volume calculation."""
+        x = bilinear_expression.variables[0]
+        y = bilinear_expression.variables[1]
         grid_size = (
             self.model_data.settings.feature_stair_locatelli_evaluation_grid_size
         )
@@ -103,24 +135,24 @@ class StairLocatelli:
             cell_area = dx * dy
         else:
             cell_area = 0.0
+        return cell_area, x_range, y_range
 
-        for x_grid in x_range:
-            for y_grid in y_range:
-                mc_height = self._calculate_mc_cormick_size_at_point(
-                    (x_grid, y_grid), (x, y), bilinear_expression
-                )
-                # Multiply height by area to get volume of the column
-                mc_cormick_volumes.append(mc_height * cell_area)
+    def calculate_3d_volume_polygon(
+        self, bilinear_expression: ble.BilinearExpression, domain_vertices
+    ) -> float:
+        """Calculates the 3D volume under the McCormick envelope over the grid."""
+        cell_area, x_range, y_range = self._create_evaluation_grid(bilinear_expression)
 
-        return self._calculate_improvement_stats(
-            mc_cormick_volumes,
-            uge.calculate_locatelli_volume(
-                x_range,
-                y_range,
-                domain_vertices,
-                self.settings.feature_stair_locatelli == 1,
-            ),
-        )
+        polygon_volume = 0.0
+        for x_grid, y_grid in uge.calculate_x_y_domain_polygon(
+            x_range, y_range, domain_vertices
+        ):
+            polygon_height = self._calculate_polygon_size_at_point(
+                (x_grid, y_grid), bilinear_expression
+            )
+            # Multiply height by area to get volume of the column
+            polygon_volume += polygon_height * cell_area
+        return polygon_volume
 
     @staticmethod
     def _calculate_max_z_interval(x: var.Variable, y: var.Variable):
@@ -147,7 +179,6 @@ class StairLocatelli:
     def _calculate_mc_cormick_size_at_point(
         self,
         values: tuple[float, float],
-        variables: tuple[var.Variable, var.Variable],
         expr,
     ):
         """
@@ -155,7 +186,7 @@ class StairLocatelli:
         at a specific grid point.
         """
         x_val, y_val = values
-        x_var, y_var = variables
+        x_var, y_var = expr.variables
         mc_upper = min(
             self._get_constraint_value(c, (x_val, y_val), (x_var, y_var))
             for c in expr.mc_cormick_constraints["overestimator"]
@@ -166,13 +197,33 @@ class StairLocatelli:
         )
         return mc_upper - mc_lower
 
+    def _calculate_polygon_size_at_point(
+        self,
+        values: tuple[float, float],
+        expr,
+    ):
+        """
+        Calculates the size of the McCormick interval and the Locatelli interval
+        at a specific grid point.
+        """
+        x_val, y_val = values
+        x_var, y_var = expr.variables
+        mc_upper = min(
+            self._get_constraint_value(c, (x_val, y_val), (x_var, y_var))
+            for c in expr.linear_relaxation_for_bilinear["overestimator"]
+        )
+        mc_lower = max(
+            self._get_constraint_value(c, (x_val, y_val), (x_var, y_var))
+            for c in expr.linear_relaxation_for_bilinear["underestimator"]
+        )
+        return mc_upper - mc_lower
+
     @staticmethod
     def _calculate_improvement_stats(
-        mc_volumes: list[float], locatelli_volume: float
+        mc_volume: float, locatelli_volume: float
     ) -> float:
         """Calculates the final volume and max difference improvement metrics."""
-        total_mc_volume = sum(mc_volumes)
-        if total_mc_volume == 0:
+        if mc_volume == 0:
             return 0.0
-        volume_improvement = (total_mc_volume - locatelli_volume) / total_mc_volume
+        volume_improvement = (mc_volume - locatelli_volume) / mc_volume
         return volume_improvement
