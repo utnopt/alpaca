@@ -147,12 +147,29 @@ class StairLocatelli:
         for x_grid, y_grid in uge.calculate_x_y_domain_polygon(
             x_range, y_range, domain_vertices
         ):
-            polygon_height = self._calculate_polygon_size_at_point(
+            polygon_height = self._calculate_feasible_height(
                 (x_grid, y_grid), bilinear_expression
             )
             # Multiply height by area to get volume of the column
             polygon_volume += polygon_height * cell_area
         return polygon_volume
+
+    def calculate_3d_volume_polytope_over_2d_polygon(
+        self, bilinear_expression: ble.BilinearExpression, domain_vertices
+    ) -> float:
+        """Calculates the 3D volume under the McCormick envelope over the grid."""
+        cell_area, x_range, y_range = self._create_evaluation_grid(bilinear_expression)
+
+        polytope_volume = 0.0
+        for x_grid, y_grid in uge.calculate_x_y_domain_polygon(
+            x_range, y_range, domain_vertices
+        ):
+            polytope_height = self._calculate_feasible_height(
+                (x_grid, y_grid), bilinear_expression
+            )
+            # Multiply height by area to get volume of the column
+            polytope_volume += polytope_height * cell_area
+        return polytope_volume
 
     @staticmethod
     def _calculate_max_z_interval(x: var.Variable, y: var.Variable):
@@ -197,7 +214,7 @@ class StairLocatelli:
         )
         return mc_upper - mc_lower
 
-    def _calculate_polygon_size_at_point(
+    def _calculate_feasible_height(
         self,
         values: tuple[float, float],
         expr,
