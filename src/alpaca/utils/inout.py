@@ -22,6 +22,15 @@ def config_console_logger(log_level):
     )
 
 
+def get_log_file_path() -> str | None:
+    """Return the file path of the log file used by the logger,
+    or None if no file handler is found."""
+    for handler in logger.handlers:
+        if isinstance(handler, logging.FileHandler):
+            return handler.baseFilename
+    return None
+
+
 def config_file_logger(path: str, level: str = "INFO"):
     """
     function that configures a logger:

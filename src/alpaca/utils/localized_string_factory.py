@@ -440,6 +440,10 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return "OutputFlag"
 
     @classmethod
+    def gurobi_parameter_logfile(cls) -> str:
+        return "LogFile"
+
+    @classmethod
     def gurobi_parameter_heuristics(cls) -> str:
         return "Heuristics"
 

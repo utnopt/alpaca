@@ -7,6 +7,7 @@ import time
 from alpaca.external_solvers import mip_model as mm, solver_wrapper as sw
 from alpaca.utils.logger import logger
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+import alpaca.utils.inout as uio
 
 
 class Solver:
@@ -21,6 +22,7 @@ class Solver:
     def solve_instance(self):
         """Solve instance."""
         logger.info(lsf.info_init_solver())
+        self.external_solver.opt_model.redirect_logging(uio.get_log_file_path())
         if self.settings.feature_mpip:
             self._activate_mpip_features()
         self._attach_event_handlers()

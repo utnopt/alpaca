@@ -362,6 +362,13 @@ class SolverWrapper:
             return self.model.Status == gp.GRB.OPTIMAL
         return self.model.getStatus() == lsf.scip_status_optimal()
 
+    def redirect_logging(self, log_file_path: str) -> None:
+        """Redirect solver logs to a specified file."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            self.model.setParam(lsf.gurobi_parameter_logfile(), log_file_path)
+        else:  # scip
+            self.model.setLogfile(log_file_path)
+
 
 def gurobi_separation_callback(grb_model, where):
     """Callback for mpip separation"""
