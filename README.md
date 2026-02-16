@@ -1,34 +1,321 @@
-# ALPACA
+# Alpaca 🦙
 
-Code to ALPACA: Adaptive Linear Piecewise Approximation with Combinatorial Augmentation
+**A**daptive **L**inear **P**iecewise **A**pproximation with **C**ombinatorial **A**ugmentation
 
+[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/utnopt/alpaca/releases/tag/v0.1.0)
+[![Python](https://img.shields.io/badge/python-3.11%20|%203.12-blue.svg)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+Alpaca is a Python-based optimization framework for solving nonlinear programming (NLP) and mixed-integer nonlinear programming (MINLP) problems using piecewise linear (PWL) relaxations.
+
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [Architecture](#architecture)
+- [Supported Expressions](#supported-expressions)
+- [External Solvers](#external-solvers)
+- [References](#references)
+- [License](#license)
+- [Authors](#authors)
+
+---
+
+## Overview
+
+Alpaca transforms nonlinear optimization problems into mixed-integer linear programs (MILPs) by decomposing complex expressions into low-dimensional components and approximating them with piecewise linear functions. The framework supports reading models in the OSiL (Optimization Services instance Language) format and provides advanced features such as:
+
+- Automatic expression tree decomposition
+- Multiple PWL formulation methods
+- Bound propagation and tightening
+- Cutting plane generation via Multipartite Implication Polytopes (MPIP)
+
+---
 
 ## Features
-PWL relaxation methods:
-- multiple-choice method
 
-Bilinear handling:
-- McCormick envelopes
-- reformulation to sum of squares
-- piecewise constant relaxations
+| Feature | Description                                                                                              |
+|---------|----------------------------------------------------------------------------------------------------------|
+| **OSiL Model Import** | Parse optimization models from `.osil` XML files                                                         |
+| **Expression Decomposition** | Automatically decompose nonlinear expressions into bilinear, multilinear, and one-dimensional components |
+| **PWL Methods** | Multiple Choice Method and Delta Method for domain discretization                                        |
+| **Bilinear Handling** | McCormick envelopes, sum-of-squares reformulation, or piecewise constant relaxation                      |
+| **Bound Propagation** | Manual propagation and Optimization-Based Bound Tightening (OBBT)                                        |
+| **Breakpoint Generation** | Uniform, adaptive (error-based), and neural network-based strategies                                     |
+| **MPIP Separation** | Advanced cutting planes based on multipartite implication polytopes                                      |
+| **Solver Support** | Gurobi and SCIP backends                                                                                 |
 
-Separators:
-- multipartite implication polytope
+---
 
 ## Installation
 
-create conda env with all required packages
+### Prerequisites
+
+- Python 3.11 or 3.12
+- One of the following MIP solvers:
+  - [Gurobi](https://www.gurobi.com/) (commercial, free academic license)
+  - [SCIP](https://www.scipopt.org/) (open source via `pyscipopt`)
+
+### Install from PyPI
+
 ```bash
-        conda env create -f conda_env.yml
+
+# Install the latest release (v0.1.0)
+pip install git+https://github.com/utnopt/alpaca.git@v0.1.0
+# Clone the repository
+git clone https://github.com/utnopt/alpaca.git
+cd alpaca
+
+# Checkout the release tag
+git checkout v0.1.0
+
+# Install in development mode
+pip install -e .
+
+# Or install normally
+pip install .
 ```
 
-## Usage
+### Install Solver Backend
 
-- download osil files from www.minlplib.org/download.html
-- put the files into data/import/instances
-- adjust data/import/config.json
-- run run.py
-- get logs and results from export/
+Alpaca requires at least one MIP solver backend. Install your preferred solver:
 
-## Authors and acknowledgment
-Code and model by: Robert Burlacu, Tobias Kuen, ...
+```bash
+# For SCIP (open source)
+pip install pyscipopt
+
+# For Gurobi (requires license)
+pip install gurobipy
+```
+
+---
+
+## Quick Start
+
+### Basic Usage
+
+```python
+import alpaca as alp
+
+# Load model from OSiL file
+alpaca = alp.read_model_from_osil("path/to/model.osil")
+
+
+
+---
+
+## Quick Start
+
+### Basic Usage
+
+```python
+import alpaca as alp
+
+# Load model from OSiL file
+alpaca = alp.read_model_from_osil("path/to/model.osil")
+
+# Configure logging
+alpaca.configure_logging("logs/optimization.log", level="INFO")
+
+# Customize settings (optional)
+alpaca.customize_settings({"number_of_breakpoints": 10, "external_solver": "gurobi"})
+
+# Build the PWL relaxation model
+alpaca.build_pwl_relaxation_solver()
+
+# Solve
+runtime = alpaca.solve()
+print(f"Optimization completed in {runtime:.2f} seconds")
+```
+
+### Using a Configuration File
+
+```python
+import alpaca as alp
+
+alpaca = alp.read_model_from_osil("instances/alkyl.osil")
+alpaca.customize_settings("config/settings.json")
+alpaca.build_pwl_relaxation_solver()
+alpaca.solve()
+```
+
+---
+
+## Configuration
+
+Settings can be provided via a JSON file or a Python dictionary.
+
+### Core Settings
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `seed` | int | 42 | Random seed for reproducibility |
+| `solver_time_limit` | int | 7200 | Time limit in seconds |
+| `solver_thread_limit` | int | 4 | Number of threads |
+| `external_solver` | str | `"scip"` | `"scip"` or `"gurobi"` |
+| `number_of_breakpoints` | int | 5 | Number of PWL breakpoints per variable |
+| `relaxation_tolerance` | float | 1e-4 | Tolerance for adaptive breakpoint generation |
+| `pwl_method` | str | `"multiple_choice"` | `"multiple_choice"`, `"delta"`, or `"none"` |
+
+### Bilinear Handling
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `bilinear_handling` | int | 0 | `0`: McCormick, `1`: Sum of squares, `2`: Piecewise constant, `3`: Nonlinear |
+| `reformulate_multilinear_to_bilinear` | int | 1 | Decompose multilinear terms into bilinear chains |
+
+### Bound Propagation
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `bound_propagation` | int | 0 | `0`: Manual, `1`: OBBT |
+| `bound_propagation_rounds` | int | 3 | Number of propagation iterations |
+| `bound_propagation_obbt_time_limit` | int | 300 | OBBT time budget in seconds |
+
+### Breakpoint Generation
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `breakpoint_generation` | int | 0 | `0`: Uniform, `1`: Neural network, `2`: Adaptive |
+| `feature/nnbp/learning_rate` | float | 1e-7 | Learning rate for NN-based generation |
+| `feature/nnbp/time_limit` | int | 100 | Training time limit |
+
+### MPIP Features
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `feature/mpip/separation` | int | 0 | Enable separation cuts |
+| `feature/mpip/mccormick` | int | 0 | Add MPIP-based McCormick constraints |
+| `feature/mpip/corner` | int | 0 | Add corner constraints |
+| `feature/mpip/stripe` | int | 0 | Add stripe constraints |
+| `feature/mpip/bar` | int | 0 | Add bar constraints |
+| `feature/mpip/frequency` | int | 10 | Separation callback frequency |
+
+---
+
+## Architecture
+
+```
+alpaca/
+├── src/alpaca/
+│   ├── main.py                  # Main Alpaca class and entry point
+│   ├── settings.py              # Static and user-configurable settings
+│   ├── run.py                   # Example usage and script execution
+│   ├── solver/
+│   │   └── solver.py            # Solver orchestration
+│   ├── model_data/
+│   │   ├── model_data.py        # Central model container
+│   │   ├── variable.py          # Variable representation
+│   │   └── constraint.py        # Constraint representation
+│   ├── model_buildup/
+│   │   ├── osil_reader.py       # OSiL file parser
+│   │   ├── expression_tree.py   # Expression tree decomposition
+│   │   ├── multilinear_handler.py
+│   │   ├── bound_propagator.py  # Bound propagation & OBBT
+│   │   ├── breakpoint_generator.py
+│   │   └── pwl_handler.py       # PWL relaxation application
+│   ├── expressions/
+│   │   ├── expression.py
+│   │   ├── expression_container.py
+│   │   ├── one_dim_expression.py    # Square, Exp, Ln, Sin, Cos, etc.
+│   │   ├── bilinear_expression.py
+│   │   ├── bilinear_binary_expression.py
+│   │   ├── bilinear_mixed_binary_expression.py
+│   │   ├── multilinear_expression.py
+│   │   ├── linear_expression.py
+│   │   └── nonlinear_expression.py
+│   ├── pwl/
+│   │   ├── pwl_method.py
+│   │   ├── multiple_choice_method.py
+│   │   └── delta_method.py
+│   ├── breakpoints/
+│   │   ├── breakpoint_adaptive.py
+│   │   └── breakpoint_neural_network.py
+│   ├── external_solvers/
+│   │   ├── mip_model.py         # MIP model construction
+│   │   └── solver_wrapper.py    # Gurobi/SCIP abstraction
+│   ├── mpip/
+│   │   ├── mpip.py              # MPIP data structure
+│   │   ├── mpip_handler.py      # MPIP extraction
+│   │   └── separation/
+│   │       ├── mpip_separationhandler.py
+│   │       └── mpip_separator.py
+│   └── utils/
+├── test/                        # Test suite
+├── pyproject.toml
+└── README.md
+```
+
+---
+
+## Supported Expressions
+
+### One-Dimensional Functions
+
+| Expression | Mathematical Form |
+|------------|-------------------|
+| Square | $x^2$ |
+| Exponential | $e^x$ |
+| Natural Logarithm | $\ln(x)$ |
+| Square Root | $\sqrt{x}$ |
+| Sine | $\sin(x)$ |
+| Cosine | $\cos(x)$ |
+| Log Base 10 | $\log_{10}(x)$ |
+| Hyperbolic Tangent | $\tanh(x)$ |
+| Inverse | $x^{-1}$ |
+| Absolute Value | $\|x\|$ |
+| Power | $x^y$ |
+
+### Multilinear Expressions
+
+- **Bilinear**: $z = x \cdot y$
+- **Bilinear Binary**: $z = x \cdot y$ where $x, y \in \{0, 1\}$
+- **Bilinear Mixed Binary**: $z = b \cdot x$ where $b \in \{0, 1\}$
+- **Multilinear**: $z = \prod_{i} x_i$
+
+---
+
+## External Solvers
+
+Alpaca provides a unified interface for both Gurobi and SCIP:
+
+```python
+# Use Gurobi
+alpaca.customize_settings({"external_solver": "gurobi"})
+
+# Use SCIP
+alpaca.customize_settings({"external_solver": "scip"})
+```
+
+Solver-specific features (e.g., callbacks, separation handlers) are automatically configured based on the selected backend.
+
+---
+
+## References
+
+If you use Alpaca in your research, please cite the following:
+
+### MPIP Theory
+
+> Burlacu, Gemander, and Kuen (2024). *The Bipartite Implication Polytope: Conditional Relations over Multiple Sets of Binary Variables*.  
+> [https://optimization-online.org/?p=26208](https://optimization-online.org/?p=26208)
+
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+---
+
+## Authors
+
+- **Tobias Kuen**
+- **Robert Burlacu**
+- **Dennis Cost**
+
+---
