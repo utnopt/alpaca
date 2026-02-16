@@ -20,12 +20,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Cache pip
+
         id: cache
         uses: actions/cache@v4
         with:
           path: ${{ env.PIP_CACHE_DIR }}
           key: pip-cache-${{ hashFiles('conda_env.yml') }}
       - name: Cache conda packages
+
         uses: actions/cache@v4
         with:
           path: /opt/conda/pkgs
@@ -39,42 +41,51 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Conda environment
+
         shell: bash -el {0}
         run: |
           conda env create -f $CONDA_ENV_FILE -n $CONDA_ENV_NAME
           conda activate $CONDA_ENV_NAME
       - name: Create output directories
+
         run: mkdir -p public/badges public/lint
       - name: Initialize score file
+
         run: echo undefined > public/badges/${{ github.job }}.score
       - name: Install pylint-gitlab
+
         shell: bash -el {0}
         run: |
           conda activate $CONDA_ENV_NAME
           pip install pylint-gitlab
       - name: Run pylint text
+
         shell: bash -el {0}
         run: |
           conda activate $CONDA_ENV_NAME
           pylint --exit-zero --output-format=text $SOURCE_FOLDER | tee /tmp/pylint.txt
           sed -n 's/^Your code has been rated at \(.*\)/\1/p' /tmp/pylint.txt > public/badges/${{ github.job }}.score
       - name: Generate CodeClimate report
+
         shell: bash -el {0}
         run: |
           conda activate $CONDA_ENV_NAME
           pylint --exit-zero --output-format=pylint_gitlab.GitlabCodeClimateReporter $SOURCE_FOLDER > codeclimate.json
       - name: Generate HTML report
+
         shell: bash -el {0}
         run: |
           conda activate $CONDA_ENV_NAME
           pylint --fail-under=$PYLINT_SCORE_THRESHOLD --output-format=pylint_gitlab.GitlabPagesHtmlReporter $SOURCE_FOLDER > public/lint/pylint_index.html
       - name: Create badge SVG
+
         shell: bash -el {0}
         run: |
           conda activate $CONDA_ENV_NAME
           pip install anybadge
           anybadge --overwrite --label ${{ github.job }} --value=$(cat public/badges/${{ github.job }}.score) --file=public/badges/${{ github.job }}.svg 4=red 6=orange 8=yellow 10=green
       - name: Upload lint artifacts
+
         uses: actions/upload-artifact@v4
         with:
           name: lint-artifacts
@@ -83,46 +94,49 @@ jobs:
             codeclimate.json
 
   pytest:
-      needs: setup
-      runs-on: ubuntu-latest
-      container:
-        image: continuumio/miniconda3:latest
-      steps:
-        - uses: actions/checkout@v4
+    needs: setup
+    runs-on: ubuntu-latest
+    container:
+      image: continuumio/miniconda3:latest
+    steps:
+      - uses: actions/checkout@v4
 
-        - name: Set up Conda environment
-          shell: bash -el {0}
-          run: |
-            conda env create -f $CONDA_ENV_FILE -n $CONDA_ENV_NAME
-            conda activate $CONDA_ENV_NAME
+      - name: Set up Conda environment
 
-        - name: Install pytest and coverage
-          shell: bash -el {0}
-          run: |
-            conda activate $CONDA_ENV_NAME
-            # We add pytest and pytest-cov for a smoother integration
-            conda install -c conda-forge pytest pytest-cov coverage-badge
+        shell: bash -el {0}
+        run: |
+          conda env create -f $CONDA_ENV_FILE -n $CONDA_ENV_NAME
+          conda activate $CONDA_ENV_NAME
 
-        - name: Run tests with pytest
-          shell: bash -el {0}
-          run: |
-            conda activate $CONDA_ENV_NAME
-            export PYTHONPATH=$SOURCE_FOLDER:./test
-            # --cov specifies the source to measure, --cov-report generates the HTML
-            pytest --cov=$SOURCE_FOLDER --cov-report=html:htmlcov --cov-report=term test/
+      - name: Install pytest and coverage
 
-        - name: Generate Coverage Badge
-          shell: bash -el {0}
-          run: |
-            conda activate $CONDA_ENV_NAME
-            mkdir -p public
-            # Generate the badge from the .coverage file created by pytest-cov
-            coverage-badge -o public/coverage.svg
+        shell: bash -el {0}
+        run: |
+          conda activate $CONDA_ENV_NAME
+          conda install -c conda-forge pytest pytest-cov
+          pip install genbadge[coverage]
 
-        - name: Upload test artifacts
-          uses: actions/upload-artifact@v4
-          with:
-            name: test-artifacts
-            path: |
-              htmlcov
-              public
+      - name: Run tests with pytest
+
+        shell: bash -el {0}
+        run: |
+          conda activate $CONDA_ENV_NAME
+          export PYTHONPATH=$SOURCE_FOLDER:./test
+          pytest --cov=$SOURCE_FOLDER --cov-report=html:htmlcov --cov-report=xml:coverage.xml --cov-report=term test/
+
+      - name: Generate Coverage Badge
+
+        shell: bash -el {0}
+        run: |
+          conda activate $CONDA_ENV_NAME
+          mkdir -p public
+          genbadge coverage -i coverage.xml -o public/coverage.svg
+
+      - name: Upload test artifacts
+
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts
+          path: |
+            htmlcov
+            public
