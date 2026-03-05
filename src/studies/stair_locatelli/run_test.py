@@ -50,7 +50,7 @@ def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting)
         volume_improvement = 0.0
         if alpaca.user_settings.feature_stair_locatelli:
             volume_improvement = (
-                alpaca.stair_locatelli.calculate_mean_bilinear_relaxation_volume_improvement()
+                alpaca.stair_locatelli.calculate_mean_bilinear_domain_volume()
             )
         opt_model = alpaca.solver.external_solver.opt_model
         opt_model.model.setParam("NodeLimit", 0)

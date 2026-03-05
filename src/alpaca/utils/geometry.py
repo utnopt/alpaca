@@ -110,40 +110,6 @@ def filter_collinear_vertices(vertices, tolerance=1e-5):
     return [vertices[i] for i in indices_to_keep]
 
 
-def calculate_locatelli_volume_polytope(
-    bilinear_expression,
-    domain_vertices: list[tuple[float, float]],
-    grid_size: int = 100,
-) -> float:
-    """
-    Calculates the volume of the convex hull of points mapped to z = x*y over a specific domain.
-    """
-    x = bilinear_expression.variables[0]
-    y = bilinear_expression.variables[1]
-    x_range = np.linspace(x.lb, x.ub, grid_size)
-    y_range = np.linspace(y.lb, y.ub, grid_size)
-    valid_points = calculate_x_y_domain_polytope(x_range, y_range, domain_vertices)
-    return calculate_3d_volume_polytope(valid_points)
-
-
-def calculate_3d_volume_polytope(valid_points: np.ndarray) -> float:
-    """Calculate the volume of the convex hull of 3D points (x, y, x*y)."""
-    # Create 3D points (x, y, x*y)
-    point_cloud = np.column_stack(
-        (
-            valid_points[:, 0],
-            valid_points[:, 1],
-            valid_points[:, 0] * valid_points[:, 1],
-        )
-    )
-
-    if len(point_cloud) < 4:
-        return 0.0
-
-    hull = ConvexHull(point_cloud)
-    return hull.volume
-
-
 def calculate_x_y_domain_polygon(  # pylint: disable=too-many-locals
     x_range: np.ndarray, y_range: np.ndarray, domain_vertices: list[tuple[float, float]]
 ) -> np.ndarray:

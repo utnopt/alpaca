@@ -45,8 +45,10 @@ class Alpaca:
         self.stair_locatelli: slo.StairLocatelli | None = None
         self.solver: slv.Solver | None = None
         self.runtime: float | None = None
+        self._added_mccormick_envelopes = False
 
-    def configure_logging(self, path: str, level: str = "INFO") -> None:
+    @staticmethod
+    def configure_logging(path: str, level: str = "INFO") -> None:
         """Configures global logging for both console and file output.
 
         Args:
@@ -126,6 +128,32 @@ class Alpaca:
             if self.solver is not None
             else None
         )
+
+    @property
+    def stair_locatelli_domain_volume_polytope(self) -> float | None:
+        """Returns bilinear domain volume over polytope from the Stair-Locatelli handler."""
+        if self.stair_locatelli is not None:
+            return self.stair_locatelli.calculate_mean_bilinear_domain_volume(
+                is_polytope=True
+            )
+        volume = slo.StairLocatelli.calculate_mean_bilinear_domain_volume_box(
+            self.model_data, self._added_mccormick_envelopes
+        )
+        self._added_mccormick_envelopes = True
+        return volume
+
+    @property
+    def stair_locatelli_domain_volume_polygon(self) -> float | None:
+        """Returns bilinear domain volume over polygon from the Stair-Locatelli handler."""
+        if self.stair_locatelli is not None:
+            return self.stair_locatelli.calculate_mean_bilinear_domain_volume(
+                is_polytope=False
+            )
+        volume = slo.StairLocatelli.calculate_mean_bilinear_domain_volume_box(
+            self.model_data, self._added_mccormick_envelopes
+        )
+        self._added_mccormick_envelopes = True
+        return volume
 
 
 def read_model_from_osil(path: str) -> Alpaca:

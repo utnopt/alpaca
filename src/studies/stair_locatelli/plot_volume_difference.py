@@ -50,7 +50,7 @@ def analyze_volume_difference(
             cut_generator.generate_cuts(bilinear_expression_polytope, vertices_polytope)
             z_diff = stair_locatelli.calculate_3d_volume_polytope_over_2d_polygon(
                 bilinear_expression_polytope, vertices_polygon
-            ) - stair_locatelli.calculate_3d_volume_polygon(
+            ) - stair_locatelli.calculate_3d_volume_polygon_over_domain(
                 bilinear_expression_polygon, vertices_polygon
             )
             z_diff_mesh[i, j] = z_diff
