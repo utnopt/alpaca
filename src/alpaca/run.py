@@ -12,9 +12,9 @@ import alpaca as alp
 IMPORT_PATH = "../../data/import/"
 LOGGING_PATH = "../../data/export/logs/"
 CONFIG_PATH = IMPORT_PATH + "/example_configs/"
-CONFIG_FILE = CONFIG_PATH + "nonlinear_gurobi.json"
+CONFIG_FILE = CONFIG_PATH + "stair_locatelli_scip.json"
 INSTANCES_PATH = IMPORT_PATH + "instances/"
-INSTANCE_FILE = INSTANCES_PATH + "blend721.osil"
+INSTANCE_FILE = INSTANCES_PATH + "pooling_haverly1pq.osil"
 
 
 def run_optimization():

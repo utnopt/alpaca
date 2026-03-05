@@ -31,10 +31,10 @@ def run_nonlinear_test(instance_name):
     alpaca.customize_settings(config_dict)
     alpaca.build_pwl_relaxation_solver()
     alpaca.solve()
-    assert (
-        abs(alpaca.solution - solution_dict[instance_name]) <= 0.05
-    ), (f"Expected solution {solution_dict[instance_name]} "
-        f"but got {alpaca.solution} for instance {instance_name}")
+    assert abs(alpaca.solution - solution_dict[instance_name]) <= 0.05, (
+        f"Expected solution {solution_dict[instance_name]} "
+        f"but got {alpaca.solution} for instance {instance_name}"
+    )
 
 
 @pytest.mark.parametrize(

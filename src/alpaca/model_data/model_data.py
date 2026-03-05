@@ -295,7 +295,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
 
         bound_propagator = bpr.BoundPropagator(self)
         bound_propagator.propagate_bounds()
-        if self.settings.bound_propagation == 1:
+        if self.settings.bound_propagation >= 1:
             self._translate_linear_expressions_to_constraints()
             bound_propagator.apply_obbt()
 

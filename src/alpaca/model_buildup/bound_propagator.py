@@ -33,20 +33,25 @@ class BoundPropagator:
             self._propagate_expressions()
 
     def apply_obbt(self):
-        """Use optimization-based bound tightening (OBBT) for all variables."""
+        """Use optimization-based bound tightening (OBBT)."""
         logger.info(lsf.info_apply_obbt())
         external_solver = mm.MIPModel(self.model_data)
         external_solver.opt_model.hide_output()
-        variables_in_bilinear_terms = []
-        for expression in self.model_data.expressions.bilinear_expressions.values():
-            variables_in_bilinear_terms.append(expression.variables[0].name)
-            variables_in_bilinear_terms.append(expression.variables[1].name)
-        variables_in_bilinear_terms = set(variables_in_bilinear_terms)
+        if self.model_data.settings.bound_propagation == 2:
+            selected_variables = []
+            for expression in self.model_data.expressions.bilinear_expressions.values():
+                selected_variables.append(expression.variables[0].name)
+                selected_variables.append(expression.variables[1].name)
+            selected_variables = set(selected_variables)
+        else:
+            selected_variables = set(self.model_data.variables.keys())
+        if len(selected_variables) == 0:
+            return
         external_solver.opt_model.set_time_limit(
             self.model_data.settings.bound_propagation_obbt_time_limit
-            / len(variables_in_bilinear_terms)
+            / len(selected_variables)
         )
-        for variable_name in variables_in_bilinear_terms:
+        for variable_name in selected_variables:
             variable = self.model_data.variables[variable_name]
             if (
                 variable.var_type != lsf.var_type_binary()

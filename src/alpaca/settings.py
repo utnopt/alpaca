@@ -51,12 +51,6 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
             config_dict.get("bound_propagation_obbt_time_limit", 300)
         )
         self.allow_infinite_bounds = int(config_dict.get("allow_infinite_bounds", 0))
-        self.feature_stair_locatelli_obbt_time_limit = int(
-            config_dict.get("feature/stair_locatelli/obbt_time_limit", 1800)
-        )
-        self.feature_stair_locatelli_evaluation_grid_size = int(
-            config_dict.get("feature/stair_locatelli/evaluation_grid_size", 100)
-        )
         self.reformulate_multilinear_to_bilinear = int(
             config_dict.get("reformulate_multilinear_to_bilinear", 1)
         )
@@ -65,7 +59,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         )  # 0: mccormick, 1: reformulate to sum of squares, 2: piecewise constant, 3: nonlinear
         self.bound_propagation = int(
             config_dict.get("bound_propagation", 0)
-        )  # 0: manual, 1: obbt
+        )  # 0: manual, 1: obbt, 2: obbt on bilinear
         self.feature_mpip_separation = int(
             config_dict.get("feature/mpip/separation", 0)
         )
@@ -110,14 +104,18 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.feature_stair_locatelli = int(
             config_dict.get("feature/stair_locatelli", 0)
         )  # 0: disabled, 1: locatelli, 2: stair locatelli, 3: indicator locatelli
-
         self.feature_stair_locatelli_grid_size = int(
             config_dict.get("feature/stair_locatelli/grid_size", 10)
         )  # grid size for stair locatelli
-
         self.feature_stair_locatelli_mu = float(
             config_dict.get("feature/stair_locatelli/mu", 1e-3)
         )  # distance from lb for stair locatelli
+        self.feature_stair_locatelli_obbt_time_limit = int(
+            config_dict.get("feature/stair_locatelli/obbt_time_limit", 1800)
+        )
+        self.feature_stair_locatelli_evaluation_grid_size = int(
+            config_dict.get("feature/stair_locatelli/evaluation_grid_size", 100)
+        )
 
     def update_from_other(self, other_settings: "UserSettings") -> None:
         """

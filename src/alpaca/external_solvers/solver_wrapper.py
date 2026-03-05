@@ -298,7 +298,7 @@ class SolverWrapper:
     ) -> None:
         """Set the model's objective function."""
         if self.mip_solver == lsf.solver_name_scip():
-            self.model.freeTransform()
+            self._ensure_scip_problem_stage_modifiable()
         self.model.setObjective(expression)
         self.set_objective_sense(sense)
 
@@ -329,6 +329,7 @@ class SolverWrapper:
         if self.mip_solver == lsf.solver_name_gurobi():
             variable.LB = lb
         else:
+            self._ensure_scip_problem_stage_modifiable()
             self.model.chgVarLb(variable, lb)
 
     def set_variable_ub(self, variable: Any, ub: float) -> None:
@@ -336,9 +337,10 @@ class SolverWrapper:
         if self.mip_solver == lsf.solver_name_gurobi():
             variable.UB = ub
         else:
+            self._ensure_scip_problem_stage_modifiable()
             self.model.chgVarUb(variable, ub)
 
-    def get_objective_value(self) -> (float | None):
+    def get_objective_value(self) -> float | None:
         """Get the objective value of the solution."""
         if not self.is_optimal():
             return None
@@ -371,6 +373,11 @@ class SolverWrapper:
                 self.model.setParam(lsf.gurobi_parameter_logfile(), log_file_path)
         else:  # scip
             self.model.setLogfile(log_file_path)
+
+    def _ensure_scip_problem_stage_modifiable(self):
+        stage = self.model.getStage()
+        if stage >= scip.SCIP_STAGE.TRANSFORMED:
+            self.model.freeTransform()
 
 
 def gurobi_separation_callback(grb_model, where):
