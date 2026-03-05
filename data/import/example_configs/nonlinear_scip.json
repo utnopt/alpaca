@@ -1,0 +1,8 @@
+{
+      "solver_time_limit": 3600,
+      "external_solver": "scip",
+      "reformulate_multilinear_to_bilinear": 0,
+      "bilinear_handling": 3,
+      "allow_infinite_bounds": 1,
+      "pwl_method": "none"
+}

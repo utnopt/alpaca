@@ -662,6 +662,14 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return "INF"
 
     @classmethod
+    def osil_tag_sense(cls) -> str:
+        return "maxOrMin"
+
+    @classmethod
+    def osil_sense_maximize(cls) -> str:
+        return "max"
+
+    @classmethod
     def osil_tag_variables(cls) -> str:
         return "variables"
 

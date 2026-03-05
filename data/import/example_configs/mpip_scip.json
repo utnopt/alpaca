@@ -1,0 +1,11 @@
+{
+      "solver_time_limit": 100,
+      "external_solver": "scip",
+      "reformulate_multilinear_to_bilinear": 1,
+      "bilinear_handling": 2,
+      "pwl_method": "multiple-choice",
+      "breakpoint_generation": 0,
+      "bound_propagation": 1,
+      "number_of_breakpoints": 10,
+      "bound_propagation_time_limit": 3600
+}

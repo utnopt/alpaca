@@ -11,9 +11,10 @@ import alpaca as alp
 
 IMPORT_PATH = "../../data/import/"
 LOGGING_PATH = "../../data/export/logs/"
-CONFIG_FILE = IMPORT_PATH + "config.json"
+CONFIG_PATH = IMPORT_PATH + "/example_configs/"
+CONFIG_FILE = CONFIG_PATH + "nonlinear_gurobi.json"
 INSTANCES_PATH = IMPORT_PATH + "instances/"
-INSTANCE_FILE = INSTANCES_PATH + "alkyl.osil"
+INSTANCE_FILE = INSTANCES_PATH + "blend721.osil"
 
 
 def run_optimization():

@@ -39,7 +39,6 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.seed = int(config_dict.get("seed", 42))
         self.solver_time_limit = int(config_dict.get("solver_time_limit", 7200))
         self.solver_thread_limit = int(config_dict.get("solver_thread_limit", 4))
-        self.osil_file_name = str(config_dict.get("osil_file_name", "st_e41"))
         self.number_of_breakpoints = int(config_dict.get("number_of_breakpoints", 5))
         self.relaxation_tolerance = float(config_dict.get("relaxation_tolerance", 1e-4))
         self.pwl_method = str(config_dict.get("pwl_method", "multiple_choice"))

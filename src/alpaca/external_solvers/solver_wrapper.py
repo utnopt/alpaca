@@ -338,8 +338,10 @@ class SolverWrapper:
         else:
             self.model.chgVarUb(variable, ub)
 
-    def get_objective_value(self) -> float:
+    def get_objective_value(self) -> (float | None):
         """Get the objective value of the solution."""
+        if not self.is_optimal():
+            return None
         if self.mip_solver == lsf.solver_name_gurobi():
             return self.model.ObjVal
         return self.model.getObjVal()
@@ -365,7 +367,8 @@ class SolverWrapper:
     def redirect_logging(self, log_file_path: str) -> None:
         """Redirect solver logs to a specified file."""
         if self.mip_solver == lsf.solver_name_gurobi():
-            self.model.setParam(lsf.gurobi_parameter_logfile(), log_file_path)
+            if log_file_path is not None:
+                self.model.setParam(lsf.gurobi_parameter_logfile(), log_file_path)
         else:  # scip
             self.model.setLogfile(log_file_path)
 

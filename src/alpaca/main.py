@@ -118,6 +118,15 @@ class Alpaca:
         logger.info(lsf.info_optimization_finished(self.runtime))
         return self.runtime
 
+    @property
+    def solution(self):
+        """Retrieves the solution from the external solver if available."""
+        return (
+            self.solver.external_solver.opt_model.get_objective_value()
+            if self.solver is not None
+            else None
+        )
+
 
 def read_model_from_osil(path: str) -> Alpaca:
     """Creates an Alpaca instance and populates it with data from an OSIL file.

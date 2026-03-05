@@ -98,11 +98,14 @@ class OsilReader:
         objective = osil_data.find(lsf.osil_tag_objectives()).find_all(
             lsf.osil_tag_obj()
         )[0]
+        sense_is_max = objective.get(lsf.osil_tag_sense()) == lsf.osil_sense_maximize()
+        sense_coeff = 1.0 if sense_is_max else -1.0
+        con_type = lsf.constraint_geq() if sense_is_max else lsf.constraint_leq()
         constraint = self.model_data.add_constraint(
-            con.LinearConstraint(lsf.obj_con_name(), con_type=lsf.constraint_leq())
+            con.LinearConstraint(lsf.obj_con_name(), con_type=con_type)
         )
         constraint.variables.append(
-            (-1.0, self.model_data.variables[lsf.objective_var()])
+            (sense_coeff, self.model_data.variables[lsf.objective_var()])
         )
         coeff_tags = objective.find_all(lsf.osil_attr_coef())
         for c in coeff_tags:
