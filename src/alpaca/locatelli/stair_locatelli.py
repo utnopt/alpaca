@@ -30,7 +30,7 @@ class StairLocatelli:
         self.cut_generator = lcg.LocatelliCutGenerator(model_data)
 
         # Storage for results
-        self.bilinear_projected_domains: list[
+        self.bilinear_projected_domains_polygon: list[
             tuple[ble.BilinearExpression, list[tuple[float, float]]]
         ] = []
 
@@ -48,7 +48,7 @@ class StairLocatelli:
                 if self.settings.feature_stair_locatelli <= 2
                 else self.projector.get_projected_vertices_indicator(expr)
             )
-            self.bilinear_projected_domains.append((expr, vertices))
+            self.bilinear_projected_domains_polygon.append((expr, vertices))
 
             # 2. Generate Cuts (Constraint creation)
             cuts_added = self.cut_generator.generate_cuts(expr, vertices)
@@ -120,9 +120,9 @@ class StairLocatelli:
         """
         x = bilinear_expression.variables[0]
         y = bilinear_expression.variables[1]
-        domain_vertices = [
+        polygon_domain_vertices = [
             vertices
-            for bl_exp, vertices in self.bilinear_projected_domains
+            for bl_exp, vertices in self.bilinear_projected_domains_polygon
             if bl_exp.name == bilinear_expression.name
         ][0]
         if (
@@ -131,7 +131,7 @@ class StairLocatelli:
         ):
             return 0.0
         return self.calculate_3d_volume_polygon_over_domain(
-            bilinear_expression, domain_vertices, is_polytope=is_polytope
+            bilinear_expression, polygon_domain_vertices, is_polytope=is_polytope
         )
 
     @classmethod
@@ -170,12 +170,23 @@ class StairLocatelli:
             if is_polytope
             else uge.calculate_x_y_domain_polygon(x_range, y_range, domain_vertices)
         )
-        for x_grid, y_grid in poly_grid:
-            polygon_height = self._calculate_feasible_height(
-                (x_grid, y_grid), bilinear_expression
+        convexified_area = None
+        if self.settings.feature_stair_locatelli == 1:
+            convexified_area = uge.calculate_convexified_area(
+                x_range, y_range, domain_vertices
             )
+        for x_grid_point, y_grid_point in poly_grid:
+            if self.settings.feature_stair_locatelli == 1:
+                # Standard locatelli, calculate height based on convex hull over the polytope.
+                poly_height = uge.calculate_feasible_height_convexified(
+                    (x_grid_point, y_grid_point), convexified_area
+                )
+            else:
+                poly_height = self._calculate_feasible_height(
+                    (x_grid_point, y_grid_point), bilinear_expression
+                )
             # Multiply height by area to get volume of the column
-            poly_volume += polygon_height * cell_area
+            poly_volume += poly_height * cell_area
         return poly_volume
 
     def calculate_3d_volume_polytope_over_2d_polygon(

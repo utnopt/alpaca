@@ -299,8 +299,6 @@ class DomainProjector:
         # --- Post Processing ---
         vertices = geo.filter_equal_vertices(vertices)
         vertices = geo.filter_collinear_vertices(vertices)
-        if self.settings.feature_stair_locatelli == 1:
-            vertices = geo.get_convex_hull(vertices)
 
         return vertices
 

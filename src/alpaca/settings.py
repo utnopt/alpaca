@@ -17,7 +17,7 @@ class StaticSettings:
 
     # ===== Data settings =====
     infinity = 1e6
-    feasibility_tolerance = 1e-3
+    feasibility_tolerance = 1e-5
 
     # ===== MPIP settings =====
     max_violation_relation = 1e-2

@@ -5,6 +5,8 @@
 import numpy as np
 from scipy.spatial import ConvexHull, Delaunay  # pylint: disable=no-name-in-module
 
+import alpaca.settings as s
+
 
 def calculate_hyperplane_for_vertex_triple(v1, v2, v3):
     """
@@ -157,3 +159,37 @@ def calculate_x_y_domain_polytope(
 
     inside = tri.find_simplex(points) >= 0
     return points[inside]
+
+
+def calculate_convexified_area(
+    x_range: np.ndarray, y_range: np.ndarray, domain_vertices: list[tuple[float, float]]
+) -> ConvexHull:
+    """Calculate the convex hull of the 3D domain over the polytope defined by xy domain."""
+    xy_domain = calculate_x_y_domain_polytope(x_range, y_range, domain_vertices)
+    xyz_domain = np.column_stack([xy_domain, xy_domain[:, 0] * xy_domain[:, 1]])
+    return ConvexHull(xyz_domain)
+
+
+def calculate_feasible_height_convexified(
+    values: tuple[float, float], convexified_area: ConvexHull
+) -> float:
+    """
+    Calculates the vertical height (gap) of the convex hull at the given (x, y) point.
+    If the point is outside the convex hull's 2D projection, returns 0.
+    """
+    x_val, y_val = values
+    eqs = convexified_area.equations
+    z_coeff = eqs[:, 2]
+    rhs = -(eqs[:, 0] * x_val + eqs[:, 1] * y_val + eqs[:, 3])
+    vertical_mask = np.abs(z_coeff) < s.StaticSettings.feasibility_tolerance
+    if np.any(rhs[vertical_mask] < -s.StaticSettings.feasibility_tolerance):
+        return 0.0
+    upper_mask = z_coeff > s.StaticSettings.feasibility_tolerance
+    lower_mask = z_coeff < -s.StaticSettings.feasibility_tolerance
+    z_upper_bounds = rhs[upper_mask] / z_coeff[upper_mask]
+    max_z = np.min(z_upper_bounds) if len(z_upper_bounds) > 0 else np.inf
+    z_lower_bounds = rhs[lower_mask] / z_coeff[lower_mask]
+    min_z = np.max(z_lower_bounds) if len(z_lower_bounds) > 0 else -np.inf
+    if min_z > max_z + s.StaticSettings.feasibility_tolerance:
+        return 0.0
+    return max(0.0, float(max_z - min_z))
