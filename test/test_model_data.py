@@ -20,7 +20,7 @@ def run_model_test(instance_name, approximation, reformulate_multilinear):
     config_dict = {
         "approximation": approximation,
         "reformulate_multilinear": reformulate_multilinear,
-        "allow_infinite_bounds": 1,
+        "filter/unbounded_variables": 0,
     }
     user_settings = s.UserSettings(config_dict)
 
