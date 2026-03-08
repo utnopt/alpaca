@@ -9,6 +9,7 @@ import alpaca.mpip.mpip_handler as mph
 import alpaca.mpip.separation.mpip_separationhandler as msh
 import alpaca.locatelli.stair_locatelli as slo
 import alpaca.settings as s
+import alpaca.stats.statistics as ass
 from alpaca.utils import inout as ut_io
 from alpaca.utils.logger import logger
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
@@ -26,7 +27,6 @@ class Alpaca:
         model_data (mda.ModelData): Data structure holding the optimization model.
         stair_locatelli (slo.StairLocatelli | None): Handler for Stair-Locatelli features.
         solver (slv.Solver | None): The initialized solver instance.
-        runtime (float | None): The duration of the last solve operation in seconds.
     """
 
     def __init__(self, settings_path: str | None = None) -> None:
@@ -40,21 +40,20 @@ class Alpaca:
         config_dict = (
             ut_io.read_config_file(settings_path) if settings_path is not None else {}
         )
+        self.statistics = ass.Statistics(self)
         self.user_settings = s.UserSettings(config_dict)
         self.model_data = mda.ModelData(self.user_settings)
         self.stair_locatelli: slo.StairLocatelli | None = None
         self.solver: slv.Solver | None = None
-        self.runtime: float | None = None
-        self._added_mccormick_envelopes = False
 
-    @staticmethod
-    def configure_logging(path: str, level: str = "INFO") -> None:
+    def configure_logging(self, path: str, level: str = "INFO") -> None:
         """Configures global logging for both console and file output.
 
         Args:
             path: Path where the log file should be saved.
             level: Logging threshold level (e.g., "DEBUG", "INFO", "WARNING").
         """
+        self.statistics.log_file_path = path
         ut_io.config_console_logger(level)
         ut_io.config_file_logger(path, level)
 
@@ -79,6 +78,7 @@ class Alpaca:
         MPIP (Mixed-Integer Programming Partitioning) separation logic based
         on the user settings.
         """
+        self.statistics.build_started()
         self.model_data.build_pwl_relaxation_model()
 
         if self.user_settings.feature_stair_locatelli:
@@ -101,6 +101,7 @@ class Alpaca:
                     mpip_handler, external_solver.opt_model
                 )
                 self.solver.mpip_separation_handler = mpip_separation_handler
+        self.statistics.build_finished()
 
     def solve(self):
         """Executes the optimization process for the built model.
@@ -116,44 +117,9 @@ class Alpaca:
                 "Solver is not initialized. "
                 "Call 'build_pwl_relaxation_solver' before calling 'solve'."
             )
-        self.runtime = self.solver.solve_instance()
-        logger.info(lsf.info_optimization_finished(self.runtime))
-        return self.runtime
-
-    @property
-    def solution(self):
-        """Retrieves the solution from the external solver if available."""
-        return (
-            self.solver.external_solver.opt_model.get_objective_value()
-            if self.solver is not None
-            else None
-        )
-
-    @property
-    def stair_locatelli_domain_volume_polytope(self) -> float | None:
-        """Returns bilinear domain volume over polytope from the Stair-Locatelli handler."""
-        if self.stair_locatelli is not None:
-            return self.stair_locatelli.calculate_mean_bilinear_domain_volume(
-                is_polytope=True
-            )
-        volume = slo.StairLocatelli.calculate_mean_bilinear_domain_volume_box(
-            self.model_data, self._added_mccormick_envelopes
-        )
-        self._added_mccormick_envelopes = True
-        return volume
-
-    @property
-    def stair_locatelli_domain_volume_polygon(self) -> float | None:
-        """Returns bilinear domain volume over polygon from the Stair-Locatelli handler."""
-        if self.stair_locatelli is not None:
-            return self.stair_locatelli.calculate_mean_bilinear_domain_volume(
-                is_polytope=False
-            )
-        volume = slo.StairLocatelli.calculate_mean_bilinear_domain_volume_box(
-            self.model_data, self._added_mccormick_envelopes
-        )
-        self._added_mccormick_envelopes = True
-        return volume
+        runtime = self.solver.solve_instance()
+        logger.info(lsf.info_optimization_finished(runtime))
+        self.statistics.get_solver_information_from_external_solver_log()
 
 
 def read_model_from_osil(path: str) -> Alpaca:
