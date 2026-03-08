@@ -24,7 +24,7 @@ def run_nonlinear_test(instance_name):
         "external_solver": "scip",
         "reformulate_multilinear_to_bilinear": 0,
         "bilinear_handling": 3,
-        "allow_infinite_bounds": 1,
+        "filter/unbounded_variables": 0,
         "pwl_method": "none",
     }
     alpaca = alp.read_model_from_osil(file_path)
