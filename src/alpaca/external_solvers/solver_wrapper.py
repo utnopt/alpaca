@@ -385,9 +385,7 @@ class SolverWrapper:
             self.model.freeTransform()
 
     # pylint: disable=too-many-branches, too-many-statements
-    def get_solver_log_information(
-        self, solver_log_path: str
-    ) -> dict:
+    def get_solver_log_information(self, solver_log_path: str) -> dict:
         """Get solver log information after optimization."""
         if self.mip_solver == lsf.solver_name_gurobi():
             summary = glt.parse([solver_log_path]).summary()

@@ -8,5 +8,6 @@
       "bound_propagation_obbt_time_limit": 3600,
       "feature/stair_locatelli/grid_size": 10,
       "feature/stair_locatelli": 2,
-      "feature/stair_locatelli/obbt_time_limit": 3600
+      "feature/stair_locatelli/obbt_time_limit": 3600,
+      "filter/unbounded_variables": 0
 }

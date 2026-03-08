@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=missing-function-docstring, no-member
+# pylint: disable=missing-function-docstring, no-member, too-many-lines
 """
 @authors: kuen,
 """
@@ -25,6 +25,14 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
     @classmethod
     def empty_string(cls) -> str:
         return ""
+
+    @classmethod
+    def path_separator(cls) -> str:
+        return "/"
+
+    @classmethod
+    def json_file_suffix(cls) -> str:
+        return ".json"
 
     # --- Mathematical & Model Elements ---
 
@@ -256,8 +264,16 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return f"Nonlinearity '{nonlinearity_type}' not implemented."
 
     @classmethod
-    def error_infinite_bounds_discretized_var(cls, variable_name: str) -> str:
+    def error_filter_infinite_bounds_discretized_var(cls, variable_name: str) -> str:
         return f"Variable {variable_name} is discretized but has infinite bounds."
+
+    @classmethod
+    def error_filter_no_bilinear_expressions(cls) -> str:
+        return "No bilinear expressions."
+
+    @classmethod
+    def error_filter_no_mpip_instances(cls) -> str:
+        return "No MPIP instances."
 
     @classmethod
     def warning_expression_type_not_supported(cls, expr_type: str) -> str:
@@ -842,7 +858,6 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return "Creating performance plots from MPIP results..."
 
     # --- Statistics ---
-
     @classmethod
     def stats_format_gurobi(cls) -> str:
         return "stats_gurobi"
@@ -972,3 +987,180 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         if f == cls.stats_format_latex():
             return "Root Relaxation Time (s)"
         return "root_solving_time"
+
+    @classmethod
+    def stats_build_time(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "Model Building Time (s)"
+        return "build_time"
+
+    @classmethod
+    def stats_stair_locatelli_domain_volume_polytope(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "Stair Locatelli Domain Volume Polytope"
+        return "stair_locatelli_domain_volume_polytope"
+
+    @classmethod
+    def stats_stair_locatelli_domain_volume_polygon(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "Stair Locatelli Domain Volume Polygon"
+        return "stair_locatelli_domain_volume_polygon"
+
+    @classmethod
+    def stats_original_nr_variables(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "Original # Variables"
+        return "original_nr_variables"
+
+    @classmethod
+    def stats_original_nr_constraints(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "Original # Constraints"
+        return "original_nr_constraints"
+
+    @classmethod
+    def stats_original_nr_bilinear_expressions(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "Original # Bilinear Expressions"
+        return "original_nr_bilinear_expressions"
+
+    @classmethod
+    def stats_original_nr_bilinear_binary_expressions(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "Original # Bilinear Binary Expressions"
+        return "original_nr_bilinear_binary_expressions"
+
+    @classmethod
+    def stats_original_nr_mixed_binary_expressions(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "Original # Mixed Binary Expressions"
+        return "original_nr_mixed_binary_expressions"
+
+    @classmethod
+    def stats_original_nr_multilinear_expressions(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "Original # Multilinear Expressions"
+        return "original_nr_multilinear_expressions"
+
+    @classmethod
+    def stats_original_nr_one_dim_expressions(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "Original # One-Dimensional Expressions"
+        return "original_nr_one_dim_expressions"
+
+    @classmethod
+    def stats_pwl_nr_variables(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "PWL # Variables"
+        return "pwl_nr_variables"
+
+    @classmethod
+    def stats_pwl_nr_constraints(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "PWL # Constraints"
+        return "pwl_nr_constraints"
+
+    @classmethod
+    def stats_pwl_nr_bilinear_expressions(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "PWL # Bilinear Expressions"
+        return "pwl_nr_bilinear_expressions"
+
+    @classmethod
+    def stats_pwl_nr_bilinear_binary_expressions(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "PWL # Bilinear Binary Expressions"
+        return "pwl_nr_bilinear_binary_expressions"
+
+    @classmethod
+    def stats_pwl_nr_mixed_binary_expressions(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "PWL # Mixed Binary Expressions"
+        return "pwl_nr_mixed_binary_expressions"
+
+    @classmethod
+    def stats_pwl_nr_multilinear_expressions(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "PWL # Multilinear Expressions"
+        return "pwl_nr_multilinear_expressions"
+
+    @classmethod
+    def stats_pwl_nr_one_dim_expressions(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "PWL # One-Dimensional Expressions"
+        return "pwl_nr_one_dim_expressions"
+
+    @classmethod
+    def stats_locatelli_domain_volume_polygon(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "Locatelli Domain Volume Polygon"
+        return "locatelli_domain_volume_polygon"
+
+    @classmethod
+    def stats_locatelli_domain_volume_polytope(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "Locatelli Domain Volume Polytope"
+        return "locatelli_domain_volume_polytope"
+
+    @classmethod
+    def stats_mpip_nr_instances(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "MPIP # Instances"
+        return "mpip_nr_instances"
+
+    @classmethod
+    def stats_mpip_ratio(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "MPIP Ratio"
+        return "mpip_ratio"
+
+    @classmethod
+    def stats_instance_name(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "Instance Name"
+        return "instance_name"
+
+    @classmethod
+    def stats_config_name(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "Configuration Name"
+        return "config_name"
+
+    @classmethod
+    def stats_column_names(cls) -> str:
+        return (
+            f"{cls.stats_instance_name()},"
+            f"{cls.stats_config_name()},"
+            f"{cls.stats_solving_time()},"
+            f"{cls.stats_nr_nodes()},"
+            f"{cls.stats_solution_value()},"
+            f"{cls.stats_mip_gap()},"
+            f"{cls.stats_final_nr_vars()},"
+            f"{cls.stats_final_nr_constraints()},"
+            f"{cls.stats_presolved_nr_vars()},"
+            f"{cls.stats_presolved_nr_constraints()},"
+            f"{cls.stats_presolved_nr_nonzeros()},"
+            f"{cls.stats_root_solution_value()},"
+            f"{cls.stats_root_solving_time()},"
+            f"{cls.stats_build_time()},"
+            f"{cls.stats_original_nr_variables()},"
+            f"{cls.stats_original_nr_constraints()},"
+            f"{cls.stats_original_nr_bilinear_expressions()},"
+            f"{cls.stats_original_nr_bilinear_binary_expressions()},"
+            f"{cls.stats_original_nr_mixed_binary_expressions()},"
+            f"{cls.stats_original_nr_multilinear_expressions()},"
+            f"{cls.stats_original_nr_one_dim_expressions()},"
+            f"{cls.stats_pwl_nr_variables()},"
+            f"{cls.stats_pwl_nr_constraints()},"
+            f"{cls.stats_pwl_nr_bilinear_expressions()},"
+            f"{cls.stats_pwl_nr_bilinear_binary_expressions()},"
+            f"{cls.stats_pwl_nr_mixed_binary_expressions()},"
+            f"{cls.stats_pwl_nr_multilinear_expressions()},"
+            f"{cls.stats_pwl_nr_one_dim_expressions()},"
+            f"{cls.stats_locatelli_domain_volume_polygon()},"
+            f"{cls.stats_locatelli_domain_volume_polytope()},"
+            f"{cls.stats_stair_locatelli_domain_volume_polygon()},"
+            f"{cls.stats_stair_locatelli_domain_volume_polytope()},"
+            f"{cls.stats_mpip_nr_instances()},"
+            f"{cls.stats_mpip_ratio()}"
+        )

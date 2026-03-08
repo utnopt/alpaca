@@ -299,7 +299,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
             self._translate_linear_expressions_to_constraints()
             bound_propagator.apply_obbt()
 
-        if not self.settings.allow_infinite_bounds:
+        if self.settings.filter_unbounded_variables:
             self._check_infinite_bounds()
 
         if self.settings.bilinear_handling == 0:
@@ -323,7 +323,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
                     or variable.ub == StaticSettings.infinity
                 ):
                     raise ValueError(
-                        lsf.error_infinite_bounds_discretized_var(variable.name)
+                        lsf.error_filter_infinite_bounds_discretized_var(variable.name)
                     )
 
     def _translate_linear_expressions_to_constraints(

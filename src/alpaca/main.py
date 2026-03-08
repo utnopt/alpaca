@@ -67,6 +67,9 @@ class Alpaca:
         if isinstance(settings_import, dict):
             new_settings = s.UserSettings(settings_import)
         else:
+            self.statistics.config_name = settings_import.split(lsf.path_separator())[
+                -1
+            ].replace(lsf.json_file_suffix(), lsf.empty_string())
             new_settings = s.UserSettings(ut_io.read_config_file(settings_import))
         self.user_settings.update_from_other(new_settings)
 
@@ -79,7 +82,9 @@ class Alpaca:
         on the user settings.
         """
         self.statistics.build_started()
+        self.statistics.track_statistics_original_model()
         self.model_data.build_pwl_relaxation_model()
+        self.statistics.track_statistics_pwl_model()
 
         if self.user_settings.feature_stair_locatelli:
             self.stair_locatelli = slo.StairLocatelli(self.model_data)
@@ -101,6 +106,7 @@ class Alpaca:
                     mpip_handler, external_solver.opt_model
                 )
                 self.solver.mpip_separation_handler = mpip_separation_handler
+                self.statistics.track_statistics_mpip()
         self.statistics.build_finished()
 
     def solve(self):
@@ -120,6 +126,13 @@ class Alpaca:
         runtime = self.solver.solve_instance()
         logger.info(lsf.info_optimization_finished(runtime))
         self.statistics.get_solver_information_from_external_solver_log()
+        if self.user_settings.feature_stair_locatelli:
+            self.statistics.track_statistics_stair_locatelli()
+        if (
+            self.user_settings.feature_mpip
+            and self.user_settings.pwl_method != lsf.pwl_method_none()
+        ):
+            self.statistics.track_statistics_mpip_separation()
 
 
 def read_model_from_osil(path: str) -> Alpaca:
@@ -133,4 +146,7 @@ def read_model_from_osil(path: str) -> Alpaca:
     """
     alp = Alpaca()
     alp.model_data.read_model_from_osil_data(path)
+    alp.statistics.instance_name = path.split(lsf.path_separator())[-1].replace(
+        lsf.osil_file_suffix(), lsf.empty_string()
+    )
     return alp

@@ -50,7 +50,6 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.bound_propagation_obbt_time_limit = int(
             config_dict.get("bound_propagation_obbt_time_limit", 300)
         )
-        self.allow_infinite_bounds = int(config_dict.get("allow_infinite_bounds", 0))
         self.reformulate_multilinear_to_bilinear = int(
             config_dict.get("reformulate_multilinear_to_bilinear", 1)
         )
@@ -115,6 +114,15 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         )
         self.feature_stair_locatelli_evaluation_grid_size = int(
             config_dict.get("feature/stair_locatelli/evaluation_grid_size", 100)
+        )
+        self.filter_no_bilinear_expressions = int(
+            config_dict.get("filter/no_bilinear_expressions", 0)
+        )
+        self.filter_no_mpip_instances = int(
+            config_dict.get("filter/no_mpip_instances", 0)
+        )
+        self.filter_unbounded_variables = int(
+            config_dict.get("filter/unbounded_variables", 1)
         )
 
     def update_from_other(self, other_settings: "UserSettings") -> None:

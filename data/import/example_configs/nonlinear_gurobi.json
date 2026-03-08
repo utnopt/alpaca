@@ -3,7 +3,7 @@
       "external_solver": "gurobi",
       "reformulate_multilinear_to_bilinear": 0,
       "bilinear_handling": 3,
-      "allow_infinite_bounds": 1,
+      "filter/unbounded_variables": 0,
       "pwl_method": "none",
       "bound_propagation": 2,
       "bound_propagation_obbt_time_limit": 3600
