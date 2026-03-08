@@ -58,7 +58,7 @@ def run_single_stair_locatelli_test(instance_full_path, stair_locatelli_setting)
         opt_model.hide_output()
         alpaca.solve()
         return (
-            alpaca.runtime,
+            alpaca.statistics.solving_time,
             opt_model.model.ObjBound,
             volume_improvement,
         )

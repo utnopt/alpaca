@@ -31,9 +31,10 @@ def run_nonlinear_test(instance_name):
     alpaca.customize_settings(config_dict)
     alpaca.build_pwl_relaxation_solver()
     alpaca.solve()
-    assert abs(alpaca.statistics.solution_value - solution_dict[instance_name]) <= 0.05, (
+    solution_value = alpaca.solver.external_solver.opt_model.get_objective_value()
+    assert abs(solution_value - solution_dict[instance_name]) <= 0.05, (
         f"Expected solution {solution_dict[instance_name]} "
-        f"but got {alpaca.statistics.solution_value} for instance {instance_name}"
+        f"but got {solution_value} for instance {instance_name}"
     )
 
 

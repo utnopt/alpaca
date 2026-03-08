@@ -79,7 +79,7 @@ def run_single_optimization(args) -> tuple[str, float, float, int, int, float]:
         )
         return (
             osil_file_name,
-            alpaca.runtime,
+            alpaca.statistics.solving_time,
             mip_gap,
             nr_cuts,
             nr_applied_cuts,
