@@ -36,6 +36,7 @@ class Alpaca:
             settings_path: Filesystem path to a configuration file (e.g., JSON/YAML).
                 If None, default settings are used.
         """
+        ut_io.config_console_logger("INFO")
         config_dict = (
             ut_io.read_config_file(settings_path) if settings_path is not None else {}
         )
@@ -52,7 +53,6 @@ class Alpaca:
             path: Path where the log file should be saved.
             level: Logging threshold level (e.g., "DEBUG", "INFO", "WARNING").
         """
-        ut_io.config_console_logger(level)
         self.statistics.log_file_path = path
         ut_io.config_console_logger(level)
         ut_io.config_file_logger(path, level)

@@ -101,7 +101,7 @@ def run_single_combination(args: tuple[str, str, str | None, bool, Any, int]) ->
         if log_dir is not None:
             os.makedirs(log_dir, exist_ok=True)
             log_path = os.path.join(log_dir, f"{instance_name}_{config_name}.log")
-            alpaca.configure_logging(log_path, level="CRITICAL")
+            alpaca.configure_logging(log_path, level="WARNING")
 
         alpaca.customize_settings(config_path)
         alpaca.user_settings.solver_thread_limit = min(8, nr_of_threads)
