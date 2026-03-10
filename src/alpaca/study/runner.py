@@ -80,30 +80,28 @@ def run_single_combination(args: tuple[str, str, str | None, bool, Any, int]) ->
     instance_name = extract_name_from_path(instance_path)
     config_name = extract_name_from_path(config_path)
 
-    # Check if this instance has already failed with another config
     if failed_instances.get(instance_name, False):
         return RunResult(
             instance_name=instance_name,
             config_name=config_name,
             status=RunStatus.SKIPPED,
-            error_message="Instance failed with another configuration",
+            error_message="Instance failed with another configuration"
         )
-
-    original_stdout = sys.stdout
-    devnull_file: Any = None
+    original_stdout_fd = None
+    devnull_fd = None
 
     try:
         if suppress_output:
-            with open(os.devnull, "w", encoding="utf-8") as devnull_file:
-                sys.stdout = devnull_file
+            original_stdout_fd = os.dup(sys.stdout.fileno())
+            devnull_fd = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull_fd, sys.stdout.fileno())
 
-        # Initialize and configure Alpaca
         alpaca = alp.read_model_from_osil(instance_path)
 
         if log_dir is not None:
             os.makedirs(log_dir, exist_ok=True)
             log_path = os.path.join(log_dir, f"{instance_name}_{config_name}.log")
-            alpaca.configure_logging(log_path)
+            alpaca.configure_logging(log_path, level="CRITICAL")
 
         alpaca.customize_settings(config_path)
         alpaca.user_settings.solver_thread_limit = min(8, nr_of_threads)
@@ -116,24 +114,23 @@ def run_single_combination(args: tuple[str, str, str | None, bool, Any, int]) ->
             instance_name=instance_name,
             config_name=config_name,
             status=RunStatus.SUCCESS,
-            csv_row=csv_row,
+            csv_row=csv_row
         )
 
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         error_msg = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
-
-        # Mark this instance as failed so other configs will be skipped
         failed_instances[instance_name] = True
-
         return RunResult(
             instance_name=instance_name,
             config_name=config_name,
             status=RunStatus.ERROR,
-            error_message=error_msg,
+            error_message=error_msg
         )
 
     finally:
-        if suppress_output:
-            sys.stdout = original_stdout
-            if devnull_file is not None:
-                devnull_file.close()
+        if suppress_output and original_stdout_fd is not None:
+            # Restore original stdout
+            os.dup2(original_stdout_fd, sys.stdout.fileno())
+            os.close(original_stdout_fd)
+            if devnull_fd is not None:
+                os.close(devnull_fd)
