@@ -1,0 +1,328 @@
+# -*- coding: utf-8 -*-
+
+"""
+Command-line interface for running computational studies.
+
+This module provides a CLI entry point for the study pipeline, including
+execution, evaluation, and LaTeX generation.
+
+Usage:
+    python -m alpaca.study [OPTIONS]
+    python -m alpaca.study run [OPTIONS]
+    python -m alpaca.study evaluate --csv <path> [OPTIONS]
+"""
+import argparse
+import sys
+from pathlib import Path
+
+from alpaca.study.pipeline import run_study, StudyResults
+from alpaca.study.evaluator import StudyEvaluator
+from alpaca.study.latex_generator import LaTeXGenerator, LaTeXConfig
+from alpaca.utils.logger import logger
+from alpaca.utils import inout as ut_io
+
+
+def get_default_paths() -> dict[str, str]:
+    """Returns default paths relative to the project root.
+
+    Returns:
+        Dictionary with default paths for instances, configs, results, and logs.
+    """
+    study_module_dir = Path(__file__).parent
+    project_root = study_module_dir.parent.parent.parent
+
+    data_study_dir = project_root / "data" / "study"
+
+    return {
+        "instances_dir": str(data_study_dir / "test_instances"),
+        "configs_dir": str(data_study_dir / "test_configs"),
+        "results_dir": str(data_study_dir / "results"),
+        "log_dir": str(data_study_dir / "results" / "logs"),
+    }
+
+
+def add_common_run_arguments(parser: argparse.ArgumentParser, defaults: dict) -> None:
+    """Adds common arguments for run and full commands.
+
+    Args:
+        parser: The argument parser to add arguments to.
+        defaults: Dictionary with default path values.
+    """
+    parser.add_argument(
+        "-i",
+        "--instances",
+        type=str,
+        default=defaults["instances_dir"],
+        help="Directory containing .osil instance files.",
+    )
+
+    parser.add_argument(
+        "-c",
+        "--configs",
+        type=str,
+        default=defaults["configs_dir"],
+        help="Directory containing .json configuration files.",
+    )
+
+    parser.add_argument(
+        "-r",
+        "--results",
+        type=str,
+        default=defaults["results_dir"],
+        help="Directory for output files (CSV, tables, plots).",
+    )
+
+    parser.add_argument(
+        "-l",
+        "--logs",
+        type=str,
+        default=defaults["log_dir"],
+        help="Directory for log files. Use 'none' to disable logging.",
+    )
+
+    parser.add_argument(
+        "-w",
+        "--workers",
+        type=int,
+        default=None,
+        help="Maximum number of parallel workers. Default: auto (cores / threads-per-job).",
+    )
+
+    parser.add_argument(
+        "-t",
+        "--threads-per-job",
+        type=int,
+        default=4,
+        help="Number of threads each solver job uses internally (e.g., Gurobi threads).",
+    )
+
+
+def create_parser() -> argparse.ArgumentParser:
+    """Creates the argument parser with subcommands.
+
+    Returns:
+        Configured ArgumentParser.
+    """
+    defaults = get_default_paths()
+
+    parser = argparse.ArgumentParser(
+        description="Run computational studies and generate evaluation outputs.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Enable verbose output."
+    )
+
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # --- RUN command ---
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Run all instance-config combinations and generate results.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    add_common_run_arguments(run_parser, defaults)
+    run_parser.add_argument(
+        "--no-evaluate",
+        action="store_true",
+        help="Skip evaluation and LaTeX generation after run.",
+    )
+
+    # --- EVALUATE command ---
+    eval_parser = subparsers.add_parser(
+        "evaluate",
+        help="Evaluate existing CSV results and generate LaTeX outputs.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    eval_parser.add_argument(
+        "--csv", type=str, required=True, help="Path to the CSV results file."
+    )
+    eval_parser.add_argument(
+        "-r",
+        "--results",
+        type=str,
+        default=defaults["results_dir"],
+        help="Directory for output files (tables, plots).",
+    )
+    eval_parser.add_argument(
+        "--standalone", action="store_true", help="Generate standalone LaTeX documents."
+    )
+
+    # --- FULL command (run + evaluate) ---
+    full_parser = subparsers.add_parser(
+        "full",
+        help="Run study and then evaluate results (default behavior).",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    add_common_run_arguments(full_parser, defaults)
+    full_parser.add_argument(
+        "--standalone", action="store_true", help="Generate standalone LaTeX documents."
+    )
+
+    return parser
+
+
+def run_command(args: argparse.Namespace) -> int:
+    """Executes the 'run' command.
+
+    Args:
+        args: Parsed command-line arguments.
+
+    Returns:
+        Exit code (0 for success, 1 for failure).
+    """
+    log_dir = None if args.logs.lower() == "none" else args.logs
+
+    logger.info("Starting study pipeline...")
+    logger.info("  Instances: %s", args.instances)
+    logger.info("  Configs: %s", args.configs)
+    logger.info("  Results: %s", args.results)
+    logger.info("  Logs: %s", log_dir or "disabled")
+    logger.info("  Workers: %s", args.workers or "auto")
+    logger.info("  Threads per job: %d", args.threads_per_job)
+
+    results: StudyResults = run_study(
+        instances_dir=args.instances,
+        configs_dir=args.configs,
+        results_dir=args.results,
+        log_dir=log_dir,
+        max_workers=args.workers,
+        threads_per_job=args.threads_per_job,
+    )
+
+    # Run evaluation unless disabled
+    if not args.no_evaluate and results.successful_runs > 0:
+        evaluate_csv(results.csv_path, args.results, standalone=False)
+
+    if results.failed_instances:
+        return 1
+    return 0
+
+
+def evaluate_command(args: argparse.Namespace) -> int:
+    """Executes the 'evaluate' command.
+
+    Args:
+        args: Parsed command-line arguments.
+
+    Returns:
+        Exit code (0 for success, 1 for failure).
+    """
+    logger.info("Evaluating CSV: %s", args.csv)
+    evaluate_csv(args.csv, args.results, standalone=args.standalone)
+    return 0
+
+
+def full_command(args: argparse.Namespace) -> int:
+    """Executes the 'full' command (run + evaluate).
+
+    Args:
+        args: Parsed command-line arguments.
+
+    Returns:
+        Exit code (0 for success, 1 for failure).
+    """
+    log_dir = None if args.logs.lower() == "none" else args.logs
+
+    logger.info("Starting full pipeline (run + evaluate)...")
+    logger.info("  Instances: %s", args.instances)
+    logger.info("  Configs: %s", args.configs)
+    logger.info("  Results: %s", args.results)
+    logger.info("  Logs: %s", log_dir or "disabled")
+    logger.info("  Workers: %s", args.workers or "auto")
+    logger.info("  Threads per job: %d", args.threads_per_job)
+
+    results: StudyResults = run_study(
+        instances_dir=args.instances,
+        configs_dir=args.configs,
+        results_dir=args.results,
+        log_dir=log_dir,
+        max_workers=args.workers,
+        threads_per_job=args.threads_per_job,
+    )
+
+    if results.successful_runs > 0:
+        evaluate_csv(results.csv_path, args.results, standalone=args.standalone)
+
+    if results.failed_instances:
+        return 1
+    return 0
+
+
+def evaluate_csv(csv_path: str, results_dir: str, standalone: bool = False) -> None:
+    """Evaluates a CSV file and generates LaTeX outputs.
+
+    Args:
+        csv_path: Path to the CSV results file.
+        results_dir: Base directory for output.
+        standalone: Whether to generate standalone LaTeX documents.
+    """
+    logger.info("Starting evaluation...")
+
+    evaluator = StudyEvaluator(csv_path)
+
+    latex_config = LaTeXConfig(
+        tables_dir=str(Path(results_dir) / "tables"),
+        plots_dir=str(Path(results_dir) / "plots"),
+        standalone=standalone,
+    )
+
+    generator = LaTeXGenerator(evaluator, latex_config)
+    outputs = generator.generate_all()
+
+    logger.info("Generated %d tables:", len(outputs["tables"]))
+    for table_path in outputs["tables"]:
+        logger.info("  - %s", table_path)
+
+    logger.info("Generated %d plots:", len(outputs["plots"]))
+    for plot_path in outputs["plots"]:
+        logger.info("  - %s", plot_path)
+
+
+def main() -> int:
+    """Main entry point for the study CLI.
+
+    Returns:
+        Exit code (0 for success, 1 for failure).
+    """
+    parser = create_parser()
+    args = parser.parse_args()
+
+    # Configure logging
+    log_level = "DEBUG" if args.verbose else "INFO"
+    ut_io.config_console_logger(log_level)
+
+    # Default to 'full' if no command specified
+    if args.command is None:
+        args.command = "full"
+        defaults = get_default_paths()
+        args.instances = defaults["instances_dir"]
+        args.configs = defaults["configs_dir"]
+        args.results = defaults["results_dir"]
+        args.logs = defaults["log_dir"]
+        args.workers = None
+        args.threads_per_job = 4
+        args.standalone = False
+
+    try:
+        if args.command == "run":
+            return run_command(args)
+        if args.command == "evaluate":
+            return evaluate_command(args)
+        if args.command == "full":
+            return full_command(args)
+
+        parser.print_help()
+        return 1
+
+    except FileNotFoundError as exc:
+        logger.error("File/Directory not found: %s", exc)
+        return 1
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.exception("Unexpected error: %s", exc)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
