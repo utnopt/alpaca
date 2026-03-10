@@ -168,7 +168,7 @@ class StudyPipeline:
         )
 
         # Execute all jobs in parallel with shared failed-instance tracking
-        all_results = self._execute_jobs_parallel(effective_workers)
+        all_results = self._execute_jobs_parallel(effective_workers, self.config.threads_per_job)
 
         # Process results
         results_by_instance = self._group_results_by_instance(all_results)
@@ -201,7 +201,7 @@ class StudyPipeline:
 
         return results
 
-    def _execute_jobs_parallel(self, max_workers: int) -> list[RunResult]:
+    def _execute_jobs_parallel(self, max_workers: int, nr_of_threads: int) -> list[RunResult]:
         """Executes all jobs in parallel using a process pool with shared state.
 
         Uses a multiprocessing Manager to share a dictionary of failed instances
@@ -229,6 +229,7 @@ class StudyPipeline:
                     self.config.log_dir,
                     self.config.suppress_output,
                     failed_instances,
+                    nr_of_threads
                 )
                 for instance_path in self.instances
                 for config_path in self.configs

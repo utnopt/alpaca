@@ -56,7 +56,8 @@ def extract_name_from_path(path: str) -> str:
     return os.path.splitext(os.path.basename(path))[0]
 
 
-def run_single_combination(args: tuple[str, str, str | None, bool, Any]) -> RunResult:
+# pylint: disable=too-many-locals
+def run_single_combination(args: tuple[str, str, str | None, bool, Any, int]) -> RunResult:
     """Runs a single instance-config combination and returns the result.
 
     This function is designed to be called from a process pool. It checks
@@ -75,7 +76,7 @@ def run_single_combination(args: tuple[str, str, str | None, bool, Any]) -> RunR
     Returns:
         RunResult containing the status and CSV row if successful.
     """
-    instance_path, config_path, log_dir, suppress_output, failed_instances = args
+    instance_path, config_path, log_dir, suppress_output, failed_instances, nr_of_threads = args
     instance_name = extract_name_from_path(instance_path)
     config_name = extract_name_from_path(config_path)
 
@@ -105,6 +106,7 @@ def run_single_combination(args: tuple[str, str, str | None, bool, Any]) -> RunR
             alpaca.configure_logging(log_path)
 
         alpaca.customize_settings(config_path)
+        alpaca.user_settings.solver_thread_limit = min(8, nr_of_threads)
         alpaca.build_pwl_relaxation_solver()
         alpaca.solve()
 
