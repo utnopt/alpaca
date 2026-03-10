@@ -54,7 +54,6 @@ class Alpaca:
             level: Logging threshold level (e.g., "DEBUG", "INFO", "WARNING").
         """
         self.statistics.log_file_path = path
-        ut_io.config_console_logger(level)
         ut_io.config_file_logger(path, level)
 
     def customize_settings(self, settings_import: str | dict) -> None:
