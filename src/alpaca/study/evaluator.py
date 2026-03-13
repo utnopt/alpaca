@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=too-many-instance-attributes, too-many-branches, too-many-locals
 """
-Evaluator module for analyzing study results.
-
-This module provides functionality to load CSV results, compute statistics,
-and prepare data for LaTeX table and plot generation.
+@authors: kuen,
 """
 import csv
 from dataclasses import dataclass, field
@@ -13,59 +9,8 @@ from typing import Any
 
 import numpy as np
 
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 from alpaca.utils.logger import logger
-
-
-@dataclass
-class ColumnStats:
-    """Statistical summary for a single numeric column.
-
-    Attributes:
-        name: Column name.
-        count: Number of non-empty values.
-        mean: Arithmetic mean.
-        std: Standard deviation.
-        min_val: Minimum value.
-        max_val: Maximum value.
-        median: Median value.
-        q25: 25th percentile.
-        q75: 75th percentile.
-    """
-
-    name: str
-    count: int = 0
-    mean: float | None = None
-    std: float | None = None
-    min_val: float | None = None
-    max_val: float | None = None
-    median: float | None = None
-    q25: float | None = None
-    q75: float | None = None
-
-
-@dataclass
-class ConfigComparison:
-    """Comparison statistics between configurations.
-
-    Attributes:
-        config_a: Name of the first configuration.
-        config_b: Name of the second configuration.
-        column: Column being compared.
-        wins_a: Number of instances where config_a is better.
-        wins_b: Number of instances where config_b is better.
-        ties: Number of instances with equal values.
-        mean_ratio: Mean ratio of config_a / config_b values.
-        geometric_mean_ratio: Geometric mean of ratios.
-    """
-
-    config_a: str
-    config_b: str
-    column: str
-    wins_a: int = 0
-    wins_b: int = 0
-    ties: int = 0
-    mean_ratio: float | None = None
-    geometric_mean_ratio: float | None = None
 
 
 @dataclass
@@ -90,60 +35,46 @@ class StudyData:
 class StudyEvaluator:
     """Evaluates study results from CSV files.
 
-    This class loads CSV data, computes statistics per configuration,
-    and provides comparison utilities between configurations.
+    This class loads CSV data, filters for complete instances,
+    computes statistics per configuration, and provides data extraction utilities.
     """
 
     NUMERIC_COLUMNS = {
-        "solving_time",
-        "nr_nodes",
-        "solution_value",
-        "mip_gap",
-        "final_nr_vars",
-        "final_nr_constraints",
-        "presolved_nr_vars",
-        "presolved_nr_constraints",
-        "presolved_nr_nonzeros",
-        "root_solution_value",
-        "root_solving_time",
-        "build_time",
-        "original_nr_variables",
-        "original_nr_constraints",
-        "original_nr_bilinear_expressions",
-        "original_nr_bilinear_binary_expressions",
-        "original_nr_mixed_binary_expressions",
-        "original_nr_multilinear_expressions",
-        "original_nr_one_dim_expressions",
-        "pwl_nr_variables",
-        "pwl_nr_constraints",
-        "pwl_nr_bilinear_expressions",
-        "pwl_nr_bilinear_binary_expressions",
-        "pwl_nr_mixed_binary_expressions",
-        "pwl_nr_multilinear_expressions",
-        "pwl_nr_one_dim_expressions",
-        "locatelli_domain_volume_polygon",
-        "locatelli_domain_volume_polytope",
-        "stair_locatelli_domain_volume_polygon",
-        "stair_locatelli_domain_volume_polytope",
-        "mpip_nr_instances",
-        "mpip_ratio",
+        lsf.stats_solving_time(),
+        lsf.stats_nr_nodes(),
+        lsf.stats_solution_value(),
+        lsf.stats_mip_gap(),
+        lsf.stats_final_nr_vars(),
+        lsf.stats_final_nr_constraints(),
+        lsf.stats_presolved_nr_vars(),
+        lsf.stats_presolved_nr_constraints(),
+        lsf.stats_presolved_nr_nonzeros(),
+        lsf.stats_root_solution_value(),
+        lsf.stats_root_solving_time(),
+        lsf.stats_build_time(),
+        lsf.stats_original_nr_variables(),
+        lsf.stats_original_nr_constraints(),
+        lsf.stats_original_nr_bilinear_expressions(),
+        lsf.stats_original_nr_bilinear_binary_expressions(),
+        lsf.stats_original_nr_mixed_binary_expressions(),
+        lsf.stats_original_nr_multilinear_expressions(),
+        lsf.stats_original_nr_one_dim_expressions(),
+        lsf.stats_pwl_nr_variables(),
+        lsf.stats_pwl_nr_constraints(),
+        lsf.stats_pwl_nr_bilinear_expressions(),
+        lsf.stats_pwl_nr_bilinear_binary_expressions(),
+        lsf.stats_pwl_nr_mixed_binary_expressions(),
+        lsf.stats_pwl_nr_multilinear_expressions(),
+        lsf.stats_pwl_nr_one_dim_expressions(),
+        lsf.stats_locatelli_domain_volume_polygon(),
+        lsf.stats_locatelli_domain_volume_polytope(),
+        lsf.stats_stair_locatelli_domain_volume_polygon(),
+        lsf.stats_stair_locatelli_domain_volume_polytope(),
+        lsf.stats_mpip_nr_instances(),
+        lsf.stats_mpip_ratio(),
     }
 
-    LOWER_IS_BETTER = {
-        "solving_time",
-        "nr_nodes",
-        "mip_gap",
-        "build_time",
-        "root_solving_time",
-        "final_nr_vars",
-        "final_nr_constraints",
-        "presolved_nr_vars",
-        "presolved_nr_constraints",
-        "locatelli_domain_volume_polygon",
-        "locatelli_domain_volume_polytope",
-        "stair_locatelli_domain_volume_polygon",
-        "stair_locatelli_domain_volume_polytope",
-    }
+    GEOMETRIC_MEAN_SHIFT = 10.0
 
     def __init__(self, csv_path: str) -> None:
         """Initializes the evaluator with a CSV file path.
@@ -154,6 +85,7 @@ class StudyEvaluator:
         self.csv_path = csv_path
         self.data = StudyData()
         self._load_csv()
+        self._filter_complete_instances()
 
     def _load_csv(self) -> None:
         """Loads and parses the CSV file into the data structure."""
@@ -169,22 +101,58 @@ class StudyEvaluator:
                 parsed_row = self._parse_row(row)
                 self.data.rows.append(parsed_row)
 
-                instance = parsed_row.get("instance_name", "")
-                config = parsed_row.get("config_name", "")
+                instance = parsed_row.get(lsf.stats_instance_name(), "")
+                config = parsed_row.get(lsf.stats_config_name(), "")
                 self.data.data_matrix[(instance, config)] = parsed_row
 
-        self.data.instances = sorted(
-            {row.get("instance_name", "") for row in self.data.rows}
+        all_instances = sorted(
+            {row.get(lsf.stats_instance_name(), "") for row in self.data.rows}
         )
         self.data.configs = sorted(
-            {row.get("config_name", "") for row in self.data.rows}
+            {row.get(lsf.stats_config_name(), "") for row in self.data.rows}
         )
+        self.data.instances = all_instances
 
         logger.info(
-            "Loaded %d rows: %d instances x %d configs",
+            "Loaded %d rows: %d instances x %d configs (before filtering)",
             len(self.data.rows),
             len(self.data.instances),
             len(self.data.configs),
+        )
+
+    def _filter_complete_instances(self) -> None:
+        """Filters to keep only instances where all configurations have results."""
+        complete_instances = []
+
+        for instance in self.data.instances:
+            has_all_configs = all(
+                (instance, config) in self.data.data_matrix
+                for config in self.data.configs
+            )
+            if has_all_configs:
+                complete_instances.append(instance)
+
+        removed_count = len(self.data.instances) - len(complete_instances)
+        self.data.instances = complete_instances
+
+        filtered_rows = [
+            row
+            for row in self.data.rows
+            if row.get(lsf.stats_instance_name(), "") in complete_instances
+        ]
+        self.data.rows = filtered_rows
+
+        filtered_matrix = {
+            key: value
+            for key, value in self.data.data_matrix.items()
+            if key[0] in complete_instances
+        }
+        self.data.data_matrix = filtered_matrix
+
+        logger.info(
+            "Filtered to %d complete instances (removed %d incomplete)",
+            len(complete_instances),
+            removed_count,
         )
 
     def _parse_row(self, row: dict[str, str]) -> dict[str, Any]:
@@ -221,228 +189,242 @@ class StudyEvaluator:
         except ValueError:
             return None
 
-    def get_column_values(
-        self,
-        column: str,
-        config: str | None = None,
-        instance: str | None = None,
-    ) -> list[float]:
-        """Extracts numeric values for a column, optionally filtered.
+    def get_column_values_for_config(self, column: str, config: str) -> list[float]:
+        """Extracts numeric values for a column filtered by configuration.
 
         Args:
             column: Column name to extract.
-            config: If provided, filter by this configuration.
-            instance: If provided, filter by this instance.
+            config: Configuration name to filter by.
 
         Returns:
             List of non-None numeric values.
         """
         values = []
-        for row in self.data.rows:
-            if config is not None and row.get("config_name") != config:
-                continue
-            if instance is not None and row.get("instance_name") != instance:
-                continue
-
-            val = row.get(column)
+        for instance in self.data.instances:
+            val = self.data.data_matrix.get((instance, config), {}).get(column)
             if val is not None:
                 values.append(val)
-
         return values
 
-    def compute_column_stats(
-        self, column: str, config: str | None = None
-    ) -> ColumnStats:
-        """Computes statistical summary for a column.
+    def get_column_values_for_instance(
+        self, column: str, instance: str
+    ) -> dict[str, float | None]:
+        """Extracts numeric values for a column filtered by instance.
 
         Args:
-            column: Column name to analyze.
-            config: If provided, compute stats only for this configuration.
+            column: Column name to extract.
+            instance: Instance name to filter by.
 
         Returns:
-            ColumnStats object with computed statistics.
+            Dictionary mapping config names to values.
         """
-        values = self.get_column_values(column, config=config)
-        stats = ColumnStats(name=column, count=len(values))
+        values = {}
+        for config in self.data.configs:
+            val = self.data.data_matrix.get((instance, config), {}).get(column)
+            values[config] = val
+        return values
+
+    def compute_mean(self, column: str, config: str) -> float | None:
+        """Computes arithmetic mean for a column and configuration.
+
+        Args:
+            column: Column name.
+            config: Configuration name.
+
+        Returns:
+            Mean value or None if no data.
+        """
+        values = self.get_column_values_for_config(column, config)
+        if not values:
+            return None
+        return float(np.mean(values))
+
+    def compute_shifted_geometric_mean(
+        self, column: str, config: str, shift: float | None = None
+    ) -> float | None:
+        """Computes shifted geometric mean for a column and configuration.
+
+        Formula: exp(mean(log(values + shift))) - shift
+
+        Args:
+            column: Column name.
+            config: Configuration name.
+            shift: Shift value. Defaults to GEOMETRIC_MEAN_SHIFT.
+
+        Returns:
+            Shifted geometric mean or None if no data.
+        """
+        if shift is None:
+            shift = self.GEOMETRIC_MEAN_SHIFT
+
+        values = self.get_column_values_for_config(column, config)
+        if not values:
+            return None
+
+        shifted_values = [v + shift for v in values]
+        if any(v <= 0 for v in shifted_values):
+            return None
+
+        log_mean = np.mean(np.log(shifted_values))
+        return float(np.exp(log_mean) - shift)
+
+    def compute_statistics_for_config(
+        self, column: str, config: str
+    ) -> dict[str, float | None]:
+        """Computes comprehensive statistics for a column and configuration.
+
+        Args:
+            column: Column name.
+            config: Configuration name.
+
+        Returns:
+            Dictionary with mean, std, min, max, median, q25, q75 values.
+        """
+        values = self.get_column_values_for_config(column, config)
 
         if not values:
-            return stats
+            return {
+                "mean": None,
+                "std": None,
+                "min": None,
+                "max": None,
+                "median": None,
+                "q25": None,
+                "q75": None,
+            }
 
         arr = np.array(values)
-        stats.mean = float(np.mean(arr))
-        stats.std = float(np.std(arr))
-        stats.min_val = float(np.min(arr))
-        stats.max_val = float(np.max(arr))
-        stats.median = float(np.median(arr))
-        stats.q25 = float(np.percentile(arr, 25))
-        stats.q75 = float(np.percentile(arr, 75))
+        return {
+            "mean": float(np.mean(arr)),
+            "std": float(np.std(arr)),
+            "min": float(np.min(arr)),
+            "max": float(np.max(arr)),
+            "median": float(np.median(arr)),
+            "q25": float(np.percentile(arr, 25)),
+            "q75": float(np.percentile(arr, 75)),
+        }
 
-        return stats
-
-    def compute_config_comparison(
-        self,
-        config_a: str,
-        config_b: str,
-        column: str,
-        lower_is_better: bool | None = None,
-    ) -> ConfigComparison:
-        """Compares two configurations on a specific column.
+    def get_instances_solved_over_time(
+        self, time_column: str = None
+    ) -> dict[str, list[tuple[float, int]]]:
+        """Computes cumulative instances solved over time for each config.
 
         Args:
-            config_a: Name of the first configuration.
-            config_b: Name of the second configuration.
-            column: Column to compare.
-            lower_is_better: If True, lower values win. If None, inferred.
+            time_column: Column containing solving times.
 
         Returns:
-            ConfigComparison with win/loss counts and ratio statistics.
+            Dictionary mapping config to list of (time, cumulative_count) tuples.
         """
-        if lower_is_better is None:
-            lower_is_better = column in self.LOWER_IS_BETTER
+        if time_column is None:
+            time_column = lsf.stats_solving_time()
 
-        comparison = ConfigComparison(
-            config_a=config_a, config_b=config_b, column=column
-        )
-
-        ratios = []
-
-        for instance in self.data.instances:
-            val_a = self.data.data_matrix.get((instance, config_a), {}).get(column)
-            val_b = self.data.data_matrix.get((instance, config_b), {}).get(column)
-
-            if val_a is None or val_b is None:
-                continue
-
-            if val_b != 0:
-                ratios.append(val_a / val_b)
-
-            if val_a < val_b:
-                if lower_is_better:
-                    comparison.wins_a += 1
-                else:
-                    comparison.wins_b += 1
-            elif val_a > val_b:
-                if lower_is_better:
-                    comparison.wins_b += 1
-                else:
-                    comparison.wins_a += 1
-            else:
-                comparison.ties += 1
-
-        if ratios:
-            comparison.mean_ratio = float(np.mean(ratios))
-            positive_ratios = [r for r in ratios if r > 0]
-            if positive_ratios:
-                comparison.geometric_mean_ratio = float(
-                    np.exp(np.mean(np.log(positive_ratios)))
-                )
-
-        return comparison
-
-    def get_pivot_table(self, value_column: str) -> dict[str, dict[str, float | None]]:
-        """Creates a pivot table with instances as rows and configs as columns.
-
-        Args:
-            value_column: Column to aggregate.
-
-        Returns:
-            Nested dictionary: {instance: {config: value}}.
-        """
-        pivot: dict[str, dict[str, float | None]] = {}
-
-        for instance in self.data.instances:
-            pivot[instance] = {}
-            for config in self.data.configs:
-                value = self.data.data_matrix.get((instance, config), {}).get(
-                    value_column
-                )
-                pivot[instance][config] = value
-
-        return pivot
-
-    def get_aggregated_stats_by_config(
-        self, columns: list[str] | None = None
-    ) -> dict[str, dict[str, ColumnStats]]:
-        """Computes statistics for each column grouped by configuration.
-
-        Args:
-            columns: List of columns to analyze. If None, uses all numeric.
-
-        Returns:
-            Nested dictionary: {config: {column: ColumnStats}}.
-        """
-        if columns is None:
-            columns = [h for h in self.data.headers if h in self.NUMERIC_COLUMNS]
-
-        result: dict[str, dict[str, ColumnStats]] = {}
+        result = {}
 
         for config in self.data.configs:
-            result[config] = {}
-            for column in columns:
-                result[config][column] = self.compute_column_stats(
-                    column, config=config
-                )
+            times = []
+            for instance in self.data.instances:
+                val = self.data.data_matrix.get((instance, config), {}).get(time_column)
+                if val is not None:
+                    times.append(val)
+
+            if not times:
+                result[config] = []
+                continue
+
+            sorted_times = sorted(times)
+            points = []
+            for i, time in enumerate(sorted_times):
+                points.append((time, i + 1))
+
+            result[config] = points
 
         return result
 
-    def compute_performance_profile_data(
-        self, column: str, lower_is_better: bool | None = None
-    ) -> dict[str, list[tuple[float, float]]]:
-        """Computes data for performance profile plots.
+    def get_pivot_data(
+        self, columns: list[str]
+    ) -> dict[str, dict[str, dict[str, float | None]]]:
+        """Creates pivot data for instances with multiple columns per config.
 
         Args:
-            column: Column to analyze (typically solving_time).
-            lower_is_better: If True, lower values are better.
+            columns: List of column names to include.
 
         Returns:
-            Dictionary mapping config names to lists of (ratio, fraction) tuples.
+            Nested dict: {instance: {config: {column: value}}}.
         """
-        if lower_is_better is None:
-            lower_is_better = column in self.LOWER_IS_BETTER
-
-        best_per_instance: dict[str, float] = {}
+        pivot = {}
         for instance in self.data.instances:
-            values = []
+            pivot[instance] = {}
             for config in self.data.configs:
-                val = self.data.data_matrix.get((instance, config), {}).get(column)
-                if val is not None:
-                    values.append(val)
+                pivot[instance][config] = {}
+                row_data = self.data.data_matrix.get((instance, config), {})
+                for column in columns:
+                    pivot[instance][config][column] = row_data.get(column)
+        return pivot
 
-            if values:
-                if lower_is_better:
-                    best_per_instance[instance] = min(values)
+    def get_config_aggregated_data(
+        self,
+        columns: list[str],
+        use_shifted_geom_mean: list[str] | None = None,
+    ) -> dict[str, dict[str, float | None]]:
+        """Aggregates data by configuration with specified aggregation methods.
+
+        Args:
+            columns: List of column names to aggregate.
+            use_shifted_geom_mean: Columns to use shifted geometric mean.
+
+        Returns:
+            Nested dict: {config: {column: aggregated_value}}.
+        """
+        if use_shifted_geom_mean is None:
+            use_shifted_geom_mean = []
+
+        result = {}
+        for config in self.data.configs:
+            result[config] = {}
+            for column in columns:
+                if column in use_shifted_geom_mean:
+                    result[config][column] = self.compute_shifted_geometric_mean(
+                        column, config
+                    )
                 else:
-                    best_per_instance[instance] = max(values)
+                    result[config][column] = self.compute_mean(column, config)
+        return result
 
-        ratios_by_config: dict[str, list[float]] = {c: [] for c in self.data.configs}
+    def get_boxplot_data_for_config(
+        self, column: str
+    ) -> dict[str, dict[str, float | None]]:
+        """Gets boxplot statistics for a column across all configurations.
 
+        Args:
+            column: Column name.
+
+        Returns:
+            Dictionary mapping config to boxplot statistics.
+        """
+        result = {}
+        for config in self.data.configs:
+            result[config] = self.compute_statistics_for_config(column, config)
+        return result
+
+    def get_instance_data(
+        self, columns: list[str]
+    ) -> dict[str, dict[str, float | None]]:
+        """Gets instance-level data for specified columns (first config's values).
+
+        Note: For instance-specific metrics that don't vary by config.
+
+        Args:
+            columns: List of column names.
+
+        Returns:
+            Dictionary mapping instance to column values.
+        """
+        result = {}
         for instance in self.data.instances:
-            if instance not in best_per_instance:
-                continue
-
-            best = best_per_instance[instance]
-            if best == 0:
-                continue
-
-            for config in self.data.configs:
-                val = self.data.data_matrix.get((instance, config), {}).get(column)
-                if val is not None:
-                    if lower_is_better:
-                        ratio = val / best
-                    else:
-                        ratio = best / val if val != 0 else float("inf")
-                    ratios_by_config[config].append(ratio)
-
-        profile_data: dict[str, list[tuple[float, float]]] = {}
-
-        for config, ratios in ratios_by_config.items():
-            if not ratios:
-                profile_data[config] = []
-                continue
-
-            sorted_ratios = sorted(ratios)
-            n = len(sorted_ratios)
-            points = [(sorted_ratios[i], (i + 1) / n) for i in range(n)]
-            profile_data[config] = points
-
-        return profile_data
+            result[instance] = {}
+            first_config = self.data.configs[0] if self.data.configs else None
+            if first_config:
+                row_data = self.data.data_matrix.get((instance, first_config), {})
+                for column in columns:
+                    result[instance][column] = row_data.get(column)
+        return result

@@ -98,3 +98,55 @@ def read_config_file(path: str) -> dict:
         encoding=lsf.file_encoding_utf8(),
     ) as file:
         return json.load(file)
+
+
+def write_file(path: str, content: str) -> None:
+    """Writes content to a file.
+
+    Args:
+        path: Output file path.
+        content: Content to write.
+    """
+    with open(path, lsf.file_mode_write(), encoding=lsf.file_encoding_utf8()) as file:
+        file.write(content)
+
+
+def build_latex_table(
+    col_spec: str,
+    header: str,
+    rows: list[str],
+    caption: str,
+    label: str,
+) -> str:
+    """Builds a complete LaTeX table environment.
+
+    Args:
+        col_spec: Column specification (e.g., "lrrr").
+        header: Header row(s) content.
+        rows: List of data row strings.
+        caption: Table caption.
+        label: Table label for referencing.
+
+    Returns:
+        Complete LaTeX table as a string.
+    """
+    lines = [
+        "\\begin{table}[htbp]",
+        "\\centering",
+        f"\\caption{{{caption}}}",
+        f"\\label{{{label}}}",
+        f"\\begin{{tabular}}{{{col_spec}}}",
+        "\\toprule",
+        header,
+        "\\midrule",
+    ]
+    lines.extend(rows)
+    lines.extend(
+        [
+            "\\bottomrule",
+            "\\end{tabular}",
+            "\\end{table}",
+        ]
+    )
+
+    return "\n".join(lines)

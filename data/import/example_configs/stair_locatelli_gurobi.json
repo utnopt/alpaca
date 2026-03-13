@@ -4,7 +4,7 @@
       "reformulate_multilinear_to_bilinear": 1,
       "bilinear_handling": 3,
       "pwl_method": "none",
-      "bound_propagation": 2,
+      "bound_propagation": 0,
       "bound_propagation_obbt_time_limit": 3600,
       "feature/stair_locatelli/grid_size": 10,
       "feature/stair_locatelli": 2,

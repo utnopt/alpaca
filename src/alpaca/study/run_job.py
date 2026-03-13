@@ -1,13 +1,6 @@
 # -*- coding: utf-8 -*-
-
 """
-Single job runner for computational studies.
-
-This module executes a single instance-config combination and outputs
-the result as a CSV row to stdout. Designed to be called as a subprocess.
-
-Usage:
-    python -m alpaca.study.run_job --instance <path> --config <path> [OPTIONS]
+@authors: kuen,
 """
 import argparse
 import os

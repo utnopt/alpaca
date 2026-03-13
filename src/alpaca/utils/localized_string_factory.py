@@ -648,6 +648,10 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
         return "r"
 
     @classmethod
+    def file_mode_write(cls) -> str:
+        return "w"
+
+    @classmethod
     def file_encoding_utf8(cls) -> str:
         return "utf-8"
 

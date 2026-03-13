@@ -171,7 +171,7 @@ def run_command(args: argparse.Namespace) -> int:
     )
 
     if not args.no_evaluate and results.successful_runs > 0:
-        evaluate_csv(results.csv_path, args.results, standalone=False)
+        evaluate_csv(results.csv_path, args.results)
 
     if results.failed_instances:
         return 1
@@ -188,17 +188,16 @@ def evaluate_command(args: argparse.Namespace) -> int:
         Exit code (0 for success, 1 for failure).
     """
     logger.info("Evaluating CSV: %s", args.csv)
-    evaluate_csv(args.csv, args.results, standalone=args.standalone)
+    evaluate_csv(args.csv, args.results)
     return 0
 
 
-def evaluate_csv(csv_path: str, results_dir: str, standalone: bool = False) -> None:
+def evaluate_csv(csv_path: str, results_dir: str) -> None:
     """Evaluates a CSV file and generates LaTeX outputs.
 
     Args:
         csv_path: Path to the CSV results file.
         results_dir: Base directory for output.
-        standalone: Whether to generate standalone LaTeX documents.
     """
     logger.info("Starting evaluation...")
 
@@ -207,7 +206,6 @@ def evaluate_csv(csv_path: str, results_dir: str, standalone: bool = False) -> N
     latex_config = LaTeXConfig(
         tables_dir=str(Path(results_dir) / "tables"),
         plots_dir=str(Path(results_dir) / "plots"),
-        standalone=standalone,
     )
 
     generator = LaTeXGenerator(evaluator, latex_config)

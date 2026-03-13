@@ -125,12 +125,14 @@ class StairLocatelli:
             for bl_exp, vertices in self.bilinear_projected_domains_polygon
             if bl_exp.name == bilinear_expression.name
         ][0]
+        if len(polygon_domain_vertices) < 3:
+            return 0.0
         if (
             abs(x.ub - x.lb) < s.StaticSettings.feasibility_tolerance
             or abs(y.ub - y.lb) < s.StaticSettings.feasibility_tolerance
         ):
             return 0.0
-        if sum (x_val * y_val for x_val, y_val in polygon_domain_vertices) == 0.0:
+        if sum(x_val * y_val for x_val, y_val in polygon_domain_vertices) == 0.0:
             return 0.0
         return self.calculate_3d_volume_polygon_over_domain(
             bilinear_expression, polygon_domain_vertices, is_polytope=is_polytope

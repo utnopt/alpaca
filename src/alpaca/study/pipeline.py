@@ -1,12 +1,6 @@
 # -*- coding: utf-8 -*-
-
 """
-Pipeline module for orchestrating study execution.
-
-This module discovers instances and configs, runs all combinations as separate
-subprocesses (visible in ps aux), and writes results immediately to CSV.
-If any configuration fails for an instance, remaining configurations for
-that instance are skipped.
+@authors: kuen,
 """
 import os
 import subprocess
@@ -259,8 +253,8 @@ class StudyPipeline:
             if running:
                 finished_procs = []
                 for proc in list(running.keys()):
-                    retcode = proc.poll()
-                    if retcode is not None:
+                    return_code = proc.poll()
+                    if return_code is not None:
                         finished_procs.append(proc)
 
                 if not finished_procs:
@@ -378,7 +372,8 @@ class StudyPipeline:
 
         return core_sets
 
-    def _log_summary(self, results: StudyResults) -> None:
+    @staticmethod
+    def _log_summary(results: StudyResults) -> None:
         """Logs a summary of the study execution.
 
         Args:

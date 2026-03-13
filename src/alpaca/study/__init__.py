@@ -30,8 +30,6 @@ from alpaca.study.pipeline import (
 from alpaca.study.evaluator import (
     StudyEvaluator,
     StudyData,
-    ColumnStats,
-    ConfigComparison,
 )
 from alpaca.study.latex_generator import LaTeXGenerator, LaTeXConfig
 
@@ -43,8 +41,6 @@ __all__ = [
     "discover_files",
     "StudyEvaluator",
     "StudyData",
-    "ColumnStats",
-    "ConfigComparison",
     "LaTeXGenerator",
     "LaTeXConfig",
 ]
