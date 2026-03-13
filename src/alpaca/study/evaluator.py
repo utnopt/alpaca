@@ -342,9 +342,7 @@ class StudyEvaluator:
 
         return comparison
 
-    def get_pivot_table(
-        self, value_column: str
-    ) -> dict[str, dict[str, float | None]]:
+    def get_pivot_table(self, value_column: str) -> dict[str, dict[str, float | None]]:
         """Creates a pivot table with instances as rows and configs as columns.
 
         Args:

@@ -1,75 +1,48 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=too-many-locals
 
 """
-Pipeline module for orchestrating study execution.
+Pipeline module using subprocess spawning.
 
-This module discovers instances and configs, runs all combinations in parallel,
-and writes results to a CSV file. If any configuration fails for an instance,
-remaining configurations for that instance are skipped.
+Each job runs as a separate process visible in `ps aux | grep run_single`.
+Results are written to CSV immediately when each job finishes.
 """
 import os
+import platform
+import signal
+import subprocess
+import sys
 import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from multiprocessing import Manager
 from pathlib import Path
+from threading import Lock, Semaphore, Thread
 
-from alpaca.study.runner import RunResult, RunStatus, run_single_combination
 from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
 from alpaca.utils.logger import logger
 
 
 @dataclass
 class StudyConfig:
-    """Configuration for a study run.
-
-    Attributes:
-        instances_dir: Directory containing .osil instance files.
-        configs_dir: Directory containing .json configuration files.
-        results_dir: Base directory for output (raw/, tables/, plots/).
-        log_dir: Directory for log files. None disables file logging.
-        max_workers: Maximum number of parallel workers. None calculates automatically.
-        threads_per_job: Number of threads each solver job uses internally.
-        suppress_output: If True, suppresses stdout during runs.
-    """
+    """Configuration for a study run."""
 
     instances_dir: str
     configs_dir: str
     results_dir: str
     log_dir: str | None = None
     max_workers: int | None = None
-    threads_per_job: int = 1
-    suppress_output: bool = True
+    threads_per_job: int = 4
 
     def get_effective_max_workers(self) -> int:
-        """Calculates the effective number of parallel workers.
-
-        If max_workers is explicitly set, that value is used.
-        Otherwise, calculates based on available CPU cores divided by
-        threads_per_job to avoid oversubscription.
-
-        Returns:
-            Number of parallel workers to use.
-        """
+        """Calculates number of parallel workers."""
         if self.max_workers is not None:
             return self.max_workers
-
         available_cores = os.cpu_count() or 1
         return max(1, available_cores // self.threads_per_job)
 
 
 @dataclass
 class StudyResults:
-    """Container for study execution results.
-
-    Attributes:
-        csv_path: Path to the generated CSV file.
-        successful_runs: Number of successful runs written to CSV.
-        failed_instances: Set of instance names that had at least one failure.
-        skipped_runs: Number of runs skipped due to prior failures.
-        total_combinations: Total number of instance-config combinations.
-        execution_time: Total execution time in seconds.
-    """
+    """Container for study execution results."""
 
     csv_path: str
     successful_runs: int = 0
@@ -80,298 +53,233 @@ class StudyResults:
 
 
 def discover_files(directory: str, extension: str) -> list[str]:
-    """Discovers all files with a given extension in a directory.
-
-    Args:
-        directory: Directory to search in.
-        extension: File extension to filter by (e.g., '.osil').
-
-    Returns:
-        Sorted list of full paths to matching files.
-
-    Raises:
-        FileNotFoundError: If the directory does not exist.
-    """
+    """Discovers all files with a given extension in a directory."""
     path = Path(directory)
     if not path.exists():
         raise FileNotFoundError(f"Directory does not exist: {directory}")
-
-    files = sorted([str(f) for f in path.glob(f"*{extension}")])
-    return files
+    return sorted([str(f) for f in path.glob(f"*{extension}")])
 
 
 class StudyPipeline:
-    """Orchestrates the execution of a computational study.
-
-    This class manages the discovery of instances and configs, parallel
-    execution of all combinations, and collection of results into a CSV file.
-    If a configuration fails for an instance, remaining configurations for
-    that instance are automatically skipped.
-    """
+    """Orchestrates study execution by spawning visible subprocesses."""
 
     def __init__(self, config: StudyConfig) -> None:
-        """Initializes the pipeline with the given configuration.
-
-        Args:
-            config: StudyConfig object with paths and settings.
-        """
         self.config = config
         self.instances: list[str] = []
         self.configs: list[str] = []
+        self._csv_lock = Lock()
+        self._results = StudyResults(csv_path="")
 
     def discover(self) -> None:
-        """Discovers all instances and configurations in the configured directories."""
+        """Discovers all instances and configurations."""
         self.instances = discover_files(self.config.instances_dir, ".osil")
         self.configs = discover_files(self.config.configs_dir, ".json")
-
         logger.info(
-            "Discovered %d instances and %d configs (%d total combinations)",
+            "Discovered %d instances and %d configs (%d combinations)",
             len(self.instances),
             len(self.configs),
             len(self.instances) * len(self.configs),
         )
 
     def run(self) -> StudyResults:
-        """Executes all instance-config combinations and writes results to CSV.
+        """Executes all combinations using subprocess spawning."""
+        if hasattr(signal, "SIGHUP"):
+            signal.signal(signal.SIGHUP, signal.SIG_IGN)
 
-        All combinations are submitted for parallel execution. A shared state
-        tracks failed instances, allowing workers to skip remaining configs
-        for instances that have already failed.
-
-        Returns:
-            StudyResults with execution statistics.
-        """
         start_time = time.time()
 
-        # Ensure discovery has been run
         if not self.instances or not self.configs:
             self.discover()
 
-        # Create output directories
+        # Setup directories and files
         raw_dir = os.path.join(self.config.results_dir, "raw")
         os.makedirs(raw_dir, exist_ok=True)
 
-        # Create CSV file with timestamp
         timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
         csv_path = os.path.join(raw_dir, f"study_results_{timestamp}.csv")
+        failed_file = os.path.join(raw_dir, f"failed_instances_{timestamp}.txt")
+        error_log = os.path.join(raw_dir, f"errors_{timestamp}.log")
 
-        results = StudyResults(
+        self._results = StudyResults(
             csv_path=csv_path,
             total_combinations=len(self.instances) * len(self.configs),
         )
 
+        # Write CSV header
+        with open(csv_path, "w", encoding="utf-8") as f:
+            f.write(lsf.stats_column_names() + "\n")
+
+        # Create empty failed file
+        Path(failed_file).touch()
+
         effective_workers = self.config.get_effective_max_workers()
+        core_sets = self._create_core_sets(effective_workers)
+
         logger.info(
-            "Starting parallel execution with %d workers (%d threads per job)...",
+            "Starting %d workers, %d threads each",
             effective_workers,
             self.config.threads_per_job,
         )
+        logger.info("Results: %s", csv_path)
+        logger.info("Errors:  %s", error_log)
 
-        # Execute all jobs in parallel with shared failed-instance tracking
-        all_results = self._execute_jobs_parallel(effective_workers, self.config.threads_per_job)
+        # Semaphore to limit concurrent jobs
+        semaphore = Semaphore(effective_workers)
+        threads: list[Thread] = []
 
-        # Process results
-        results_by_instance = self._group_results_by_instance(all_results)
+        job_num = 0
+        total_jobs = len(self.instances) * len(self.configs)
 
-        # Identify failed and skipped instances
-        for instance_name, instance_results in results_by_instance.items():
-            has_failure = any(r.status == RunStatus.ERROR for r in instance_results)
-            if has_failure:
-                results.failed_instances.add(instance_name)
+        for instance in self.instances:
+            for config in self.configs:
+                job_num += 1
+                slot = (job_num - 1) % effective_workers
+                core_set = core_sets[slot]
 
-            for result in instance_results:
-                if result.status == RunStatus.SKIPPED:
-                    results.skipped_runs += 1
-
-        # Write successful results to CSV (only for instances without failures)
-        self._write_results_to_csv(
-            csv_path, results_by_instance, results.failed_instances
-        )
-
-        # Count successful runs
-        for instance_name, instance_results in results_by_instance.items():
-            if instance_name not in results.failed_instances:
-                results.successful_runs += sum(
-                    1 for r in instance_results if r.status == RunStatus.SUCCESS
+                t = Thread(
+                    target=self._run_job,
+                    args=(
+                        instance,
+                        config,
+                        core_set,
+                        csv_path,
+                        failed_file,
+                        error_log,
+                        semaphore,
+                        job_num,
+                        total_jobs,
+                    ),
                 )
+                t.start()
+                threads.append(t)
 
-        results.execution_time = time.time() - start_time
+        # Wait for all threads
+        for t in threads:
+            t.join()
 
-        self._log_summary(results)
-
-        return results
-
-    def _execute_jobs_parallel(self, max_workers: int, nr_of_threads: int) -> list[RunResult]:
-        """Executes all jobs in parallel using a process pool with shared state.
-
-        Uses a multiprocessing Manager to share a dictionary of failed instances
-        across all worker processes. When a worker encounters an error, it marks
-        the instance as failed, and subsequent workers for the same instance
-        will skip execution.
-
-        Args:
-            max_workers: Number of parallel workers to use.
-
-        Returns:
-            List of RunResult objects from all executions.
-        """
-        all_results: list[RunResult] = []
-
-        # Create a shared dictionary for tracking failed instances
-        with Manager() as manager:
-            failed_instances = manager.dict()
-
-            # Build job list with shared state reference
-            jobs = [
-                (
-                    instance_path,
-                    config_path,
-                    self.config.log_dir,
-                    self.config.suppress_output,
-                    failed_instances,
-                    nr_of_threads
-                )
-                for instance_path in self.instances
-                for config_path in self.configs
-            ]
-
-            with ProcessPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    executor.submit(run_single_combination, job): job for job in jobs
+        # Count failed instances from file
+        if os.path.exists(failed_file):
+            with open(failed_file, "r", encoding="utf-8") as f:
+                self._results.failed_instances = {
+                    line.strip() for line in f if line.strip()
                 }
 
-                completed = 0
-                total = len(futures)
+        # Count successful runs from CSV
+        if os.path.exists(csv_path):
+            with open(csv_path, "r", encoding="utf-8") as f:
+                self._results.successful_runs = sum(1 for _ in f) - 1  # minus header
 
-                for future in as_completed(futures):
-                    completed += 1
-                    result = future.result()
-                    all_results.append(result)
+        self._results.execution_time = time.time() - start_time
+        self._log_summary()
 
-                    self._log_job_completion(completed, total, result)
+        return self._results
 
-        return all_results
+    def _create_core_sets(self, num_workers: int) -> list[str]:
+        """Creates CPU core sets for taskset."""
+        num_cores = os.cpu_count() or 1
+        core_sets = []
+        for i in range(num_workers):
+            start = (i * self.config.threads_per_job) % num_cores
+            end = min(start + self.config.threads_per_job - 1, num_cores - 1)
+            core_sets.append(f"{start}-{end}")
+        return core_sets
 
-    def _log_job_completion(
-        self, completed: int, total: int, result: RunResult
-    ) -> None:
-        """Logs the completion of a single job.
-
-        Args:
-            completed: Number of completed jobs.
-            total: Total number of jobs.
-            result: The RunResult from the completed job.
-        """
-        status_map = {
-            RunStatus.SUCCESS: "OK",
-            RunStatus.ERROR: "FAILED",
-            RunStatus.SKIPPED: "SKIPPED",
-        }
-        status_str = status_map.get(result.status, "UNKNOWN")
-
-        logger.info(
-            "[%d/%d] %s + %s: %s",
-            completed,
-            total,
-            result.instance_name,
-            result.config_name,
-            status_str,
-        )
-
-        if result.status == RunStatus.ERROR:
-            logger.error("  Error: %s", result.error_message)
-        elif result.status == RunStatus.SKIPPED:
-            logger.warning("  Skipped due to prior failure")
-
-    def _group_results_by_instance(
-        self, all_results: list[RunResult]
-    ) -> dict[str, list[RunResult]]:
-        """Groups run results by instance name.
-
-        Args:
-            all_results: List of all RunResult objects.
-
-        Returns:
-            Dictionary mapping instance names to lists of their results.
-        """
-        results_by_instance: dict[str, list[RunResult]] = {}
-
-        for result in all_results:
-            if result.instance_name not in results_by_instance:
-                results_by_instance[result.instance_name] = []
-            results_by_instance[result.instance_name].append(result)
-
-        return results_by_instance
-
-    def _write_results_to_csv(
+    def _run_job(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
+        instance_path: str,
+        config_path: str,
+        core_set: str,
         csv_path: str,
-        results_by_instance: dict[str, list[RunResult]],
-        failed_instances: set[str],
+        failed_file: str,
+        error_log: str,
+        semaphore: Semaphore,
+        job_num: int,
+        total_jobs: int,
     ) -> None:
-        """Writes successful results to the CSV file.
+        """Runs a single job as a subprocess."""
+        semaphore.acquire()
+        try:
+            instance_name = os.path.splitext(os.path.basename(instance_path))[0]
+            config_name = os.path.splitext(os.path.basename(config_path))[0]
 
-        Args:
-            csv_path: Path to the output CSV file.
-            results_by_instance: Dictionary of results grouped by instance.
-            failed_instances: Set of instance names to exclude.
-        """
-        with open(csv_path, "w", encoding="utf-8") as csv_file:
-            # Write header
-            csv_file.write(lsf.stats_column_names() + "\n")
+            logger.info(
+                "[%d/%d] Starting: %s + %s (cores %s)",
+                job_num,
+                total_jobs,
+                instance_name,
+                config_name,
+                core_set,
+            )
 
-            # Write data rows for non-failed instances
-            for instance_name in sorted(results_by_instance.keys()):
-                if instance_name in failed_instances:
-                    continue
+            log_dir = self.config.log_dir if self.config.log_dir else "none"
 
-                for result in results_by_instance[instance_name]:
-                    if result.status == RunStatus.SUCCESS and result.csv_row:
-                        csv_file.write(result.csv_row + "\n")
+            # Build command
+            cmd = [
+                sys.executable,
+                "-m",
+                "alpaca.study.run_single",
+                "--instance",
+                instance_path,
+                "--config",
+                config_path,
+                "--failed-file",
+                failed_file,
+                "--log-dir",
+                log_dir,
+                "--threads",
+                str(self.config.threads_per_job),
+            ]
 
-    def _log_summary(self, results: StudyResults) -> None:
-        """Logs a summary of the study execution.
+            # Add taskset on Linux
+            if platform.system() == "Linux":
+                cmd = ["taskset", "-c", core_set] + cmd
 
-        Args:
-            results: The StudyResults object with execution statistics.
-        """
+            # Run subprocess
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+
+            # Append stdout (CSV row) to results file immediately
+            if result.returncode == 0 and result.stdout.strip():
+                with self._csv_lock:
+                    with open(csv_path, "a", encoding="utf-8") as f:
+                        f.write(result.stdout.strip() + "\n")
+
+            # Append stderr to error log
+            if result.stderr.strip():
+                with open(error_log, "a", encoding="utf-8") as f:
+                    f.write(result.stderr)
+
+            if result.returncode == 2:
+                self._results.skipped_runs += 1
+
+        finally:
+            semaphore.release()
+
+    def _log_summary(self) -> None:
+        """Logs execution summary."""
         logger.info("=" * 60)
         logger.info("Study completed!")
-        logger.info("  Total combinations: %d", results.total_combinations)
-        logger.info("  Successful runs: %d", results.successful_runs)
-        logger.info("  Skipped runs: %d", results.skipped_runs)
-        logger.info("  Failed instances: %d", len(results.failed_instances))
-        if results.failed_instances:
+        logger.info("  Total combinations: %d", self._results.total_combinations)
+        logger.info("  Successful runs: %d", self._results.successful_runs)
+        logger.info("  Skipped runs: %d", self._results.skipped_runs)
+        logger.info("  Failed instances: %d", len(self._results.failed_instances))
+        if self._results.failed_instances:
             logger.info(
-                "  Failed instance names: %s",
-                ", ".join(sorted(results.failed_instances)),
+                "  Failed: %s", ", ".join(sorted(self._results.failed_instances))
             )
-        logger.info("  Execution time: %.2f seconds", results.execution_time)
-        logger.info("  Results written to: %s", results.csv_path)
+        logger.info("  Time: %.2f seconds", self._results.execution_time)
+        logger.info("  Results: %s", self._results.csv_path)
         logger.info("=" * 60)
 
 
-def run_study(  # pylint: disable=too-many-arguments, too-many-positional-arguments
+def run_study(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     instances_dir: str,
     configs_dir: str,
     results_dir: str,
     log_dir: str | None = None,
     max_workers: int | None = None,
-    threads_per_job: int = 1,
+    threads_per_job: int = 4,
 ) -> StudyResults:
-    """Convenience function to run a complete study.
-
-    Args:
-        instances_dir: Directory containing .osil files.
-        configs_dir: Directory containing .json configuration files.
-        results_dir: Directory for output files.
-        log_dir: Directory for log files (optional).
-        max_workers: Maximum parallel workers (optional, auto-calculated if None).
-        threads_per_job: Number of threads each solver uses internally.
-
-    Returns:
-        StudyResults with execution statistics.
-    """
+    """Convenience function to run a complete study."""
     config = StudyConfig(
         instances_dir=instances_dir,
         configs_dir=configs_dir,
@@ -380,6 +288,5 @@ def run_study(  # pylint: disable=too-many-arguments, too-many-positional-argume
         max_workers=max_workers,
         threads_per_job=threads_per_job,
     )
-
     pipeline = StudyPipeline(config)
     return pipeline.run()

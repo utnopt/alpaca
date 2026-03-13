@@ -57,7 +57,9 @@ def extract_name_from_path(path: str) -> str:
 
 
 # pylint: disable=too-many-locals
-def run_single_combination(args: tuple[str, str, str | None, bool, Any, int]) -> RunResult:
+def run_single_combination(
+    args: tuple[str, str, str | None, bool, Any, int],
+) -> RunResult:
     """Runs a single instance-config combination and returns the result.
 
     This function is designed to be called from a process pool. It checks
@@ -76,7 +78,14 @@ def run_single_combination(args: tuple[str, str, str | None, bool, Any, int]) ->
     Returns:
         RunResult containing the status and CSV row if successful.
     """
-    instance_path, config_path, log_dir, suppress_output, failed_instances, nr_of_threads = args
+    (
+        instance_path,
+        config_path,
+        log_dir,
+        suppress_output,
+        failed_instances,
+        nr_of_threads,
+    ) = args
     instance_name = extract_name_from_path(instance_path)
     config_name = extract_name_from_path(config_path)
 
@@ -85,7 +94,7 @@ def run_single_combination(args: tuple[str, str, str | None, bool, Any, int]) ->
             instance_name=instance_name,
             config_name=config_name,
             status=RunStatus.SKIPPED,
-            error_message="Instance failed with another configuration"
+            error_message="Instance failed with another configuration",
         )
     original_stdout_fd = None
     devnull_fd = None
@@ -114,7 +123,7 @@ def run_single_combination(args: tuple[str, str, str | None, bool, Any, int]) ->
             instance_name=instance_name,
             config_name=config_name,
             status=RunStatus.SUCCESS,
-            csv_row=csv_row
+            csv_row=csv_row,
         )
 
     except Exception as exc:  # pylint: disable=broad-exception-caught
@@ -124,7 +133,7 @@ def run_single_combination(args: tuple[str, str, str | None, bool, Any, int]) ->
             instance_name=instance_name,
             config_name=config_name,
             status=RunStatus.ERROR,
-            error_message=error_msg
+            error_message=error_msg,
         )
 
     finally:

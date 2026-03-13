@@ -260,7 +260,7 @@ class LaTeXGenerator:
             header=header_row,
             rows=data_rows,
             caption=f"Pairwise comparison: {self._escape_latex(column)} "
-                    f"(wins-losses, geom. mean ratio)",
+            f"(wins-losses, geom. mean ratio)",
             label="tab:comparison",
         )
 
