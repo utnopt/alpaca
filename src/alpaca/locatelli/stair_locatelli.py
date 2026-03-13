@@ -130,6 +130,8 @@ class StairLocatelli:
             or abs(y.ub - y.lb) < s.StaticSettings.feasibility_tolerance
         ):
             return 0.0
+        if sum (x_val * y_val for x_val, y_val in polygon_domain_vertices) == 0.0:
+            return 0.0
         return self.calculate_3d_volume_polygon_over_domain(
             bilinear_expression, polygon_domain_vertices, is_polytope=is_polytope
         )
