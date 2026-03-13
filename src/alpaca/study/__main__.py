@@ -3,19 +3,18 @@
 """
 Command-line interface for running computational studies.
 
-This module provides a CLI entry point for the study pipeline, including
-execution, evaluation, and LaTeX generation.
-
 Usage:
     python -m alpaca.study run [OPTIONS]
     python -m alpaca.study evaluate --csv <path> [OPTIONS]
+
+To run in background (survives shell close):
+    nohup python -m alpaca.study run [OPTIONS] > study.log 2>&1 &
 """
 import argparse
-import os
-import subprocess
 import sys
 from pathlib import Path
 
+from alpaca.study.pipeline import run_study, StudyResults
 from alpaca.study.evaluator import StudyEvaluator
 from alpaca.study.latex_generator import LaTeXGenerator, LaTeXConfig
 from alpaca.utils.logger import logger
@@ -29,13 +28,11 @@ def get_default_paths() -> dict[str, str]:
         Dictionary with default paths for instances, configs, results, and logs.
     """
     cwd = Path.cwd()
-    data_study_dir = cwd / "data" / "study"
-
     return {
-        "instances_dir": str(data_study_dir / "instances"),
-        "configs_dir": str(data_study_dir / "configs"),
-        "results_dir": str(data_study_dir / "results"),
-        "log_dir": str(data_study_dir / "results" / "logs"),
+        "instances_dir": str(cwd / "instances"),
+        "configs_dir": str(cwd / "configs"),
+        "results_dir": str(cwd / "results"),
+        "log_dir": str(cwd / "results" / "logs"),
     }
 
 
@@ -101,6 +98,7 @@ def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run computational studies and generate evaluation outputs.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        epilog="To run in background: nohup python -m alpaca.study run [OPTIONS] &",
     )
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable verbose output."
@@ -144,18 +142,8 @@ def create_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def get_shell_script_path() -> str:
-    """Returns the path to the run_study.sh script.
-
-    Returns:
-        Absolute path to run_study.sh.
-    """
-    module_dir = Path(__file__).parent
-    return str(module_dir / "run_study.sh")
-
-
 def run_command(args: argparse.Namespace) -> int:
-    """Executes the 'run' command via shell script.
+    """Executes the 'run' command.
 
     Args:
         args: Parsed command-line arguments.
@@ -163,39 +151,31 @@ def run_command(args: argparse.Namespace) -> int:
     Returns:
         Exit code (0 for success, 1 for failure).
     """
-    script_path = get_shell_script_path()
+    log_dir = None if args.logs.lower() == "none" else args.logs
 
-    if not os.path.exists(script_path):
-        logger.error("Shell script not found: %s", script_path)
+    logger.info("Starting study pipeline...")
+    logger.info("  Instances: %s", args.instances)
+    logger.info("  Configs: %s", args.configs)
+    logger.info("  Results: %s", args.results)
+    logger.info("  Logs: %s", log_dir or "disabled")
+    logger.info("  Workers: %s", args.workers or "auto")
+    logger.info("  Threads per job: %d", args.threads_per_job)
+
+    results: StudyResults = run_study(
+        instances_dir=args.instances,
+        configs_dir=args.configs,
+        results_dir=args.results,
+        log_dir=log_dir,
+        max_workers=args.workers,
+        threads_per_job=args.threads_per_job,
+    )
+
+    if not args.no_evaluate and results.successful_runs > 0:
+        evaluate_csv(results.csv_path, args.results, standalone=False)
+
+    if results.failed_instances:
         return 1
-
-    cmd = [
-        "bash",
-        script_path,
-        "--instances",
-        args.instances,
-        "--configs",
-        args.configs,
-        "--results",
-        args.results,
-    ]
-
-    if args.logs.lower() != "none":
-        cmd.extend(["--logs", args.logs])
-
-    if args.workers is not None:
-        cmd.extend(["--workers", str(args.workers)])
-
-    cmd.extend(["--threads", str(args.threads_per_job)])
-
-    if args.no_evaluate:
-        cmd.append("--no-evaluate")
-
-    logger.info("Starting study via shell coordinator...")
-    logger.info("Command: %s", " ".join(cmd))
-
-    result = subprocess.run(cmd, check=False)
-    return result.returncode
+    return 0
 
 
 def evaluate_command(args: argparse.Namespace) -> int:

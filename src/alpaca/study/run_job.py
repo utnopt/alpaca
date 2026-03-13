@@ -4,8 +4,7 @@
 Single job runner for computational studies.
 
 This module executes a single instance-config combination and outputs
-the result as a CSV row to stdout. Designed to be called from the
-shell-based coordinator.
+the result as a CSV row to stdout. Designed to be called as a subprocess.
 
 Usage:
     python -m alpaca.study.run_job --instance <path> --config <path> [OPTIONS]
@@ -51,46 +50,7 @@ def parse_arguments() -> argparse.Namespace:
         default=None,
         help="Directory for log files.",
     )
-    parser.add_argument(
-        "--failed-file",
-        type=str,
-        default=None,
-        help="Path to file tracking failed instances.",
-    )
     return parser.parse_args()
-
-
-def check_instance_failed(instance_name: str, failed_file: str | None) -> bool:
-    """Checks if an instance has already failed.
-
-    Args:
-        instance_name: Name of the instance.
-        failed_file: Path to the failed instances file.
-
-    Returns:
-        True if instance has failed, False otherwise.
-    """
-    if failed_file is None or not os.path.exists(failed_file):
-        return False
-
-    with open(failed_file, "r", encoding="utf-8") as file:
-        failed_instances = {line.strip() for line in file}
-
-    return instance_name in failed_instances
-
-
-def mark_instance_failed(instance_name: str, failed_file: str | None) -> None:
-    """Marks an instance as failed.
-
-    Args:
-        instance_name: Name of the instance to mark.
-        failed_file: Path to the failed instances file.
-    """
-    if failed_file is None:
-        return
-
-    with open(failed_file, "a", encoding="utf-8") as file:
-        file.write(f"{instance_name}\n")
 
 
 def extract_name(path: str) -> str:
@@ -112,13 +72,10 @@ def run_single_job(args: argparse.Namespace) -> int:
         args: Parsed command-line arguments.
 
     Returns:
-        Exit code (0 for success, 1 for error, 2 for skipped).
+        Exit code (0 for success, 1 for error).
     """
     instance_name = extract_name(args.instance)
     config_name = extract_name(args.config)
-
-    if check_instance_failed(instance_name, args.failed_file):
-        return 2
 
     original_stdout = sys.stdout
     original_stderr = sys.stderr
@@ -153,8 +110,6 @@ def run_single_job(args: argparse.Namespace) -> int:
     except Exception as exc:  # pylint: disable=broad-exception-caught
         sys.stdout = original_stdout
         sys.stderr = original_stderr
-
-        mark_instance_failed(instance_name, args.failed_file)
 
         error_msg = f"{instance_name} + {config_name}: {type(exc).__name__}: {exc}"
         print(error_msg, file=sys.stderr)

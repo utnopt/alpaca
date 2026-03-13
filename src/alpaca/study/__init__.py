@@ -9,17 +9,24 @@ This module provides functionality to:
 - Generate LaTeX tables and TikZ plots
 
 Usage:
-    # From command line (recommended)
-    bash run_study.sh -i instances/ -c configs/ -r results/
+    # From command line (run in background)
+    nohup python -m alpaca.study run -i instances/ -c configs/ -r results/ &
 
-    # From Python CLI
-    python -m alpaca.study run -i instances/ -c configs/ -r results/
-    python -m alpaca.study evaluate --csv results/raw/study_results.csv
+    # Monitor progress
+    tail -f results/raw/study_results_*.csv
+    ps aux | grep alpaca.study.run_job
 
-    # From Python
-    from alpaca.study import StudyEvaluator, LaTeXGenerator
+    # Evaluate results
+    python -m alpaca.study evaluate --csv results/raw/study_results_*.csv
 """
 
+from alpaca.study.pipeline import (
+    StudyConfig,
+    StudyResults,
+    StudyPipeline,
+    run_study,
+    discover_files,
+)
 from alpaca.study.evaluator import (
     StudyEvaluator,
     StudyData,
@@ -29,6 +36,11 @@ from alpaca.study.evaluator import (
 from alpaca.study.latex_generator import LaTeXGenerator, LaTeXConfig
 
 __all__ = [
+    "StudyConfig",
+    "StudyResults",
+    "StudyPipeline",
+    "run_study",
+    "discover_files",
     "StudyEvaluator",
     "StudyData",
     "ColumnStats",
