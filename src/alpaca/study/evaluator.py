@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+# pylint: disable=too-many-instance-attributes, too-many-branches, too-many-locals
 """
 Evaluator module for analyzing study results.
 
@@ -17,7 +17,7 @@ from alpaca.utils.logger import logger
 
 
 @dataclass
-class ColumnStats:  # pylint: disable=too-many-instance-attributes
+class ColumnStats:
     """Statistical summary for a single numeric column.
 
     Attributes:
@@ -44,7 +44,7 @@ class ColumnStats:  # pylint: disable=too-many-instance-attributes
 
 
 @dataclass
-class ConfigComparison:  # pylint: disable=too-many-instance-attributes
+class ConfigComparison:
     """Comparison statistics between configurations.
 
     Attributes:
@@ -94,7 +94,6 @@ class StudyEvaluator:
     and provides comparison utilities between configurations.
     """
 
-    # Columns that should be parsed as numeric values
     NUMERIC_COLUMNS = {
         "solving_time",
         "nr_nodes",
@@ -130,7 +129,6 @@ class StudyEvaluator:
         "mpip_ratio",
     }
 
-    # Columns where lower is better (for comparisons)
     LOWER_IS_BETTER = {
         "solving_time",
         "nr_nodes",
@@ -175,16 +173,15 @@ class StudyEvaluator:
                 config = parsed_row.get("config_name", "")
                 self.data.data_matrix[(instance, config)] = parsed_row
 
-        # Extract unique instances and configs
         self.data.instances = sorted(
-            set(row.get("instance_name", "") for row in self.data.rows)
+            {row.get("instance_name", "") for row in self.data.rows}
         )
         self.data.configs = sorted(
-            set(row.get("config_name", "") for row in self.data.rows)
+            {row.get("config_name", "") for row in self.data.rows}
         )
 
         logger.info(
-            "Loaded %d rows: %d instances × %d configs",
+            "Loaded %d rows: %d instances x %d configs",
             len(self.data.rows),
             len(self.data.instances),
             len(self.data.configs),
@@ -225,7 +222,10 @@ class StudyEvaluator:
             return None
 
     def get_column_values(
-        self, column: str, config: str | None = None, instance: str | None = None
+        self,
+        column: str,
+        config: str | None = None,
+        instance: str | None = None,
     ) -> list[float]:
         """Extracts numeric values for a column, optionally filtered.
 
@@ -279,7 +279,7 @@ class StudyEvaluator:
 
         return stats
 
-    def compute_config_comparison(  # pylint: disable=too-many-branches
+    def compute_config_comparison(
         self,
         config_a: str,
         config_b: str,
@@ -292,7 +292,7 @@ class StudyEvaluator:
             config_a: Name of the first configuration.
             config_b: Name of the second configuration.
             column: Column to compare.
-            lower_is_better: If True, lower values win. If None, inferred from column name.
+            lower_is_better: If True, lower values win. If None, inferred.
 
         Returns:
             ConfigComparison with win/loss counts and ratio statistics.
@@ -313,11 +313,9 @@ class StudyEvaluator:
             if val_a is None or val_b is None:
                 continue
 
-            # Compute ratio (avoiding division by zero)
             if val_b != 0:
                 ratios.append(val_a / val_b)
 
-            # Determine winner
             if val_a < val_b:
                 if lower_is_better:
                     comparison.wins_a += 1
@@ -333,7 +331,6 @@ class StudyEvaluator:
 
         if ratios:
             comparison.mean_ratio = float(np.mean(ratios))
-            # Geometric mean (only for positive ratios)
             positive_ratios = [r for r in ratios if r > 0]
             if positive_ratios:
                 comparison.geometric_mean_ratio = float(
@@ -347,7 +344,6 @@ class StudyEvaluator:
 
         Args:
             value_column: Column to aggregate.
-            aggfunc: Aggregation function ("mean", "sum", "min", "max").
 
         Returns:
             Nested dictionary: {instance: {config: value}}.
@@ -370,7 +366,7 @@ class StudyEvaluator:
         """Computes statistics for each column grouped by configuration.
 
         Args:
-            columns: List of columns to analyze. If None, uses all numeric columns.
+            columns: List of columns to analyze. If None, uses all numeric.
 
         Returns:
             Nested dictionary: {config: {column: ColumnStats}}.
@@ -389,13 +385,10 @@ class StudyEvaluator:
 
         return result
 
-    def compute_performance_profile_data(  # pylint: disable=too-many-locals, too-many-branches
+    def compute_performance_profile_data(
         self, column: str, lower_is_better: bool | None = None
     ) -> dict[str, list[tuple[float, float]]]:
         """Computes data for performance profile plots.
-
-        For each configuration, computes the cumulative distribution of
-        performance ratios relative to the best configuration per instance.
 
         Args:
             column: Column to analyze (typically solving_time).
@@ -407,7 +400,6 @@ class StudyEvaluator:
         if lower_is_better is None:
             lower_is_better = column in self.LOWER_IS_BETTER
 
-        # Compute best value per instance
         best_per_instance: dict[str, float] = {}
         for instance in self.data.instances:
             values = []
@@ -422,7 +414,6 @@ class StudyEvaluator:
                 else:
                     best_per_instance[instance] = max(values)
 
-        # Compute ratios for each config
         ratios_by_config: dict[str, list[float]] = {c: [] for c in self.data.configs}
 
         for instance in self.data.instances:
@@ -442,7 +433,6 @@ class StudyEvaluator:
                         ratio = best / val if val != 0 else float("inf")
                     ratios_by_config[config].append(ratio)
 
-        # Convert to cumulative distribution
         profile_data: dict[str, list[tuple[float, float]]] = {}
 
         for config, ratios in ratios_by_config.items():

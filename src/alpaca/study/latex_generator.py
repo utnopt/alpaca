@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=too-many-locals
-
+# pylint: disable=too-many-locals, too-many-arguments, too-many-positional-arguments
 """
 LaTeX generator module for creating tables and TikZ plots.
 
@@ -34,11 +33,7 @@ class LaTeXConfig:
 
 
 class LaTeXGenerator:
-    """Generates LaTeX tables and TikZ plots from study results.
-
-    This class takes a StudyEvaluator and produces LaTeX output files
-    for inclusion in academic papers.
-    """
+    """Generates LaTeX tables and TikZ plots from study results."""
 
     def __init__(self, evaluator: StudyEvaluator, config: LaTeXConfig) -> None:
         """Initializes the generator with an evaluator and configuration.
@@ -50,7 +45,6 @@ class LaTeXGenerator:
         self.evaluator = evaluator
         self.config = config
 
-        # Create output directories
         os.makedirs(config.tables_dir, exist_ok=True)
         os.makedirs(config.plots_dir, exist_ok=True)
 
@@ -111,12 +105,14 @@ class LaTeXGenerator:
         return text
 
     def generate_summary_table(
-        self, columns: list[str] | None = None, filename: str = "summary_table.tex"
+        self,
+        columns: list[str] | None = None,
+        filename: str = "summary_table.tex",
     ) -> str:
         """Generates a summary table with statistics per configuration.
 
         Args:
-            columns: Columns to include. Defaults to solving_time and mip_gap.
+            columns: Columns to include. Defaults to common metrics.
             filename: Output filename.
 
         Returns:
@@ -128,7 +124,6 @@ class LaTeXGenerator:
         stats = self.evaluator.get_aggregated_stats_by_config(columns)
         configs = self.evaluator.data.configs
 
-        # Build table header
         col_spec = "l" + "r" * (len(columns) * 3)
         header_row = "Config"
         for col in columns:
@@ -141,7 +136,6 @@ class LaTeXGenerator:
             subheader_row += " & Mean & Std & Median"
         subheader_row += " \\\\"
 
-        # Build data rows
         data_rows = []
         for config in configs:
             row = self._escape_latex(config)
@@ -153,7 +147,6 @@ class LaTeXGenerator:
             row += " \\\\"
             data_rows.append(row)
 
-        # Assemble table
         table_content = self._build_table(
             col_spec=col_spec,
             header=header_row + "\n" + subheader_row,
@@ -169,7 +162,9 @@ class LaTeXGenerator:
         return output_path
 
     def generate_results_matrix(
-        self, value_column: str = "solving_time", filename: str = "results_matrix.tex"
+        self,
+        value_column: str = "solving_time",
+        filename: str = "results_matrix.tex",
     ) -> str:
         """Generates a matrix table with instances as rows and configs as columns.
 
@@ -184,7 +179,6 @@ class LaTeXGenerator:
         instances = self.evaluator.data.instances
         configs = self.evaluator.data.configs
 
-        # Build table
         col_spec = "l" + "r" * len(configs)
         header_row = "Instance"
         for config in configs:
@@ -194,10 +188,8 @@ class LaTeXGenerator:
         data_rows = []
         for instance in instances:
             row = self._escape_latex(instance)
-            values = []
             for config in configs:
                 val = pivot[instance].get(config)
-                values.append(val)
                 row += f" & {self._format_float(val)}"
             row += " \\\\"
             data_rows.append(row)
@@ -217,7 +209,9 @@ class LaTeXGenerator:
         return output_path
 
     def generate_comparison_table(
-        self, column: str = "solving_time", filename: str = "comparison_table.tex"
+        self,
+        column: str = "solving_time",
+        filename: str = "comparison_table.tex",
     ) -> str:
         """Generates a pairwise comparison table between configurations.
 
@@ -230,7 +224,6 @@ class LaTeXGenerator:
         """
         configs = self.evaluator.data.configs
 
-        # Build header
         col_spec = "l" + "c" * len(configs)
         header_row = ""
         for config in configs:
@@ -247,7 +240,6 @@ class LaTeXGenerator:
                     comparison = self.evaluator.compute_config_comparison(
                         config_a, config_b, column
                     )
-                    # Format as "wins-losses (ratio)"
                     ratio_str = ""
                     if comparison.geometric_mean_ratio is not None:
                         ratio_str = f" ({comparison.geometric_mean_ratio:.2f})"
@@ -271,7 +263,9 @@ class LaTeXGenerator:
         return output_path
 
     def generate_performance_profile_plot(
-        self, column: str = "solving_time", filename: str = "performance_profile.tex"
+        self,
+        column: str = "solving_time",
+        filename: str = "performance_profile.tex",
     ) -> str:
         """Generates a TikZ performance profile plot.
 
@@ -284,7 +278,6 @@ class LaTeXGenerator:
         """
         profile_data = self.evaluator.compute_performance_profile_data(column)
 
-        # Build TikZ plot
         lines = [
             "\\begin{tikzpicture}",
             "\\begin{axis}[",
@@ -311,12 +304,11 @@ class LaTeXGenerator:
                 continue
 
             lines.append(f"\\addplot[{color}, thick, mark=none] coordinates {{")
-            # Add starting point at (1, 0) if first point is > 1
             if points[0][0] > 1:
                 lines.append("    (1, 0)")
 
             for ratio, fraction in points:
-                if ratio <= 10:  # Limit x-axis
+                if ratio <= 10:
                     lines.append(f"    ({ratio:.4f}, {fraction:.4f})")
 
             lines.append("};")
@@ -358,6 +350,8 @@ class LaTeXGenerator:
 
         colors = ["blue!70", "red!70", "green!60", "orange!70", "purple!70"]
 
+        symbolic_coords = ",".join(self._escape_latex(i) for i in instances)
+
         lines = [
             "\\begin{tikzpicture}",
             "\\begin{axis}[",
@@ -365,10 +359,8 @@ class LaTeXGenerator:
             "    bar width=0.15cm,",
             "    width=\\textwidth,",
             "    height=8cm,",
-            "    ylabel={" + self._escape_latex(column) + "},",
-            "    symbolic x coords={"
-            + ",".join(self._escape_latex(i) for i in instances)
-            + "},",
+            f"    ylabel={{{self._escape_latex(column)}}},",
+            f"    symbolic x coords={{{symbolic_coords}}},",
             "    xtick=data,",
             "    x tick label style={rotate=45, anchor=east, font=\\tiny},",
             "    legend style={at={(0.5,-0.25)}, anchor=north, legend columns=-1},",
@@ -403,8 +395,13 @@ class LaTeXGenerator:
 
         return output_path
 
-    def _build_table(  # pylint: disable=too-many-arguments, too-many-positional-arguments
-        self, col_spec: str, header: str, rows: list[str], caption: str, label: str
+    def _build_table(
+        self,
+        col_spec: str,
+        header: str,
+        rows: list[str],
+        caption: str,
+        label: str,
     ) -> str:
         """Builds a complete LaTeX table environment.
 

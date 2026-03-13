@@ -1,307 +1,256 @@
 #!/bin/bash
 
-# Study runner script with shell-based job coordination.
+# -*- coding: utf-8 -*-
 
-#
+# Shell-based coordinator for computational studies.
 
-# Features:
-
-#   - One visible subprocess per instance+config (check with: ps aux | grep run_single)
-
-#   - CPU affinity via taskset
-
-#   - Immediate CSV writes on job completion
-
-#   - Skip remaining configs when an instance fails
-
-#
-
-# Usage:
-
-#   ./run_study.sh [OPTIONS]
-
-#
-
-# Options:
-
-#   -i, --instances DIR     Directory with .osil files
-
-#   -c, --configs DIR       Directory with .json config files
-
-#   -r, --results DIR       Output directory for results
-
-#   -l, --logs DIR          Log directory (use 'none' to disable)
-
-#   -w, --workers N         Max parallel jobs
-
-#   -t, --threads N         Threads per job (for CPU affinity)
-
-#
-
-# To run in background and detach:
-
-#   nohup ./run_study.sh &> run_study.out &
-
-# Ignore SIGHUP to survive shell closure
+# Submits one job per instance+config combination for visibility and control.
 
 trap '' HUP
 
-set -o pipefail
-
-# --- Get script location ---
-
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-PROJECT_ROOT=$(dirname "$(dirname "$SCRIPT_DIR")")
 
-# --- Default configuration ---
+# Default values
 
-INSTANCES_DIR="$SCRIPT_DIR/test_instances"
-CONFIGS_DIR="$SCRIPT_DIR/test_configs"
-RESULTS_DIR="$SCRIPT_DIR/results"
-LOG_DIR="$SCRIPT_DIR/results/logs"
-
-NUM_CORES=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
-THREADS_PER_JOB=4
+INSTANCES_DIR=""
+CONFIGS_DIR=""
+RESULTS_DIR=""
+LOG_DIR=""
+CORES_PER_JOB=4
 MAX_PARALLEL_JOBS=""
+SKIP_EVALUATE=0
 
-# --- Parse command line arguments ---
+print_usage() {
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  -i, --instances DIR    Directory containing .osil instance files"
+    echo "  -c, --configs DIR      Directory containing .json configuration files"
+    echo "  -r, --results DIR      Directory for output files"
+    echo "  -l, --logs DIR         Directory for log files (optional)"
+    echo "  -w, --workers N        Maximum parallel jobs (default: auto)"
+    echo "  -t, --threads N        Threads per job for CPU affinity (default: 4)"
+    echo "  --no-evaluate          Skip evaluation after run"
+    echo "  -h, --help             Show this help message"
+}
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -i|--instances)
-            INSTANCES_DIR="$2"
-            shift 2
-            ;;
-        -c|--configs)
-            CONFIGS_DIR="$2"
-            shift 2
-            ;;
-        -r|--results)
-            RESULTS_DIR="$2"
-            shift 2
-            ;;
-        -l|--logs)
-            LOG_DIR="$2"
-            shift 2
-            ;;
-        -w|--workers)
-            MAX_PARALLEL_JOBS="$2"
-            shift 2
-            ;;
-        -t|--threads)
-            THREADS_PER_JOB="$2"
-            shift 2
-            ;;
-        -h|--help)
-            echo "Usage: $0 [OPTIONS]"
-            echo ""
-            echo "Options:"
-            echo "  -i, --instances DIR   Directory with .osil files"
-            echo "  -c, --configs DIR     Directory with .json config files"
-            echo "  -r, --results DIR     Output directory"
-            echo "  -l, --logs DIR        Log directory ('none' to disable)"
-            echo "  -w, --workers N       Max parallel jobs"
-            echo "  -t, --threads N       Threads per job"
-            exit 0
-            ;;
-        *)
-            echo "Unknown option: $1"
-            echo "Use --help for usage information."
-            exit 1
-            ;;
+        -i|--instances) INSTANCES_DIR="$2"; shift 2 ;;
+        -c|--configs) CONFIGS_DIR="$2"; shift 2 ;;
+        -r|--results) RESULTS_DIR="$2"; shift 2 ;;
+        -l|--logs) LOG_DIR="$2"; shift 2 ;;
+        -w|--workers) MAX_PARALLEL_JOBS="$2"; shift 2 ;;
+        -t|--threads) CORES_PER_JOB="$2"; shift 2 ;;
+        --no-evaluate) SKIP_EVALUATE=1; shift ;;
+        -h|--help) print_usage; exit 0 ;;
+        *) echo "Unknown option: $1"; print_usage; exit 1 ;;
     esac
 done
 
-# Calculate max workers if not specified
+if [[ -z "$INSTANCES_DIR" ]] || [[ -z "$CONFIGS_DIR" ]] || [[ -z "$RESULTS_DIR" ]]; then
+    echo "Error: --instances, --configs, and --results are required."
+    print_usage
+    exit 1
+fi
 
+if [[ ! -d "$INSTANCES_DIR" ]]; then
+    echo "Error: Instances directory does not exist: $INSTANCES_DIR"
+    exit 1
+fi
+
+if [[ ! -d "$CONFIGS_DIR" ]]; then
+    echo "Error: Configs directory does not exist: $CONFIGS_DIR"
+    exit 1
+fi
+
+NUM_CORES=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 if [[ -z "$MAX_PARALLEL_JOBS" ]]; then
-    MAX_PARALLEL_JOBS=$((NUM_CORES / THREADS_PER_JOB))
+    MAX_PARALLEL_JOBS=$((NUM_CORES / CORES_PER_JOB))
     if [[ $MAX_PARALLEL_JOBS -lt 1 ]]; then
         MAX_PARALLEL_JOBS=1
     fi
 fi
 
-# --- Setup directories ---
-
-RAW_DIR="$RESULTS_DIR/raw"
-mkdir -p "$RAW_DIR"
-
-if [[ "$LOG_DIR" != "none" ]]; then
+mkdir -p "$RESULTS_DIR/raw"
+if [[ -n "$LOG_DIR" ]]; then
     mkdir -p "$LOG_DIR"
 fi
 
-# --- Create output files with timestamp ---
-
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
-RESULTS_CSV="$RAW_DIR/study_results_${TIMESTAMP}.csv"
-FAILED_FILE="$RAW_DIR/failed_instances_${TIMESTAMP}.txt"
-ERROR_LOG="$RAW_DIR/errors_${TIMESTAMP}.log"
-
-# Setup Python path
-
-export PYTHONPATH="$PROJECT_ROOT/src:$PYTHONPATH"
-
-# --- Write CSV header ---
-
-python3 -c "from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf; print(lsf.stats_column_names())" > "$RESULTS_CSV"
-
-if [[ $? -ne 0 ]]; then
-    echo "ERROR: Failed to write CSV header. Check PYTHONPATH and alpaca installation."
-    exit 1
-fi
+RESULTS_FILE="$RESULTS_DIR/raw/study_results_${TIMESTAMP}.csv"
+FAILED_FILE="$RESULTS_DIR/raw/.failed_instances_${TIMESTAMP}"
+ERROR_LOG="$RESULTS_DIR/raw/errors_${TIMESTAMP}.log"
 
 touch "$FAILED_FILE"
 touch "$ERROR_LOG"
 
-# --- Discover instances and configs ---
+# Write CSV header using Python to get correct column names
 
-mapfile -t INSTANCES < <(find "$INSTANCES_DIR" -maxdepth 1 -name "*.osil" -type f | sort)
-mapfile -t CONFIGS < <(find "$CONFIGS_DIR" -maxdepth 1 -name "*.json" -type f | sort)
+python3 -c "
+from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+print(lsf.stats_column_names())
+" > "$RESULTS_FILE"
+
+mapfile -t INSTANCES < <(find "$INSTANCES_DIR" -name "*.osil" | sort)
+mapfile -t CONFIGS < <(find "$CONFIGS_DIR" -name "*.json" | sort)
 
 NUM_INSTANCES=${#INSTANCES[@]}
 NUM_CONFIGS=${#CONFIGS[@]}
-NUM_JOBS=$((NUM_INSTANCES * NUM_CONFIGS))
+TOTAL_JOBS=$((NUM_INSTANCES * NUM_CONFIGS))
 
-# --- Print configuration ---
-
-echo "========================================================"
+echo "========================================"
 echo "Study Configuration"
-echo "========================================================"
-echo "  Instances:         $INSTANCES_DIR ($NUM_INSTANCES files)"
-echo "  Configs:           $CONFIGS_DIR ($NUM_CONFIGS files)"
-echo "  Results:           $RESULTS_DIR"
-echo "  Logs:              $LOG_DIR"
-echo "  Total jobs:        $NUM_JOBS"
-echo "  Parallel workers:  $MAX_PARALLEL_JOBS"
-echo "  Threads per job:   $THREADS_PER_JOB"
-echo "  CPU cores:         $NUM_CORES"
-echo "========================================================"
-echo "  Results CSV:       $RESULTS_CSV"
-echo "  Failed instances:  $FAILED_FILE"
-echo "  Error log:         $ERROR_LOG"
-echo "========================================================"
+echo "========================================"
+echo "  Instances directory: $INSTANCES_DIR"
+echo "  Configs directory:   $CONFIGS_DIR"
+echo "  Results directory:   $RESULTS_DIR"
+echo "  Log directory:       ${LOG_DIR:-disabled}"
+echo "  Instances found:     $NUM_INSTANCES"
+echo "  Configs found:       $NUM_CONFIGS"
+echo "  Total combinations:  $TOTAL_JOBS"
+echo "  Parallel jobs:       $MAX_PARALLEL_JOBS"
+echo "  Threads per job:     $CORES_PER_JOB"
+echo "  Results file:        $RESULTS_FILE"
+echo "========================================"
 
-if [[ $NUM_JOBS -eq 0 ]]; then
-    echo "ERROR: No jobs to run. Check instances and configs directories."
+if [[ $TOTAL_JOBS -eq 0 ]]; then
+    echo "No jobs to run. Check your instance and config directories."
     exit 1
 fi
 
-# --- Create CPU core sets for taskset ---
+declare -a JOBS
+for instance in "${INSTANCES[@]}"; do
+    for config in "${CONFIGS[@]}"; do
+        JOBS+=("$instance|$config")
+    done
+done
 
-declare -a CORE_SETS
-for (( i=0; i<MAX_PARALLEL_JOBS; i++ )); do
-    start=$((i * THREADS_PER_JOB))
-    end=$((start + THREADS_PER_JOB - 1))
-    # Wrap around if we exceed available cores
+core_sets=()
+for i in $(seq 0 $((MAX_PARALLEL_JOBS - 1))); do
+    start=$((i * CORES_PER_JOB))
+    end=$((start + CORES_PER_JOB - 1))
     if [[ $end -ge $NUM_CORES ]]; then
         end=$((NUM_CORES - 1))
     fi
-    if [[ $start -ge $NUM_CORES ]]; then
-        start=$((i % NUM_CORES))
-        end=$(( (start + THREADS_PER_JOB - 1) % NUM_CORES ))
-        if [[ $end -lt $start ]]; then
-            end=$((NUM_CORES - 1))
-        fi
-    fi
-    CORE_SETS+=("$start-$end")
+    core_sets+=("$start-$end")
 done
-
-# --- Semaphore for parallel job control ---
 
 PIPE=$(mktemp -u)
 mkfifo "$PIPE"
 exec 3<>"$PIPE"
 rm -f "$PIPE"
 
-# Initialize semaphore with available slots
-
-for (( i=0; i<MAX_PARALLEL_JOBS; i++ )); do
+for i in $(seq 0 $((MAX_PARALLEL_JOBS - 1))); do
     echo "$i" >&3
 done
 
-# --- Job execution function ---
+COMPLETED=0
+SUCCESSFUL=0
+FAILED=0
+SKIPPED=0
 
 run_job() {
-    local instance="$1"
-    local config="$2"
+    local instance_path="$1"
+    local config_path="$2"
     local core_set="$3"
     local slot="$4"
+    local job_num="$5"
+    local total="$6"
 
-    local log_arg="$LOG_DIR"
-    if [[ "$LOG_DIR" == "none" ]]; then
-        log_arg="none"
+    local instance_name
+    instance_name=$(basename "$instance_path" .osil)
+    local config_name
+    config_name=$(basename "$config_path" .json)
+
+    if grep -q "^${instance_name}$" "$FAILED_FILE" 2>/dev/null; then
+        echo "[$job_num/$total] SKIPPED: $instance_name + $config_name (prior failure)"
+        echo "$slot" >&3
+        return 2
     fi
 
-    # Run with CPU affinity
-    taskset -c "$core_set" python3 -m alpaca.study.run_single \
-        --instance "$instance" \
-        --config "$config" \
-        --failed-file "$FAILED_FILE" \
-        --log-dir "$log_arg" \
-        --threads "$THREADS_PER_JOB" \
-        >> "$RESULTS_CSV" 2>> "$ERROR_LOG"
+    echo "[$job_num/$total] RUNNING: $instance_name + $config_name (cores $core_set)"
 
-    # Return slot to semaphore
-    echo "$slot" >&3
+    local log_arg=""
+    if [[ -n "$LOG_DIR" ]]; then
+        log_arg="--log-dir $LOG_DIR"
+    fi
+
+    local result
+    result=$(taskset -c "$core_set" python3 -m alpaca.study.run_job \
+        --instance "$instance_path" \
+        --config "$config_path" \
+        --threads "$CORES_PER_JOB" \
+        --failed-file "$FAILED_FILE" \
+        $log_arg 2>> "$ERROR_LOG")
+
+    local exit_code=$?
+
+    if [[ $exit_code -eq 0 ]] && [[ -n "$result" ]]; then
+        echo "$result" >> "$RESULTS_FILE"
+        echo "[$job_num/$total] SUCCESS: $instance_name + $config_name"
+        echo "$slot" >&3
+        return 0
+    else
+        echo "$instance_name" >> "$FAILED_FILE"
+        echo "[$job_num/$total] FAILED: $instance_name + $config_name"
+        echo "$slot" >&3
+        return 1
+    fi
 }
 
-# --- Dispatch all jobs ---
+job_num=0
+for job in "${JOBS[@]}"; do
+    IFS='|' read -r instance config <<< "$job"
 
-echo ""
-echo "Starting job execution..."
-echo ""
+    read -r -u 3 slot
+    core_set="${core_sets[$slot]}"
 
-job_count=0
-for instance in "${INSTANCES[@]}"; do
-    for config in "${CONFIGS[@]}"; do
-        # Wait for an available slot
-        read -r -u 3 slot
+    ((job_num++))
 
-        core_set="${CORE_SETS[$slot]}"
-        instance_name=$(basename "${instance%.*}")
-        config_name=$(basename "${config%.*}")
-
-        job_count=$((job_count + 1))
-        echo "[$job_count/$NUM_JOBS] Starting: $instance_name + $config_name (cores $core_set, slot $slot)"
-
-        # Launch job in background
-        run_job "$instance" "$config" "$core_set" "$slot" &
-    done
+    run_job "$instance" "$config" "$core_set" "$slot" "$job_num" "$TOTAL_JOBS" &
 done
 
-# Wait for all background jobs to complete
-
-echo ""
-echo "All jobs dispatched. Waiting for completion..."
 wait
-
-# Close semaphore file descriptor
 
 exec 3>&-
 
-# --- Summary ---
+SUCCESSFUL=$(wc -l < "$RESULTS_FILE")
+SUCCESSFUL=$((SUCCESSFUL - 1))
 
-echo ""
-echo "========================================================"
-echo "Study completed!"
-echo "========================================================"
-
-# Count results
-
-if [[ -f "$RESULTS_CSV" ]]; then
-    result_count=$(($(wc -l < "$RESULTS_CSV") - 1))
-    echo "  Successful runs:   $result_count"
-fi
-
+FAILED_COUNT=0
 if [[ -f "$FAILED_FILE" ]]; then
-    failed_count=$(wc -l < "$FAILED_FILE" | tr -d ' ')
-    if [[ $failed_count -gt 0 ]]; then
-        echo "  Failed instances:  $failed_count"
-        echo "  Failed names:      $(cat "$FAILED_FILE" | tr '\n' ' ')"
-    fi
+    FAILED_COUNT=$(sort -u "$FAILED_FILE" | wc -l)
 fi
 
 echo ""
-echo "  Results CSV:       $RESULTS_CSV"
-echo "  Error log:         $ERROR_LOG"
-echo "========================================================"
+echo "========================================"
+echo "Study Completed"
+echo "========================================"
+echo "  Total combinations:  $TOTAL_JOBS"
+echo "  Successful runs:     $SUCCESSFUL"
+echo "  Failed instances:    $FAILED_COUNT"
+echo "  Results file:        $RESULTS_FILE"
+echo "  Error log:           $ERROR_LOG"
+echo "========================================"
+
+if [[ -f "$FAILED_FILE" ]] && [[ -s "$FAILED_FILE" ]]; then
+    echo ""
+    echo "Failed instances:"
+    sort -u "$FAILED_FILE" | while read -r name; do
+        echo "  - $name"
+    done
+fi
+
+rm -f "$FAILED_FILE"
+
+if [[ $SKIP_EVALUATE -eq 0 ]] && [[ $SUCCESSFUL -gt 0 ]]; then
+    echo ""
+    echo "Running evaluation..."
+    python3 -m alpaca.study evaluate --csv "$RESULTS_FILE" --results "$RESULTS_DIR"
+fi
+
+if [[ $FAILED_COUNT -gt 0 ]]; then
+    exit 1
+fi
+exit 0
