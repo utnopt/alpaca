@@ -6,5 +6,6 @@
       "filter/unbounded_variables": 0,
       "pwl_method": "none",
       "bound_propagation": 2,
-      "bound_propagation_obbt_time_limit": 3600
+      "bound_propagation_obbt_time_limit": 3600,
+      "filter/no_bilinear_expressions": 1
 }
