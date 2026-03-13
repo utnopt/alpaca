@@ -14,7 +14,7 @@ LOGGING_PATH = "../../data/export/logs/"
 CONFIG_PATH = IMPORT_PATH + "/example_configs/"
 CONFIG_FILE = CONFIG_PATH + "stair_locatelli_gurobi.json"
 INSTANCES_PATH = IMPORT_PATH + "instances/"
-INSTANCE_FILE = INSTANCES_PATH + "blend718.osil"
+INSTANCE_FILE = INSTANCES_PATH + "pooling_adhya1pq.osil"
 
 
 def run_optimization(

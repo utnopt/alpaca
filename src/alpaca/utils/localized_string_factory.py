@@ -1130,6 +1130,41 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
             return "Configuration Name"
         return "config_name"
 
+    # return (
+    #     f"{self.instance_name},"
+    #     f"{self.config_name},"
+    #     f"{self.solving_time},"
+    #     f"{self.nr_nodes},"
+    #     f"{self.solution_value},"
+    #     f"{self.mip_gap},"
+    #     f"{self.final_nr_variables},"
+    #     f"{self.final_nr_constraints},"
+    #     f"{self.presolved_nr_variables},"
+    #     f"{self.presolved_nr_constraints},"
+    #     f"{self.presolved_nr_nonzeros},"
+    #     f"{self.root_solution_value},"
+    #     f"{self.root_solving_time},"
+    #     f"{self.build_time},"
+    #     f"{self.original_nr_variables},"
+    #     f"{self.original_nr_constraints},"
+    #     f"{self.original_nr_bilinear_expressions},"
+    #     f"{self.original_nr_bilinear_binary_expressions},"
+    #     f"{self.original_nr_mixed_binary_expressions},"
+    #     f"{self.original_nr_multilinear_expressions},"
+    #     f"{self.original_nr_one_dim_expressions},"
+    #     f"{self.pwl_nr_variables},"
+    #     f"{self.pwl_nr_constraints},"
+    #     f"{self.pwl_nr_bilinear_expressions},"
+    #     f"{self.pwl_nr_bilinear_binary_expressions},"
+    #     f"{self.pwl_nr_mixed_binary_expressions},"
+    #     f"{self.pwl_nr_multilinear_expressions},"
+    #     f"{self.pwl_nr_one_dim_expressions},"
+    #     f"{self.locatelli_domain_volume_polygon},"
+    #     f"{self.locatelli_domain_volume_polytope},"
+    #     f"{self.mpip_nr_instances},"
+    #     f"{self.mpip_ratio}"
+    # )
+
     @classmethod
     def stats_column_names(cls) -> str:
         return (
@@ -1163,8 +1198,6 @@ class LocalizedStringFactory:  # pylint: disable=too-many-public-methods
             f"{cls.stats_pwl_nr_one_dim_expressions()},"
             f"{cls.stats_locatelli_domain_volume_polygon()},"
             f"{cls.stats_locatelli_domain_volume_polytope()},"
-            f"{cls.stats_stair_locatelli_domain_volume_polygon()},"
-            f"{cls.stats_stair_locatelli_domain_volume_polytope()},"
             f"{cls.stats_mpip_nr_instances()},"
             f"{cls.stats_mpip_ratio()}"
         )
