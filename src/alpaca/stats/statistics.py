@@ -63,7 +63,7 @@ class Statistics:  # pylint: disable=too-many-instance-attributes
             self.alp_instance.model_data.expressions.bilinear_binary_expressions
         )
         self.original_nr_mixed_binary_expressions = len(
-            self.alp_instance.model_data.expressions.bilinear_binary_expressions
+            self.alp_instance.model_data.expressions.mixed_binary_expressions
         )
         self.original_nr_multilinear_expressions = len(
             self.alp_instance.model_data.expressions.multilinear_expressions
@@ -83,7 +83,7 @@ class Statistics:  # pylint: disable=too-many-instance-attributes
             self.alp_instance.model_data.expressions.bilinear_binary_expressions
         )
         self.pwl_nr_mixed_binary_expressions = len(
-            self.alp_instance.model_data.expressions.bilinear_binary_expressions
+            self.alp_instance.model_data.expressions.mixed_binary_expressions
         )
         self.pwl_nr_multilinear_expressions = len(
             self.alp_instance.model_data.expressions.multilinear_expressions
@@ -113,20 +113,24 @@ class Statistics:  # pylint: disable=too-many-instance-attributes
         """Tracks statistics related to the MPIP handler."""
         mpip_handler = self.alp_instance.solver.mpip_separation_handler.mpip_handler
         self.mpip_nr_instances = len(mpip_handler.mpip_dict)
-        self.mpip_ratio = round(
-            sum(
-                mpip.calculate_relation_ratio()
-                for mpip in mpip_handler.mpip_dict.values()
+        self.mpip_ratio = (
+            0.0
+            if self.mpip_nr_instances == 0
+            else round(
+                sum(
+                    mpip.calculate_relation_ratio()
+                    for mpip in mpip_handler.mpip_dict.values()
+                )
+                / len(mpip_handler.mpip_dict),
+                3,
             )
-            / len(mpip_handler.mpip_dict),
-            3,
         )
         self._check_filters_mpip()
 
     def _check_filters_mpip(self):
         if (
             self.alp_instance.user_settings.filter_no_mpip_instances
-            and self.pwl_nr_bilinear_expressions == 0
+            and self.mpip_nr_instances == 0
         ):
             raise ValueError(lsf.error_filter_no_mpip_instances())
 

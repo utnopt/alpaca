@@ -210,13 +210,18 @@ class StudyPipeline:
         num_cores = os.cpu_count() or 1
         core_sets = self._compute_core_sets(max_workers, num_cores)
 
-        running: dict[subprocess.Popen, tuple[str, str, int]] = {}
+        # Explicitly track free worker slots as suggested by Copilot
+        available_slots = list(range(max_workers))
+
+        # We now store the assigned slot in the tuple so we know what to free later
+        running: dict[subprocess.Popen, tuple[str, str, int, int]] = {}
         job_index = 0
         completed = 0
         total = len(jobs)
 
         while completed < total:
-            while len(running) < max_workers and job_index < total:
+            # Only start a new job if there's a slot explicitly available
+            while available_slots and job_index < total:
                 instance_path, config_path = jobs[job_index]
                 instance_name = extract_name(instance_path)
 
@@ -233,11 +238,14 @@ class StudyPipeline:
                     job_index += 1
                     continue
 
-                slot = len(running)
+                # Take the next available slot identifier (e.g., 0, 1, or 2)
+                slot = available_slots.pop(0)
                 core_set = core_sets[slot % len(core_sets)]
 
                 proc = self._start_job(instance_path, config_path, core_set)
-                running[proc] = (instance_path, config_path, job_index)
+
+                # Store the slot alongside the process so we can return it when done
+                running[proc] = (instance_path, config_path, job_index, slot)
 
                 logger.info(
                     "[%d/%d] RUNNING: %s + %s (cores %s, PID %d)",
@@ -262,7 +270,12 @@ class StudyPipeline:
                     continue
 
                 for proc in finished_procs:
-                    instance_path, config_path, _ = running.pop(proc)
+                    # Retrieve the specific slot that this process was occupying
+                    instance_path, config_path, _, slot = running.pop(proc)
+
+                    # Return the slot back to the available pool
+                    available_slots.append(slot)
+
                     instance_name = extract_name(instance_path)
                     config_name = extract_name(config_path)
                     completed += 1
