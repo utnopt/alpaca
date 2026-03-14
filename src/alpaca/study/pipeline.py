@@ -2,6 +2,7 @@
 """
 @authors: kuen,
 """
+import collections
 import os
 import subprocess
 import sys
@@ -210,13 +211,14 @@ class StudyPipeline:
         num_cores = os.cpu_count() or 1
         core_sets = self._compute_core_sets(max_workers, num_cores)
 
-        running: dict[subprocess.Popen, tuple[str, str, int]] = {}
+        running: dict[subprocess.Popen, tuple[str, str, int, int]] = {}
+        free_slots: collections.deque[int] = collections.deque(range(len(core_sets)))
         job_index = 0
         completed = 0
         total = len(jobs)
 
         while completed < total:
-            while len(running) < max_workers and job_index < total:
+            while free_slots and job_index < total:
                 instance_path, config_path = jobs[job_index]
                 instance_name = extract_name(instance_path)
 
@@ -233,11 +235,11 @@ class StudyPipeline:
                     job_index += 1
                     continue
 
-                slot = len(running)
-                core_set = core_sets[slot % len(core_sets)]
+                slot = free_slots.popleft()
+                core_set = core_sets[slot]
 
                 proc = self._start_job(instance_path, config_path, core_set)
-                running[proc] = (instance_path, config_path, job_index)
+                running[proc] = (instance_path, config_path, job_index, slot)
 
                 logger.info(
                     "[%d/%d] RUNNING: %s + %s (cores %s, PID %d)",
@@ -262,7 +264,8 @@ class StudyPipeline:
                     continue
 
                 for proc in finished_procs:
-                    instance_path, config_path, _ = running.pop(proc)
+                    instance_path, config_path, _, slot = running.pop(proc)
+                    free_slots.append(slot)
                     instance_name = extract_name(instance_path)
                     config_name = extract_name(config_path)
                     completed += 1
