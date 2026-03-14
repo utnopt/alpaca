@@ -126,7 +126,7 @@ class Statistics:  # pylint: disable=too-many-instance-attributes
     def _check_filters_mpip(self):
         if (
             self.alp_instance.user_settings.filter_no_mpip_instances
-            and self.pwl_nr_bilinear_expressions == 0
+            and self.mpip_nr_instances == 0
         ):
             raise ValueError(lsf.error_filter_no_mpip_instances())
 
