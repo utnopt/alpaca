@@ -25,7 +25,7 @@ from alpaca.model_buildup import (
     osil_reader as osr,
     pwl_handler as pwh,
 )
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class ModelData:  # pylint: disable=too-many-instance-attributes
@@ -295,11 +295,11 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
 
         bound_propagator = bpr.BoundPropagator(self)
         bound_propagator.propagate_bounds()
-        if self.settings.bound_propagation == 1:
+        if self.settings.bound_propagation >= 1:
             self._translate_linear_expressions_to_constraints()
             bound_propagator.apply_obbt()
 
-        if not self.settings.allow_infinite_bounds:
+        if self.settings.filter_unbounded_variables:
             self._check_infinite_bounds()
 
         if self.settings.bilinear_handling == 0:
@@ -323,7 +323,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
                     or variable.ub == StaticSettings.infinity
                 ):
                     raise ValueError(
-                        lsf.error_infinite_bounds_discretized_var(variable.name)
+                        lsf.error_filter_infinite_bounds_discretized_var(variable.name)
                     )
 
     def _translate_linear_expressions_to_constraints(

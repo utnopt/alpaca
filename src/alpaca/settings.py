@@ -5,7 +5,7 @@
 import json
 
 from alpaca.utils.logger import logger
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class StaticSettings:
@@ -17,7 +17,7 @@ class StaticSettings:
 
     # ===== Data settings =====
     infinity = 1e6
-    feasibility_tolerance = 1e-3
+    feasibility_tolerance = 1e-5
 
     # ===== MPIP settings =====
     max_violation_relation = 1e-2
@@ -39,7 +39,6 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.seed = int(config_dict.get("seed", 42))
         self.solver_time_limit = int(config_dict.get("solver_time_limit", 7200))
         self.solver_thread_limit = int(config_dict.get("solver_thread_limit", 4))
-        self.osil_file_name = str(config_dict.get("osil_file_name", "st_e41"))
         self.number_of_breakpoints = int(config_dict.get("number_of_breakpoints", 5))
         self.relaxation_tolerance = float(config_dict.get("relaxation_tolerance", 1e-4))
         self.pwl_method = str(config_dict.get("pwl_method", "multiple_choice"))
@@ -51,13 +50,6 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.bound_propagation_obbt_time_limit = int(
             config_dict.get("bound_propagation_obbt_time_limit", 300)
         )
-        self.allow_infinite_bounds = int(config_dict.get("allow_infinite_bounds", 0))
-        self.feature_stair_locatelli_obbt_time_limit = int(
-            config_dict.get("feature/stair_locatelli/obbt_time_limit", 1800)
-        )
-        self.feature_stair_locatelli_evaluation_grid_size = int(
-            config_dict.get("feature/stair_locatelli/evaluation_grid_size", 100)
-        )
         self.reformulate_multilinear_to_bilinear = int(
             config_dict.get("reformulate_multilinear_to_bilinear", 1)
         )
@@ -66,7 +58,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         )  # 0: mccormick, 1: reformulate to sum of squares, 2: piecewise constant, 3: nonlinear
         self.bound_propagation = int(
             config_dict.get("bound_propagation", 0)
-        )  # 0: manual, 1: obbt
+        )  # 0: manual, 1: obbt, 2: obbt on bilinear
         self.feature_mpip_separation = int(
             config_dict.get("feature/mpip/separation", 0)
         )
@@ -111,14 +103,27 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.feature_stair_locatelli = int(
             config_dict.get("feature/stair_locatelli", 0)
         )  # 0: disabled, 1: locatelli, 2: stair locatelli, 3: indicator locatelli
-
         self.feature_stair_locatelli_grid_size = int(
             config_dict.get("feature/stair_locatelli/grid_size", 10)
         )  # grid size for stair locatelli
-
         self.feature_stair_locatelli_mu = float(
             config_dict.get("feature/stair_locatelli/mu", 1e-3)
         )  # distance from lb for stair locatelli
+        self.feature_stair_locatelli_obbt_time_limit = int(
+            config_dict.get("feature/stair_locatelli/obbt_time_limit", 1800)
+        )
+        self.feature_stair_locatelli_evaluation_grid_size = int(
+            config_dict.get("feature/stair_locatelli/evaluation_grid_size", 100)
+        )
+        self.filter_no_bilinear_expressions = int(
+            config_dict.get("filter/no_bilinear_expressions", 0)
+        )
+        self.filter_no_mpip_instances = int(
+            config_dict.get("filter/no_mpip_instances", 0)
+        )
+        self.filter_unbounded_variables = int(
+            config_dict.get("filter/unbounded_variables", 1)
+        )
 
     def update_from_other(self, other_settings: "UserSettings") -> None:
         """

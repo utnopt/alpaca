@@ -6,7 +6,7 @@ import itertools
 import numpy as np
 
 from alpaca.model_data import constraint as con
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 import alpaca.expressions.bilinear_expression as ble
 from alpaca.model_data import model_data as mda
 import alpaca.settings as s

@@ -9,9 +9,10 @@ import alpaca.mpip.mpip_handler as mph
 import alpaca.mpip.separation.mpip_separationhandler as msh
 import alpaca.locatelli.stair_locatelli as slo
 import alpaca.settings as s
+import alpaca.stats.statistics as ass
 from alpaca.utils import inout as ut_io
 from alpaca.utils.logger import logger
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class Alpaca:
@@ -26,7 +27,6 @@ class Alpaca:
         model_data (mda.ModelData): Data structure holding the optimization model.
         stair_locatelli (slo.StairLocatelli | None): Handler for Stair-Locatelli features.
         solver (slv.Solver | None): The initialized solver instance.
-        runtime (float | None): The duration of the last solve operation in seconds.
     """
 
     def __init__(self, settings_path: str | None = None) -> None:
@@ -40,11 +40,11 @@ class Alpaca:
         config_dict = (
             ut_io.read_config_file(settings_path) if settings_path is not None else {}
         )
+        self.statistics = ass.Statistics(self)
         self.user_settings = s.UserSettings(config_dict)
         self.model_data = mda.ModelData(self.user_settings)
         self.stair_locatelli: slo.StairLocatelli | None = None
         self.solver: slv.Solver | None = None
-        self.runtime: float | None = None
 
     def configure_logging(self, path: str, level: str = "INFO") -> None:
         """Configures global logging for both console and file output.
@@ -53,7 +53,7 @@ class Alpaca:
             path: Path where the log file should be saved.
             level: Logging threshold level (e.g., "DEBUG", "INFO", "WARNING").
         """
-        ut_io.config_console_logger(level)
+        self.statistics.log_file_path = path
         ut_io.config_file_logger(path, level)
 
     def customize_settings(self, settings_import: str | dict) -> None:
@@ -66,6 +66,9 @@ class Alpaca:
         if isinstance(settings_import, dict):
             new_settings = s.UserSettings(settings_import)
         else:
+            self.statistics.config_name = settings_import.split(lsf.path_separator())[
+                -1
+            ].replace(lsf.json_file_suffix(), lsf.empty_string())
             new_settings = s.UserSettings(ut_io.read_config_file(settings_import))
         self.user_settings.update_from_other(new_settings)
 
@@ -77,7 +80,10 @@ class Alpaca:
         MPIP (Mixed-Integer Programming Partitioning) separation logic based
         on the user settings.
         """
+        self.statistics.build_started()
+        self.statistics.track_statistics_original_model()
         self.model_data.build_pwl_relaxation_model()
+        self.statistics.track_statistics_pwl_model()
 
         if self.user_settings.feature_stair_locatelli:
             self.stair_locatelli = slo.StairLocatelli(self.model_data)
@@ -99,24 +105,26 @@ class Alpaca:
                     mpip_handler, external_solver.opt_model
                 )
                 self.solver.mpip_separation_handler = mpip_separation_handler
+                self.statistics.track_statistics_mpip()
+        self.statistics.build_finished()
 
     def solve(self):
-        """Executes the optimization process for the built model.
-
-        Returns:
-            float: The runtime of the optimization instance.
-
-        Raises:
-            RuntimeError: If called before 'build_pwl_relaxation_solver'.
-        """
+        """Executes the optimization process for the built model."""
         if self.solver is None:
             raise RuntimeError(
                 "Solver is not initialized. "
                 "Call 'build_pwl_relaxation_solver' before calling 'solve'."
             )
-        self.runtime = self.solver.solve_instance()
-        logger.info(lsf.info_optimization_finished(self.runtime))
-        return self.runtime
+        runtime = self.solver.solve_instance()
+        logger.info(lsf.info_optimization_finished(runtime))
+        self.statistics.get_solver_information_from_external_solver_log()
+        if self.user_settings.feature_stair_locatelli:
+            self.statistics.track_statistics_stair_locatelli()
+        if (
+            self.user_settings.feature_mpip
+            and self.user_settings.pwl_method != lsf.pwl_method_none()
+        ):
+            self.statistics.track_statistics_mpip_separation()
 
 
 def read_model_from_osil(path: str) -> Alpaca:
@@ -130,4 +138,7 @@ def read_model_from_osil(path: str) -> Alpaca:
     """
     alp = Alpaca()
     alp.model_data.read_model_from_osil_data(path)
+    alp.statistics.instance_name = path.split(lsf.path_separator())[-1].replace(
+        lsf.osil_file_suffix(), lsf.empty_string()
+    )
     return alp

@@ -11,7 +11,7 @@ from alpaca.model_buildup import expression_tree as etr
 from alpaca.external_solvers import mip_model as mm
 import alpaca.solver.solver as slv
 import alpaca.settings as s
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 SAMPLE_OSIL_DATA = [
     {

@@ -9,7 +9,7 @@ from alpaca.utils.logger import logger
 from alpaca.pwl import multiple_choice_method as mcm, delta_method as dem
 import alpaca.expressions.one_dim_expression as ode
 import alpaca.model_data.constraint as con
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 import alpaca.settings as s
 
 if TYPE_CHECKING:

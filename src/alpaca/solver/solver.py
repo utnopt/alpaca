@@ -6,7 +6,7 @@ import time
 
 from alpaca.external_solvers import mip_model as mm, solver_wrapper as sw
 from alpaca.utils.logger import logger
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 import alpaca.utils.inout as uio
 
 

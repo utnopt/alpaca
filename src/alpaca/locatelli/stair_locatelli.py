@@ -5,7 +5,7 @@
 import numpy as np
 
 from alpaca.model_data import model_data as md, variable as var, constraint as con
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 from alpaca.utils.logger import logger
 import alpaca.utils.geometry as uge
 import alpaca.expressions.bilinear_expression as ble
@@ -13,6 +13,7 @@ from alpaca.locatelli import (
     domain_projector as dop,
     locatelli_cut_generator as lcg,
 )
+import alpaca.model_buildup.multilinear_handler as mlh
 import alpaca.settings as s
 
 
@@ -29,7 +30,7 @@ class StairLocatelli:
         self.cut_generator = lcg.LocatelliCutGenerator(model_data)
 
         # Storage for results
-        self.bilinear_projected_domains: list[
+        self.bilinear_projected_domains_polygon: list[
             tuple[ble.BilinearExpression, list[tuple[float, float]]]
         ] = []
 
@@ -47,7 +48,7 @@ class StairLocatelli:
                 if self.settings.feature_stair_locatelli <= 2
                 else self.projector.get_projected_vertices_indicator(expr)
             )
-            self.bilinear_projected_domains.append((expr, vertices))
+            self.bilinear_projected_domains_polygon.append((expr, vertices))
 
             # 2. Generate Cuts (Constraint creation)
             cuts_added = self.cut_generator.generate_cuts(expr, vertices)
@@ -55,22 +56,63 @@ class StairLocatelli:
 
         logger.info(lsf.info_total_stair_locatelli_cuts_added(total_cuts))
 
-    def calculate_mean_bilinear_relaxation_volume_improvement(self):
-        """Calculate metrics for the improvement provided by these cuts."""
-        total_volume_imp = 0.0
+    def calculate_mean_bilinear_domain_volume(self, is_polytope=True):
+        """Calculate 3d volume over polytope or polygon domain."""
+        total_volume = 0.0
         bilinear_expressions = self.model_data.expressions.bilinear_expressions.values()
 
         for expr in bilinear_expressions:
-            vol = self.calculate_volume_improvement_bilinear_expression(expr)
-            total_volume_imp += vol
+            total_volume += self.calculate_bilinear_domain_volume(
+                expr, is_polytope=is_polytope
+            )
 
         if not bilinear_expressions:
-            return -1.0
+            return 0.0
 
-        return total_volume_imp / len(bilinear_expressions)
+        return total_volume / len(bilinear_expressions)
 
-    def calculate_volume_improvement_bilinear_expression(
-        self, bilinear_expression: ble.BilinearExpression
+    @classmethod
+    def calculate_mean_bilinear_domain_volume_box(
+        cls, model_data: md.ModelData, added_mccormick_envelopes
+    ):
+        """Calculate 3d volume over box domain."""
+        if not added_mccormick_envelopes:
+            multilinear_handler = mlh.MultilinearHandler(model_data)
+            multilinear_handler.add_mccormick_envelopes()
+        total_volume = 0.0
+        bilinear_expressions = model_data.expressions.bilinear_expressions.values()
+
+        for expr in bilinear_expressions:
+            total_volume += cls.calculate_bilinear_domain_volume_box(
+                expr, model_data.settings
+            )
+
+        if not bilinear_expressions:
+            return 0.0
+
+        return total_volume / len(bilinear_expressions)
+
+    @classmethod
+    def calculate_bilinear_domain_volume_box(
+        cls, bilinear_expression: ble.BilinearExpression, settings: s.UserSettings
+    ):
+        """
+        Calculate volume of mccormick relaxation.
+        """
+        cell_area, x_range, y_range = cls._create_evaluation_grid(
+            bilinear_expression, settings
+        )
+        mc_cormick_volume = 0.0
+        for x_grid in x_range:
+            for y_grid in y_range:
+                mc_height = cls._calculate_mc_cormick_size_at_point(
+                    (x_grid, y_grid), bilinear_expression
+                )
+                mc_cormick_volume += mc_height * cell_area
+        return mc_cormick_volume
+
+    def calculate_bilinear_domain_volume(
+        self, bilinear_expression: ble.BilinearExpression, is_polytope=True
     ):
         """
         Calculate volume and max difference improvement of bilinear relaxation.
@@ -78,53 +120,32 @@ class StairLocatelli:
         """
         x = bilinear_expression.variables[0]
         y = bilinear_expression.variables[1]
-        domain_vertices = [
+        polygon_domain_vertices = [
             vertices
-            for bl_exp, vertices in self.bilinear_projected_domains
+            for bl_exp, vertices in self.bilinear_projected_domains_polygon
             if bl_exp.name == bilinear_expression.name
         ][0]
+        if len(polygon_domain_vertices) < 3:
+            return 0.0
         if (
             abs(x.ub - x.lb) < s.StaticSettings.feasibility_tolerance
             or abs(y.ub - y.lb) < s.StaticSettings.feasibility_tolerance
         ):
             return 0.0
-
-        comparison_volume = (
-            uge.calculate_locatelli_volume_polytope(
-                bilinear_expression,
-                domain_vertices,
-                grid_size=self.model_data.settings.feature_stair_locatelli_evaluation_grid_size,
-            )
-            if self.settings.feature_stair_locatelli == 1
-            else self.calculate_3d_volume_polygon(bilinear_expression, domain_vertices)
-        )
-        return self._calculate_improvement_stats(
-            self._calculate_3d_volume_mc_cormick(bilinear_expression),
-            comparison_volume,
+        if sum(x_val * y_val for x_val, y_val in polygon_domain_vertices) == 0.0:
+            return 0.0
+        return self.calculate_3d_volume_polygon_over_domain(
+            bilinear_expression, polygon_domain_vertices, is_polytope=is_polytope
         )
 
-    def _calculate_3d_volume_mc_cormick(
-        self, bilinear_expression: ble.BilinearExpression
-    ) -> float:
-        """Calculates the 3D volume under the McCormick envelope over the grid."""
-        cell_area, x_range, y_range = self._create_evaluation_grid(bilinear_expression)
-        mc_cormick_volume = 0.0
-        for x_grid in x_range:
-            for y_grid in y_range:
-                mc_height = self._calculate_mc_cormick_size_at_point(
-                    (x_grid, y_grid), bilinear_expression
-                )
-                # Multiply height by area to get volume of the column
-                mc_cormick_volume += mc_height * cell_area
-        return mc_cormick_volume
-
-    def _create_evaluation_grid(self, bilinear_expression: ble.BilinearExpression):
+    @classmethod
+    def _create_evaluation_grid(
+        cls, bilinear_expression: ble.BilinearExpression, settings: s.UserSettings
+    ):
         """Creates the evaluation grid for volume calculation."""
         x = bilinear_expression.variables[0]
         y = bilinear_expression.variables[1]
-        grid_size = (
-            self.model_data.settings.feature_stair_locatelli_evaluation_grid_size
-        )
+        grid_size = settings.feature_stair_locatelli_evaluation_grid_size
         x_range = np.linspace(x.lb, x.ub, grid_size)
         y_range = np.linspace(y.lb, y.ub, grid_size)
 
@@ -137,28 +158,48 @@ class StairLocatelli:
             cell_area = 0.0
         return cell_area, x_range, y_range
 
-    def calculate_3d_volume_polygon(
-        self, bilinear_expression: ble.BilinearExpression, domain_vertices
+    def calculate_3d_volume_polygon_over_domain(
+        self,
+        bilinear_expression: ble.BilinearExpression,
+        domain_vertices,
+        is_polytope=True,
     ) -> float:
         """Calculates the 3D volume under the McCormick envelope over the grid."""
-        cell_area, x_range, y_range = self._create_evaluation_grid(bilinear_expression)
-
-        polygon_volume = 0.0
-        for x_grid, y_grid in uge.calculate_x_y_domain_polygon(
-            x_range, y_range, domain_vertices
-        ):
-            polygon_height = self._calculate_feasible_height(
-                (x_grid, y_grid), bilinear_expression
+        cell_area, x_range, y_range = self._create_evaluation_grid(
+            bilinear_expression, self.model_data.settings
+        )
+        poly_volume = 0.0
+        poly_grid = (
+            uge.calculate_x_y_domain_polytope(x_range, y_range, domain_vertices)
+            if is_polytope
+            else uge.calculate_x_y_domain_polygon(x_range, y_range, domain_vertices)
+        )
+        convexified_area = None
+        if self.settings.feature_stair_locatelli == 1:
+            convexified_area = uge.calculate_convexified_area(
+                x_range, y_range, domain_vertices
             )
+        for x_grid_point, y_grid_point in poly_grid:
+            if self.settings.feature_stair_locatelli == 1:
+                # Standard locatelli, calculate height based on convex hull over the polytope.
+                poly_height = uge.calculate_feasible_height_convexified(
+                    (x_grid_point, y_grid_point), convexified_area
+                )
+            else:
+                poly_height = self._calculate_feasible_height(
+                    (x_grid_point, y_grid_point), bilinear_expression
+                )
             # Multiply height by area to get volume of the column
-            polygon_volume += polygon_height * cell_area
-        return polygon_volume
+            poly_volume += poly_height * cell_area
+        return poly_volume
 
     def calculate_3d_volume_polytope_over_2d_polygon(
         self, bilinear_expression: ble.BilinearExpression, domain_vertices
     ) -> float:
         """Calculates the 3D volume under the McCormick envelope over the grid."""
-        cell_area, x_range, y_range = self._create_evaluation_grid(bilinear_expression)
+        cell_area, x_range, y_range = self._create_evaluation_grid(
+            bilinear_expression, self.model_data.settings
+        )
 
         polytope_volume = 0.0
         for x_grid, y_grid in uge.calculate_x_y_domain_polygon(
@@ -170,12 +211,6 @@ class StairLocatelli:
             # Multiply height by area to get volume of the column
             polytope_volume += polytope_height * cell_area
         return polytope_volume
-
-    @staticmethod
-    def _calculate_max_z_interval(x: var.Variable, y: var.Variable):
-        """Calculates the maximum possible range of z = x*y given bounds of x and y."""
-        corners = [x.ub * y.ub, x.lb * y.lb, x.lb * y.ub, x.ub * y.lb]
-        return max(corners) - min(corners)
 
     @staticmethod
     def _get_constraint_value(
@@ -193,8 +228,9 @@ class StairLocatelli:
         y_coeff = -next(c for c, v in constraint.variables if v == y_var)
         return x_coeff * x_val + y_coeff * y_val + constraint.rhs
 
+    @classmethod
     def _calculate_mc_cormick_size_at_point(
-        self,
+        cls,
         values: tuple[float, float],
         expr,
     ):
@@ -205,11 +241,11 @@ class StairLocatelli:
         x_val, y_val = values
         x_var, y_var = expr.variables
         mc_upper = min(
-            self._get_constraint_value(c, (x_val, y_val), (x_var, y_var))
+            cls._get_constraint_value(c, (x_val, y_val), (x_var, y_var))
             for c in expr.mc_cormick_constraints["overestimator"]
         )
         mc_lower = max(
-            self._get_constraint_value(c, (x_val, y_val), (x_var, y_var))
+            cls._get_constraint_value(c, (x_val, y_val), (x_var, y_var))
             for c in expr.mc_cormick_constraints["underestimator"]
         )
         return mc_upper - mc_lower
@@ -234,13 +270,3 @@ class StairLocatelli:
             for c in expr.linear_relaxation_for_bilinear["underestimator"]
         )
         return mc_upper - mc_lower
-
-    @staticmethod
-    def _calculate_improvement_stats(
-        mc_volume: float, locatelli_volume: float
-    ) -> float:
-        """Calculates the final volume and max difference improvement metrics."""
-        if mc_volume == 0:
-            return 0.0
-        volume_improvement = (mc_volume - locatelli_volume) / mc_volume
-        return volume_improvement

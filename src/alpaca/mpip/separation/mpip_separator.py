@@ -10,7 +10,7 @@ import alpaca.settings as s
 import alpaca.mpip.mpip as mp
 import alpaca.model_data.variable as var
 import alpaca.external_solvers.solver_wrapper as sw
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class SeparatedPoint:

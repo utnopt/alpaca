@@ -13,7 +13,7 @@ from alpaca.expressions import (
 )
 import alpaca.mpip.mpip as mp
 import alpaca.settings as s
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class MPIPHandler:  # pylint: disable=too-many-instance-attributes

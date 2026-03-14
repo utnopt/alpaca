@@ -6,14 +6,17 @@
 @authors: kuen,
 """
 from typing import Any, TYPE_CHECKING
+import re
 
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     import gurobipy as gp
     import pyscipopt as scip
+    import grblogtools as glt
 else:
     gp = None
+    glt = None
     scip = None
     nlfunc = None
     SCIP_RESULT = None
@@ -31,7 +34,7 @@ def load_solver_backend(solver_name: str) -> None:
     Args:
         solver_name: The name of the solver to load (e.g., "gurobi", "scip").
     """
-    global gp, nlfunc, scip, SCIP_RESULT, GurobiCut, ScipSeparation
+    global gp, nlfunc, glt, scip, SCIP_RESULT, GurobiCut, ScipSeparation
 
     solver_name = solver_name.lower()
 
@@ -39,9 +42,11 @@ def load_solver_backend(solver_name: str) -> None:
         if gp is None:
             import gurobipy as gp_module
             from gurobipy import nlfunc as nlfunc_module
+            import grblogtools as glt_module
 
             gp = gp_module
             nlfunc = nlfunc_module
+            glt = glt_module
 
             # Define GurobiCut only when Gurobi is loaded
             class GurobiCut:
@@ -298,7 +303,7 @@ class SolverWrapper:
     ) -> None:
         """Set the model's objective function."""
         if self.mip_solver == lsf.solver_name_scip():
-            self.model.freeTransform()
+            self._ensure_scip_problem_stage_modifiable()
         self.model.setObjective(expression)
         self.set_objective_sense(sense)
 
@@ -329,6 +334,7 @@ class SolverWrapper:
         if self.mip_solver == lsf.solver_name_gurobi():
             variable.LB = lb
         else:
+            self._ensure_scip_problem_stage_modifiable()
             self.model.chgVarLb(variable, lb)
 
     def set_variable_ub(self, variable: Any, ub: float) -> None:
@@ -336,10 +342,13 @@ class SolverWrapper:
         if self.mip_solver == lsf.solver_name_gurobi():
             variable.UB = ub
         else:
+            self._ensure_scip_problem_stage_modifiable()
             self.model.chgVarUb(variable, ub)
 
-    def get_objective_value(self) -> float:
+    def get_objective_value(self) -> float | None:
         """Get the objective value of the solution."""
+        if self.is_infeasible() or self.is_unbounded():
+            return None
         if self.mip_solver == lsf.solver_name_gurobi():
             return self.model.ObjVal
         return self.model.getObjVal()
@@ -356,6 +365,12 @@ class SolverWrapper:
             return self.model.Status == gp.GRB.INFEASIBLE
         return self.model.getStatus() == lsf.scip_status_infeasible()
 
+    def is_unbounded(self) -> bool:
+        """Check if the model is unbounded solution."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            return self.model.Status == gp.GRB.UNBOUNDED
+        return self.model.getStatus() == lsf.scip_status_unbounded()
+
     def is_optimal(self) -> bool:
         """Check if the model has been solved to optimality."""
         if self.mip_solver == lsf.solver_name_gurobi():
@@ -365,9 +380,114 @@ class SolverWrapper:
     def redirect_logging(self, log_file_path: str) -> None:
         """Redirect solver logs to a specified file."""
         if self.mip_solver == lsf.solver_name_gurobi():
-            self.model.setParam(lsf.gurobi_parameter_logfile(), log_file_path)
+            if log_file_path is not None:
+                self.model.setParam(lsf.gurobi_parameter_logfile(), log_file_path)
         else:  # scip
             self.model.setLogfile(log_file_path)
+
+    def _ensure_scip_problem_stage_modifiable(self):
+        stage = self.model.getStage()
+        if stage >= scip.SCIP_STAGE.TRANSFORMED:
+            self.model.freeTransform()
+
+    # pylint: disable=too-many-branches, too-many-statements
+    def get_solver_log_information(self, solver_log_path: str) -> dict:
+        """Get solver log information after optimization."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            summary = glt.parse([solver_log_path]).summary()
+            fg = lsf.stats_format_gurobi()
+            summary.rename(
+                columns={
+                    lsf.stats_solving_time(f=fg): lsf.stats_solving_time(),
+                    lsf.stats_nr_nodes(f=fg): lsf.stats_nr_nodes(),
+                    lsf.stats_solution_value(f=fg): lsf.stats_solution_value(),
+                    lsf.stats_mip_gap(f=fg): lsf.stats_mip_gap(),
+                    lsf.stats_final_nr_vars(f=fg): lsf.stats_final_nr_vars(),
+                    lsf.stats_final_nr_constraints(
+                        f=fg
+                    ): lsf.stats_final_nr_constraints(),
+                    lsf.stats_presolved_nr_vars(f=fg): lsf.stats_presolved_nr_vars(),
+                    lsf.stats_presolved_nr_constraints(
+                        f=fg
+                    ): lsf.stats_presolved_nr_constraints(),
+                    lsf.stats_presolved_nr_nonzeros(
+                        f=fg
+                    ): lsf.stats_presolved_nr_nonzeros(),
+                    lsf.stats_root_solution_value(
+                        f=fg
+                    ): lsf.stats_root_solution_value(),
+                    lsf.stats_root_solving_time(f=fg): lsf.stats_root_solving_time(),
+                },
+                inplace=True,
+            )
+            return summary.iloc[0].to_dict()
+        fs = lsf.stats_format_scip()
+        with open(
+            solver_log_path, lsf.file_mode_read(), encoding=lsf.file_encoding_utf8()
+        ) as fg:
+            content = fg.read()
+        stats: dict[str, float | int] = {}
+        match = re.search(lsf.stats_solving_time(f=fs), content)
+        if match:
+            stats[lsf.stats_solving_time()] = float(match.group(1))
+        match = re.search(lsf.stats_nr_nodes(f=fs), content)
+        if match:
+            stats[lsf.stats_nr_nodes()] = int(match.group(1))
+        match = re.search(
+            lsf.stats_solution_value(f=fs),
+            content,
+        )
+        if match:
+            try:
+                stats[lsf.stats_solution_value()] = float(match.group(1))
+            except ValueError:
+                pass
+        match = re.search(lsf.stats_mip_gap(f=fs), content, re.MULTILINE)
+        if match:
+            try:
+                stats[lsf.stats_mip_gap()] = (
+                    float(match.group(1)) / 100.0
+                )  # Convert % to fraction
+            except ValueError:
+                pass
+        model_size_match = re.search(
+            lsf.stats_scip_model_size_section(), content, re.DOTALL
+        )
+        if model_size_match:
+            section = model_size_match.group(1)
+            match = re.search(lsf.stats_final_nr_vars(f=fs), section)
+            if match:
+                stats[lsf.stats_final_nr_vars()] = int(match.group(1))
+            match = re.search(lsf.stats_final_nr_constraints(f=fs), section)
+            if match:
+                stats[lsf.stats_final_nr_constraints()] = int(match.group(1))
+        presolved_match = re.search(
+            lsf.stats_scip_presolve_section(), content, re.DOTALL
+        )
+        if presolved_match:
+            section = presolved_match.group(1)
+            match = re.search(lsf.stats_presolved_nr_vars(f=fs), section)
+            if match:
+                stats[lsf.stats_presolved_nr_vars()] = int(match.group(1))
+            match = re.search(lsf.stats_presolved_nr_constraints(f=fs), section)
+            if match:
+                stats[lsf.stats_presolved_nr_constraints()] = int(match.group(1))
+            match = re.search(lsf.stats_presolved_nr_nonzeros(f=fs), section)
+            if match:
+                stats[lsf.stats_presolved_nr_nonzeros()] = int(match.group(1))
+        match = re.search(lsf.stats_root_solution_value(f=fs), content)
+        if match:
+            try:
+                stats[lsf.stats_root_solution_value()] = float(match.group(1))
+            except ValueError:
+                pass
+        match = re.search(lsf.stats_root_solving_time(f=fs), content)
+        if match:
+            try:
+                stats[lsf.stats_root_solving_time()] = float(match.group(1))
+            except ValueError:
+                pass
+        return stats
 
 
 def gurobi_separation_callback(grb_model, where):

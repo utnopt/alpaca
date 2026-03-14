@@ -6,7 +6,7 @@ import numpy as np
 
 from alpaca.model_data import variable as var
 from alpaca.external_solvers import mip_model as mm
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 import alpaca.expressions.bilinear_expression as ble
 import alpaca.settings as s
 import alpaca.utils.geometry as geo
@@ -62,7 +62,6 @@ class DomainProjector:
         )
         self.external_solver.opt_model.set_variable_lb(x.solver_variable, x.lb)
         if y_ub is None:
-            # self.external_solver.opt_model.model.write("infeasible_y.ilp")
             return [(x.lb, y.lb), (x.lb, y.ub)]
 
         self.external_solver.opt_model.set_variable_lb(
@@ -300,8 +299,6 @@ class DomainProjector:
         # --- Post Processing ---
         vertices = geo.filter_equal_vertices(vertices)
         vertices = geo.filter_collinear_vertices(vertices)
-        if self.settings.feature_stair_locatelli == 1:
-            vertices = geo.get_convex_hull(vertices)
 
         return vertices
 
