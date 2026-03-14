@@ -20,7 +20,7 @@ def run_nonlinear_test(instance_name):
     base_dir = pathlib.Path(__file__).parent
     file_path = str(base_dir / "test_instances" / f"{instance_name}.osil")
     config_dict = {
-        "solver_time_limit": 3600,
+        "solver_time_limit": 1000,
         "external_solver": "scip",
         "reformulate_multilinear_to_bilinear": 0,
         "bilinear_handling": 3,

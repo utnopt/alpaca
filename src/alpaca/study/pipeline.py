@@ -40,10 +40,10 @@ class StudyConfig:
         Returns:
             Number of parallel workers to use.
         """
-        if self.max_workers is not None:
-            return self.max_workers
-
         available_cores = os.cpu_count() or 1
+        if self.max_workers is not None:
+            return min(self.max_workers, available_cores)
+
         return max(1, available_cores // self.threads_per_job)
 
 
@@ -379,7 +379,7 @@ class StudyPipeline:
         core_sets = []
 
         for i in range(max_workers):
-            start = i * cores_per_worker
+            start = (i * cores_per_worker) % num_cores
             end = min(start + cores_per_worker - 1, num_cores - 1)
             core_sets.append(f"{start}-{end}")
 

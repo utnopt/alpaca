@@ -347,7 +347,7 @@ class SolverWrapper:
 
     def get_objective_value(self) -> float | None:
         """Get the objective value of the solution."""
-        if not self.is_optimal():
+        if self.is_infeasible() or self.is_unbounded():
             return None
         if self.mip_solver == lsf.solver_name_gurobi():
             return self.model.ObjVal
@@ -364,6 +364,12 @@ class SolverWrapper:
         if self.mip_solver == lsf.solver_name_gurobi():
             return self.model.Status == gp.GRB.INFEASIBLE
         return self.model.getStatus() == lsf.scip_status_infeasible()
+
+    def is_unbounded(self) -> bool:
+        """Check if the model is unbounded solution."""
+        if self.mip_solver == lsf.solver_name_gurobi():
+            return self.model.Status == gp.GRB.UNBOUNDED
+        return self.model.getStatus() == lsf.scip_status_unbounded()
 
     def is_optimal(self) -> bool:
         """Check if the model has been solved to optimality."""

@@ -19,7 +19,7 @@ def run_model_test(instance_name, approximation, reformulate_multilinear):
     file_path = str(base_dir / "test_instances" / f"{instance_name}.osil")
     config_dict = {
         "approximation": approximation,
-        "reformulate_multilinear": reformulate_multilinear,
+        "reformulate_multilinear_to_bilinear": reformulate_multilinear,
         "filter/unbounded_variables": 0,
     }
     user_settings = s.UserSettings(config_dict)

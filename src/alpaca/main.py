@@ -109,14 +109,7 @@ class Alpaca:
         self.statistics.build_finished()
 
     def solve(self):
-        """Executes the optimization process for the built model.
-
-        Returns:
-            float: The runtime of the optimization instance.
-
-        Raises:
-            RuntimeError: If called before 'build_pwl_relaxation_solver'.
-        """
+        """Executes the optimization process for the built model."""
         if self.solver is None:
             raise RuntimeError(
                 "Solver is not initialized. "

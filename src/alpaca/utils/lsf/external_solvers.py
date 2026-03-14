@@ -57,6 +57,10 @@ class ExternalSolvers:
         return "infeasible"
 
     @classmethod
+    def scip_status_unbounded(cls) -> str:
+        return "unbounded"
+
+    @classmethod
     def scip_status_optimal(cls) -> str:
         return "optimal"
 
