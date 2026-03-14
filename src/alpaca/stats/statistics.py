@@ -63,7 +63,7 @@ class Statistics:  # pylint: disable=too-many-instance-attributes
             self.alp_instance.model_data.expressions.bilinear_binary_expressions
         )
         self.original_nr_mixed_binary_expressions = len(
-            self.alp_instance.model_data.expressions.bilinear_binary_expressions
+            self.alp_instance.model_data.expressions.bilinear_mixed_binary_expressions
         )
         self.original_nr_multilinear_expressions = len(
             self.alp_instance.model_data.expressions.multilinear_expressions
@@ -83,7 +83,7 @@ class Statistics:  # pylint: disable=too-many-instance-attributes
             self.alp_instance.model_data.expressions.bilinear_binary_expressions
         )
         self.pwl_nr_mixed_binary_expressions = len(
-            self.alp_instance.model_data.expressions.bilinear_binary_expressions
+            self.alp_instance.model_data.expressions.bilinear_mixed_binary_expressions
         )
         self.pwl_nr_multilinear_expressions = len(
             self.alp_instance.model_data.expressions.multilinear_expressions
