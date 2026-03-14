@@ -113,14 +113,17 @@ class Statistics:  # pylint: disable=too-many-instance-attributes
         """Tracks statistics related to the MPIP handler."""
         mpip_handler = self.alp_instance.solver.mpip_separation_handler.mpip_handler
         self.mpip_nr_instances = len(mpip_handler.mpip_dict)
-        self.mpip_ratio = round(
-            sum(
-                mpip.calculate_relation_ratio()
-                for mpip in mpip_handler.mpip_dict.values()
+        if self.mpip_nr_instances == 0:
+            self.mpip_ratio = 0.0
+        else:
+            self.mpip_ratio = round(
+                sum(
+                    mpip.calculate_relation_ratio()
+                    for mpip in mpip_handler.mpip_dict.values()
+                )
+                / self.mpip_nr_instances,
+                3,
             )
-            / len(mpip_handler.mpip_dict),
-            3,
-        )
         self._check_filters_mpip()
 
     def _check_filters_mpip(self):
