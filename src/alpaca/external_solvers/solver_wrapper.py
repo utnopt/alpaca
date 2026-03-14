@@ -8,7 +8,7 @@
 from typing import Any, TYPE_CHECKING
 import re
 
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     import gurobipy as gp

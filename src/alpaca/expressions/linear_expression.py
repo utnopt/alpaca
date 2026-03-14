@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from alpaca.model_data import variable as var, constraint as con
 import alpaca.expressions.expression as exn
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData

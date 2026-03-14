@@ -5,7 +5,7 @@
 import numpy as np
 
 from alpaca.model_data import model_data as md, variable as var, constraint as con
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 from alpaca.utils.logger import logger
 import alpaca.utils.geometry as uge
 import alpaca.expressions.bilinear_expression as ble

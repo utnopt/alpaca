@@ -9,7 +9,7 @@ from alpaca.model_data import variable as var, model_data as mde
 from alpaca.model_data import constraint as con
 from alpaca.model_buildup import expression_tree as etr, bound_propagator as bpr
 import alpaca.settings as s
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 SAMPLE_BOUND_DATA = [
     {

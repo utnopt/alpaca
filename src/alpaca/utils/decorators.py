@@ -3,7 +3,7 @@
 @authors: kuen,
 """
 from alpaca.utils.logger import logger
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 
 def check_pwl_method_for_mpip_feature(func):

@@ -11,7 +11,7 @@ from alpaca.expressions import (
     one_dim_expression as ode,
 )
 import alpaca.settings as s
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     from alpaca.model_data.model_data import ModelData

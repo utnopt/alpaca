@@ -6,7 +6,7 @@ import numpy as np
 
 from alpaca.model_data import variable as var
 from alpaca.external_solvers import mip_model as mm
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 import alpaca.expressions.bilinear_expression as ble
 import alpaca.settings as s
 import alpaca.utils.geometry as geo

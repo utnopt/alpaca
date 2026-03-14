@@ -5,7 +5,7 @@
 import xml.etree.ElementTree as ET
 import zlib
 
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 
 def hash_nonlinearity(xml_str):

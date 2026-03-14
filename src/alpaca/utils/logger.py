@@ -7,6 +7,6 @@ always use this logger so it's package-wise configurable
 
 import logging
 
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 logger = logging.getLogger(lsf.project_name())

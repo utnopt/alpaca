@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import dataclasses
 
 import alpaca.settings as s
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     from alpaca.pwl import pwl_method as pwm

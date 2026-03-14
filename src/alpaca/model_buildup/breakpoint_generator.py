@@ -8,7 +8,7 @@ import numpy as np
 
 from alpaca.utils.logger import logger
 import alpaca.model_data.variable as var
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 from alpaca.breakpoints import (
     breakpoint_neural_network as bnn,
     breakpoint_adaptive as bad,

@@ -8,7 +8,7 @@ import math
 
 from alpaca.utils.logger import logger
 import alpaca.external_solvers.solver_wrapper as sw
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     from alpaca.model_data import model_data as mda

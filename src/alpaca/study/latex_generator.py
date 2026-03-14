@@ -7,7 +7,7 @@ import os
 from dataclasses import dataclass
 
 from alpaca.study.evaluator import StudyEvaluator
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 from alpaca.utils.logger import logger
 import alpaca.utils.inout as uio
 

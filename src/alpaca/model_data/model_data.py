@@ -25,7 +25,7 @@ from alpaca.model_buildup import (
     osil_reader as osr,
     pwl_handler as pwh,
 )
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class ModelData:  # pylint: disable=too-many-instance-attributes

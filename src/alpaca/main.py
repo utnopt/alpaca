@@ -12,7 +12,7 @@ import alpaca.settings as s
 import alpaca.stats.statistics as ass
 from alpaca.utils import inout as ut_io
 from alpaca.utils.logger import logger
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class Alpaca:

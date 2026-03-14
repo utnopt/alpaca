@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from alpaca.utils.logger import logger
 from alpaca.settings import StaticSettings
 import alpaca.utils.data_handling as udh
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 from alpaca.model_data import (
     variable as var,
     constraint as con,

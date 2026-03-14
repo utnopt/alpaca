@@ -8,7 +8,7 @@ from alpaca.expressions import (
     one_dim_expression as ode,
 )
 import alpaca.model_data.constraint as con
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class BilinearExpression(mle.MultilinearExpression):

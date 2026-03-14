@@ -3,7 +3,7 @@
 @authors: kuen,
 """
 from alpaca.model_data import variable as var
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class LinearConstraint:

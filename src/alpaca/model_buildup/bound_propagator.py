@@ -13,7 +13,7 @@ from alpaca.expressions import (
     linear_expression as lie,
 )
 from alpaca.external_solvers import mip_model as mm, solver_wrapper as sw
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
     from alpaca.model_data import model_data as mda, variable as var

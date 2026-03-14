@@ -7,7 +7,7 @@ import itertools
 import alpaca.pwl.pwl_method as pwm
 from alpaca.model_data import constraint as con, variable as var
 from alpaca.expressions import one_dim_expression as ode, multilinear_expression as mle
-from alpaca.utils.localized_string_factory import LocalizedStringFactory as lsf
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 
 class DeltaMethod(pwm.PWLMethod):
