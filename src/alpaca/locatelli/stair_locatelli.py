@@ -49,6 +49,8 @@ class StairLocatelli:
                 else self.projector.get_projected_vertices_indicator(expr)
             )
             self.bilinear_projected_domains_polygon.append((expr, vertices))
+            if self.settings.feature_stair_locatelli == 1:
+                vertices = uge.calculate_convex_hull_2d(vertices)
 
             # 2. Generate Cuts (Constraint creation)
             cuts_added = self.cut_generator.generate_cuts(expr, vertices)

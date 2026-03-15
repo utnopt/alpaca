@@ -428,3 +428,13 @@ class StudyEvaluator:
                 for column in columns:
                     result[instance][column] = row_data.get(column)
         return result
+
+
+if __name__ == "__main__":
+    evaluator = StudyEvaluator(
+        "C:/Users/kuen/Documents/Git/alpaca/"
+        "data/study/study_results_2026-03-14_18-05-54.csv"
+    )
+    for eval_config in evaluator.data.configs:
+        mean_time = evaluator.compute_mean(lsf.stats_solving_time(), eval_config)
+        print(f"Config: {eval_config}, Mean Solving Time: {mean_time}")
