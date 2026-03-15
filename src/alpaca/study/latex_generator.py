@@ -956,17 +956,3 @@ class LaTeXGenerator:
         plots.append(self.generate_instances_solved_over_time_plot())
         plots.append(self.generate_config_performance_boxplot())
         return {"tables": tables, "plots": plots}
-
-
-if __name__ == "__main__":
-    STUDY_DIR = "C:/Users/kuen/Documents/Git/alpaca/data/study/"
-    study_evaluator = StudyEvaluator(
-        STUDY_DIR + "study_results_2026-03-14_18-05-54.csv"
-    )
-    latex_config = LaTeXConfig(
-        tables_dir=STUDY_DIR + "tables",
-        plots_dir=STUDY_DIR + "plots",
-    )
-
-    generator = LaTeXGenerator(study_evaluator, latex_config)
-    outputs = generator.generate_all()
