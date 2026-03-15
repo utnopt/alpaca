@@ -68,8 +68,6 @@ class StudyEvaluator:
         lsf.stats_pwl_nr_one_dim_expressions(),
         lsf.stats_locatelli_domain_volume_polygon(),
         lsf.stats_locatelli_domain_volume_polytope(),
-        lsf.stats_stair_locatelli_domain_volume_polygon(),
-        lsf.stats_stair_locatelli_domain_volume_polytope(),
         lsf.stats_mpip_nr_instances(),
         lsf.stats_mpip_ratio(),
     }

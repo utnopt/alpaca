@@ -40,6 +40,7 @@ class Statistics:  # pylint: disable=too-many-instance-attributes
         self.pwl_nr_one_dim_expressions: int = 0
         self.locatelli_domain_volume_polygon: int = 0
         self.locatelli_domain_volume_polytope: int = 0
+        self.locatelli_nr_cuts: int = 0
         self.mpip_nr_instances: int = 0
         self.mpip_ratio: float = 0.0
         self.mpip_separation_nr_cuts: int = 0
@@ -107,6 +108,11 @@ class Statistics:  # pylint: disable=too-many-instance-attributes
         )
         self.locatelli_domain_volume_polygon = (
             self._stair_locatelli_domain_volume_polygon()
+        )
+        self.locatelli_nr_cuts = (
+            0
+            if self.alp_instance.stair_locatelli is None
+            else self.alp_instance.stair_locatelli.nr_cuts
         )
 
     def track_statistics_mpip(self):
@@ -288,6 +294,7 @@ class Statistics:  # pylint: disable=too-many-instance-attributes
             f"{self.pwl_nr_one_dim_expressions},"
             f"{self.locatelli_domain_volume_polygon},"
             f"{self.locatelli_domain_volume_polytope},"
+            f"{self.locatelli_nr_cuts},"
             f"{self.mpip_nr_instances},"
             f"{self.mpip_ratio}"
         )

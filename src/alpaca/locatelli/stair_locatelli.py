@@ -33,6 +33,7 @@ class StairLocatelli:
         self.bilinear_projected_domains_polygon: list[
             tuple[ble.BilinearExpression, list[tuple[float, float]]]
         ] = []
+        self.nr_cuts = 0
 
         # Execute
         self._run()
@@ -56,6 +57,7 @@ class StairLocatelli:
             cuts_added = self.cut_generator.generate_cuts(expr, vertices)
             total_cuts += cuts_added
 
+        self.nr_cuts = total_cuts
         logger.info(lsf.info_total_stair_locatelli_cuts_added(total_cuts))
 
     def calculate_mean_bilinear_domain_volume(self, is_polytope=True):

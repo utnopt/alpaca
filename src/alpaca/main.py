@@ -118,8 +118,7 @@ class Alpaca:
         runtime = self.solver.solve_instance()
         logger.info(lsf.info_optimization_finished(runtime))
         self.statistics.get_solver_information_from_external_solver_log()
-        if self.user_settings.feature_stair_locatelli:
-            self.statistics.track_statistics_stair_locatelli()
+        self.statistics.track_statistics_stair_locatelli()
         if (
             self.user_settings.feature_mpip
             and self.user_settings.pwl_method != lsf.pwl_method_none()

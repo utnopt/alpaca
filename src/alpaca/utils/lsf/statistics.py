@@ -37,7 +37,7 @@ class Statistics:
         if f == cls.stats_format_scip():
             return r"Solving Nodes\s*:\s*(\d+)"
         if f == cls.stats_format_latex():
-            return "# Nodes"
+            return "Nr. of Nodes"
         return "nr_nodes"
 
     @classmethod
@@ -71,7 +71,7 @@ class Statistics:
         if f == cls.stats_format_scip():
             return r"Variables\s*:\s*(\d+)"
         if f == cls.stats_format_latex():
-            return "Final # Variables"
+            return "Final Nr. of Variables"
         return "final_nr_vars"
 
     @classmethod
@@ -81,7 +81,7 @@ class Statistics:
         if f == cls.stats_format_scip():
             return r"Constraints\s*:\s*(\d+)\s+initial"
         if f == cls.stats_format_latex():
-            return "Final # Constraints"
+            return "Final Nr. of Constraints"
         return "final_nr_constraints"
 
     @classmethod
@@ -95,7 +95,7 @@ class Statistics:
         if f == cls.stats_format_scip():
             return r"Variables\s*:\s*(\d+)"
         if f == cls.stats_format_latex():
-            return "Presolved # Variables"
+            return "Presolved Nr. of Variables"
         return "presolved_nr_vars"
 
     @classmethod
@@ -105,7 +105,7 @@ class Statistics:
         if f == cls.stats_format_scip():
             return r"Constraints\s*:\s*(\d+)\s+initial"
         if f == cls.stats_format_latex():
-            return "Presolved # Constraints"
+            return "Presolved Nr. of Constraints"
         return "presolved_nr_constraints"
 
     @classmethod
@@ -115,7 +115,7 @@ class Statistics:
         if f == cls.stats_format_scip():
             return r"Nonzeros\s*:\s*(\d+)\s+constraint"
         if f == cls.stats_format_latex():
-            return "Presolved # Nonzeros"
+            return "Presolved Nr. of Nonzeros"
         return "presolved_nr_nonzeros"
 
     @classmethod
@@ -159,85 +159,85 @@ class Statistics:
     @classmethod
     def stats_original_nr_variables(cls, f="") -> str:
         if f == cls.stats_format_latex():
-            return "Original # Variables"
+            return "Original Nr. of Variables"
         return "original_nr_variables"
 
     @classmethod
     def stats_original_nr_constraints(cls, f="") -> str:
         if f == cls.stats_format_latex():
-            return "Original # Constraints"
+            return "Original Nr. of Constraints"
         return "original_nr_constraints"
 
     @classmethod
     def stats_original_nr_bilinear_expressions(cls, f="") -> str:
         if f == cls.stats_format_latex():
-            return "Original # Bilinear Expressions"
+            return "Original Nr. of Bilinear Expressions"
         return "original_nr_bilinear_expressions"
 
     @classmethod
     def stats_original_nr_bilinear_binary_expressions(cls, f="") -> str:
         if f == cls.stats_format_latex():
-            return "Original # Bilinear Binary Expressions"
+            return "Original Nr. of Bilinear Binary Expressions"
         return "original_nr_bilinear_binary_expressions"
 
     @classmethod
     def stats_original_nr_mixed_binary_expressions(cls, f="") -> str:
         if f == cls.stats_format_latex():
-            return "Original # Mixed Binary Expressions"
+            return "Original Nr. of Mixed Binary Expressions"
         return "original_nr_mixed_binary_expressions"
 
     @classmethod
     def stats_original_nr_multilinear_expressions(cls, f="") -> str:
         if f == cls.stats_format_latex():
-            return "Original # Multilinear Expressions"
+            return "Original Nr. of Multilinear Expressions"
         return "original_nr_multilinear_expressions"
 
     @classmethod
     def stats_original_nr_one_dim_expressions(cls, f="") -> str:
         if f == cls.stats_format_latex():
-            return "Original # One-Dimensional Expressions"
+            return "Original Nr. of One-Dimensional Expressions"
         return "original_nr_one_dim_expressions"
 
     @classmethod
     def stats_pwl_nr_variables(cls, f="") -> str:
         if f == cls.stats_format_latex():
-            return "PWL # Variables"
+            return "PWL Nr. of Variables"
         return "pwl_nr_variables"
 
     @classmethod
     def stats_pwl_nr_constraints(cls, f="") -> str:
         if f == cls.stats_format_latex():
-            return "PWL # Constraints"
+            return "PWL Nr. of Constraints"
         return "pwl_nr_constraints"
 
     @classmethod
     def stats_pwl_nr_bilinear_expressions(cls, f="") -> str:
         if f == cls.stats_format_latex():
-            return "PWL # Bilinear Expressions"
+            return "PWL Nr. of Bilinear Expressions"
         return "pwl_nr_bilinear_expressions"
 
     @classmethod
     def stats_pwl_nr_bilinear_binary_expressions(cls, f="") -> str:
         if f == cls.stats_format_latex():
-            return "PWL # Bilinear Binary Expressions"
+            return "PWL Nr. of Bilinear Binary Expressions"
         return "pwl_nr_bilinear_binary_expressions"
 
     @classmethod
     def stats_pwl_nr_mixed_binary_expressions(cls, f="") -> str:
         if f == cls.stats_format_latex():
-            return "PWL # Mixed Binary Expressions"
+            return "PWL Nr. of Mixed Binary Expressions"
         return "pwl_nr_mixed_binary_expressions"
 
     @classmethod
     def stats_pwl_nr_multilinear_expressions(cls, f="") -> str:
         if f == cls.stats_format_latex():
-            return "PWL # Multilinear Expressions"
+            return "PWL Nr. of Multilinear Expressions"
         return "pwl_nr_multilinear_expressions"
 
     @classmethod
     def stats_pwl_nr_one_dim_expressions(cls, f="") -> str:
         if f == cls.stats_format_latex():
-            return "PWL # One-Dimensional Expressions"
+            return "PWL Nr. of One-Dimensional Expressions"
         return "pwl_nr_one_dim_expressions"
 
     @classmethod
@@ -253,9 +253,15 @@ class Statistics:
         return "locatelli_domain_volume_polytope"
 
     @classmethod
+    def stats_locatelli_nr_cuts(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return "Locatelli Nr. of Cuts"
+        return "locatelli_nr_cuts"
+
+    @classmethod
     def stats_mpip_nr_instances(cls, f="") -> str:
         if f == cls.stats_format_latex():
-            return "MPIP # Instances"
+            return "MPIP Nr. of Instances"
         return "mpip_nr_instances"
 
     @classmethod
@@ -309,6 +315,7 @@ class Statistics:
             f"{cls.stats_pwl_nr_one_dim_expressions()},"
             f"{cls.stats_locatelli_domain_volume_polygon()},"
             f"{cls.stats_locatelli_domain_volume_polytope()},"
+            f"{cls.stats_locatelli_nr_cuts()},"
             f"{cls.stats_mpip_nr_instances()},"
             f"{cls.stats_mpip_ratio()}"
         )

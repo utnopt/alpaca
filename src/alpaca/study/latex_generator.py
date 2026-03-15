@@ -136,12 +136,13 @@ class LaTeXGenerator:
             lsf.stats_presolved_nr_constraints(): lsf.stats_presolved_nr_constraints(
                 latex_format
             ),
-            lsf.stats_stair_locatelli_domain_volume_polygon(): (
-                lsf.stats_stair_locatelli_domain_volume_polygon(latex_format)
+            lsf.stats_locatelli_domain_volume_polygon(): (
+                lsf.stats_locatelli_domain_volume_polygon(latex_format)
             ),
-            lsf.stats_stair_locatelli_domain_volume_polytope(): (
-                lsf.stats_stair_locatelli_domain_volume_polytope(latex_format)
+            lsf.stats_locatelli_domain_volume_polytope(): (
+                lsf.stats_locatelli_domain_volume_polytope(latex_format)
             ),
+            lsf.stats_locatelli_nr_cuts(): lsf.stats_locatelli_nr_cuts(latex_format),
             lsf.stats_pwl_nr_bilinear_expressions(): (
                 lsf.stats_pwl_nr_bilinear_expressions(latex_format)
             ),
@@ -396,8 +397,8 @@ class LaTeXGenerator:
             Path to the generated file.
         """
         columns = [
-            lsf.stats_stair_locatelli_domain_volume_polygon(),
-            lsf.stats_stair_locatelli_domain_volume_polytope(),
+            lsf.stats_locatelli_domain_volume_polygon(),
+            lsf.stats_locatelli_domain_volume_polytope(),
         ]
         data = self.evaluator.get_config_aggregated_data(columns)
 
@@ -439,8 +440,8 @@ class LaTeXGenerator:
             Path to the generated file.
         """
         columns = [
-            lsf.stats_stair_locatelli_domain_volume_polygon(),
-            lsf.stats_stair_locatelli_domain_volume_polytope(),
+            lsf.stats_locatelli_domain_volume_polygon(),
+            lsf.stats_locatelli_domain_volume_polytope(),
         ]
         data = self.evaluator.get_config_aggregated_data(columns)
 
@@ -631,8 +632,8 @@ class LaTeXGenerator:
             Path to the generated file.
         """
         columns = [
-            lsf.stats_stair_locatelli_domain_volume_polygon(),
-            lsf.stats_stair_locatelli_domain_volume_polytope(),
+            lsf.stats_locatelli_domain_volume_polygon(),
+            lsf.stats_locatelli_domain_volume_polytope(),
         ]
         pivot_data = self.evaluator.get_pivot_data(columns)
 
@@ -940,13 +941,13 @@ class LaTeXGenerator:
         tables.append(self.generate_instance_domain_volume_table())
         plots.append(
             self.generate_instance_performance_lineplot(
-                lsf.stats_stair_locatelli_domain_volume_polygon(),
+                lsf.stats_locatelli_domain_volume_polygon(),
                 "instance_domain_volume_polygon_lineplot.tex",
             )
         )
         plots.append(
             self.generate_instance_performance_lineplot(
-                lsf.stats_stair_locatelli_domain_volume_polytope(),
+                lsf.stats_locatelli_domain_volume_polytope(),
                 "instance_domain_volume_polytope_lineplot.tex",
             )
         )
@@ -955,3 +956,17 @@ class LaTeXGenerator:
         plots.append(self.generate_instances_solved_over_time_plot())
         plots.append(self.generate_config_performance_boxplot())
         return {"tables": tables, "plots": plots}
+
+
+if __name__ == "__main__":
+    STUDY_DIR = "C:/Users/kuen/Documents/Git/alpaca/data/study/"
+    study_evaluator = StudyEvaluator(
+        STUDY_DIR + "study_results_2026-03-14_18-05-54.csv"
+    )
+    latex_config = LaTeXConfig(
+        tables_dir=STUDY_DIR + "tables",
+        plots_dir=STUDY_DIR + "plots",
+    )
+
+    generator = LaTeXGenerator(study_evaluator, latex_config)
+    outputs = generator.generate_all()
