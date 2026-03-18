@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
+
 """
-@authors: kuen,
+@authors: Claude Opus,
 """
 import csv
 from dataclasses import dataclass, field
+from enum import Enum, auto
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +13,48 @@ import numpy as np
 
 from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 from alpaca.utils.logger import logger
+
+
+class InstanceFilter(Enum):
+    """Filter types for instance selection in comparisons."""
+
+    NONE = auto()
+    """No filtering - use all complete instances."""
+
+    ALL_TERMINATED = auto()
+    """Only instances where all configs terminated (not by time limit)."""
+
+    ALL_TERMINATED_CONSISTENT = auto()
+    """All terminated + consistent solution values across configs."""
+
+
+@dataclass
+class FilterConfig:
+    """Configuration for instance filtering.
+
+    Attributes:
+        solution_value_rel_tol: Relative tolerance for solution value comparison.
+        solution_value_abs_tol: Absolute tolerance for solution value comparison.
+        optimal_gap_threshold: MIP gap threshold to consider as terminated
+            (0.0 means only optimal, e.g., 0.01 means 1% gap is acceptable).
+    """
+
+    solution_value_rel_tol: float = 1e-6
+    solution_value_abs_tol: float = 1e-9
+    optimal_gap_threshold: float = 0.0
+
+
+@dataclass
+class FilterResult:
+    """Result of applying instance filters.
+
+    Attributes:
+        instances: List of instances that passed the filter.
+        warnings: List of warning messages for discarded instances.
+    """
+
+    instances: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -75,16 +119,27 @@ class StudyEvaluator:
 
     GEOMETRIC_MEAN_SHIFT = 10.0
 
-    def __init__(self, csv_path: str) -> None:
+    def __init__(
+        self,
+        csv_path: str,
+        filter_config: FilterConfig | None = None,
+    ) -> None:
         """Initializes the evaluator with a CSV file path.
 
         Args:
             csv_path: Path to the CSV results file.
+            filter_config: Configuration for filtering instances.
         """
         self.csv_path = csv_path
+        self.filter_config = filter_config or FilterConfig()
         self.data = StudyData()
+
+        # Cached filter results
+        self._filter_cache: dict[InstanceFilter, FilterResult] = {}
+
         self._load_csv()
         self._filter_complete_instances()
+        self._compute_filter_results()
 
     def _load_csv(self) -> None:
         """Loads and parses the CSV file into the data structure."""
@@ -154,6 +209,206 @@ class StudyEvaluator:
             removed_count,
         )
 
+    def _compute_filter_results(self) -> None:
+        """Computes and caches filter results for all filter types."""
+        # NONE filter - all complete instances
+        self._filter_cache[InstanceFilter.NONE] = FilterResult(
+            instances=list(self.data.instances),
+            warnings=[],
+        )
+
+        # ALL_TERMINATED filter
+        terminated_result = self._compute_all_terminated_filter()
+        self._filter_cache[InstanceFilter.ALL_TERMINATED] = terminated_result
+
+        # ALL_TERMINATED_CONSISTENT filter
+        consistent_result = self._compute_consistent_solution_filter(
+            terminated_result.instances
+        )
+        self._filter_cache[InstanceFilter.ALL_TERMINATED_CONSISTENT] = consistent_result
+
+        # Log filter statistics
+        logger.info(
+            "Filter results - NONE: %d, ALL_TERMINATED: %d, ALL_TERMINATED_CONSISTENT: %d",
+            len(self._filter_cache[InstanceFilter.NONE].instances),
+            len(self._filter_cache[InstanceFilter.ALL_TERMINATED].instances),
+            len(self._filter_cache[InstanceFilter.ALL_TERMINATED_CONSISTENT].instances),
+        )
+
+        # Log warnings
+        for warning in self._filter_cache[
+            InstanceFilter.ALL_TERMINATED_CONSISTENT
+        ].warnings:
+            logger.warning(warning)
+
+    def _is_terminated_by_time_limit(self, instance: str, config: str) -> bool:
+        """Checks if a run was terminated by the time limit.
+
+        Uses MIP gap to determine termination status:
+        - gap == 0 (or <= threshold): terminated successfully (optimal or within threshold)
+        - gap > threshold: terminated by time limit (or other limit)
+        - gap is None: treat as terminated by time limit (inconclusive)
+
+        Args:
+            instance: Instance name.
+            config: Configuration name.
+
+        Returns:
+            True if terminated by time limit, False otherwise.
+        """
+        row_data = self.data.data_matrix.get((instance, config), {})
+        mip_gap = row_data.get(lsf.stats_mip_gap())
+
+        if mip_gap is None:
+            # No gap data - assume time limit hit
+            return True
+
+        return mip_gap > self.filter_config.optimal_gap_threshold
+
+    def _compute_all_terminated_filter(self) -> FilterResult:
+        """Computes instances where all configs terminated successfully.
+
+        Returns:
+            FilterResult with instances that terminated for all configs.
+        """
+        terminated_instances = []
+        warnings = []
+
+        for instance in self.data.instances:
+            all_terminated = True
+            time_limit_configs = []
+
+            for config in self.data.configs:
+                if self._is_terminated_by_time_limit(instance, config):
+                    all_terminated = False
+                    time_limit_configs.append(config)
+
+            if all_terminated:
+                terminated_instances.append(instance)
+            elif time_limit_configs:
+                # Optional: log which configs hit time limit
+                pass
+
+        return FilterResult(instances=terminated_instances, warnings=warnings)
+
+    def _compute_consistent_solution_filter(
+        self,
+        base_instances: list[str],
+    ) -> FilterResult:
+        """Filters for instances with consistent solution values across configs.
+
+        Args:
+            base_instances: Pre-filtered list of instances to check.
+
+        Returns:
+            FilterResult with consistent instances and warnings for inconsistent ones.
+        """
+        consistent_instances = []
+        warnings = []
+
+        for instance in base_instances:
+            solution_values = []
+
+            for config in self.data.configs:
+                row_data = self.data.data_matrix.get((instance, config), {})
+                sol_val = row_data.get(lsf.stats_solution_value())
+                if sol_val is not None:
+                    solution_values.append((config, sol_val))
+
+            if not solution_values:
+                # No solution values - cannot verify consistency
+                warnings.append(
+                    f"Instance '{instance}': No solution values found for any config, "
+                    "discarding from comparison."
+                )
+                continue
+
+            if len(solution_values) < len(self.data.configs):
+                # Some configs have no solution value
+                missing_configs = set(self.data.configs) - {
+                    c for c, _ in solution_values
+                }
+                warnings.append(
+                    f"Instance '{instance}': Missing solution values for configs "
+                    f"{missing_configs}, discarding from comparison."
+                )
+                continue
+
+            # Check consistency
+            is_consistent = self._are_solution_values_consistent(
+                [v for _, v in solution_values]
+            )
+
+            if is_consistent:
+                consistent_instances.append(instance)
+            else:
+                values_str = ", ".join(
+                    f"{config}={val:.6g}" for config, val in solution_values
+                )
+                warnings.append(
+                    f"Instance '{instance}': Inconsistent solution values across configs "
+                    f"({values_str}), discarding from comparison."
+                )
+
+        return FilterResult(instances=consistent_instances, warnings=warnings)
+
+    def _are_solution_values_consistent(self, values: list[float]) -> bool:
+        """Checks if solution values are consistent within tolerance.
+
+        Uses both relative and absolute tolerance:
+        |a - b| <= max(rel_tol * max(|a|, |b|), abs_tol)
+
+        Args:
+            values: List of solution values to compare.
+
+        Returns:
+            True if all values are consistent, False otherwise.
+        """
+        if len(values) <= 1:
+            return True
+
+        reference = values[0]
+
+        for val in values[1:]:
+            max_abs = max(abs(reference), abs(val))
+            tolerance = max(
+                self.filter_config.solution_value_rel_tol * max_abs,
+                self.filter_config.solution_value_abs_tol,
+            )
+
+            if abs(reference - val) > tolerance:
+                return False
+
+        return True
+
+    def get_filtered_instances(
+        self,
+        filter_type: InstanceFilter = InstanceFilter.NONE,
+    ) -> list[str]:
+        """Gets instances that pass the specified filter.
+
+        Args:
+            filter_type: Type of filter to apply.
+
+        Returns:
+            List of instance names that pass the filter.
+        """
+        return self._filter_cache[filter_type].instances
+
+    def get_filter_warnings(
+        self,
+        filter_type: InstanceFilter = InstanceFilter.NONE,
+    ) -> list[str]:
+        """Gets warnings generated during filtering.
+
+        Args:
+            filter_type: Type of filter to get warnings for.
+
+        Returns:
+            List of warning messages.
+        """
+        return self._filter_cache[filter_type].warnings
+
     def _parse_row(self, row: dict[str, str]) -> dict[str, Any]:
         """Parses a CSV row, converting numeric columns to floats.
 
@@ -188,18 +443,25 @@ class StudyEvaluator:
         except ValueError:
             return None
 
-    def get_column_values_for_config(self, column: str, config: str) -> list[float]:
+    def get_column_values_for_config(
+        self,
+        column: str,
+        config: str,
+        filter_type: InstanceFilter = InstanceFilter.NONE,
+    ) -> list[float]:
         """Extracts numeric values for a column filtered by configuration.
 
         Args:
             column: Column name to extract.
             config: Configuration name to filter by.
+            filter_type: Instance filter to apply.
 
         Returns:
             List of non-None numeric values.
         """
+        instances = self.get_filtered_instances(filter_type)
         values = []
-        for instance in self.data.instances:
+        for instance in instances:
             val = self.data.data_matrix.get((instance, config), {}).get(column)
             if val is not None:
                 values.append(val)
@@ -223,23 +485,33 @@ class StudyEvaluator:
             values[config] = val
         return values
 
-    def compute_mean(self, column: str, config: str) -> float | None:
+    def compute_mean(
+        self,
+        column: str,
+        config: str,
+        filter_type: InstanceFilter = InstanceFilter.NONE,
+    ) -> float | None:
         """Computes arithmetic mean for a column and configuration.
 
         Args:
             column: Column name.
             config: Configuration name.
+            filter_type: Instance filter to apply.
 
         Returns:
             Mean value or None if no data.
         """
-        values = self.get_column_values_for_config(column, config)
+        values = self.get_column_values_for_config(column, config, filter_type)
         if not values:
             return None
         return float(np.mean(values))
 
     def compute_shifted_geometric_mean(
-        self, column: str, config: str, shift: float | None = None
+        self,
+        column: str,
+        config: str,
+        shift: float | None = None,
+        filter_type: InstanceFilter = InstanceFilter.NONE,
     ) -> float | None:
         """Computes shifted geometric mean for a column and configuration.
 
@@ -249,6 +521,7 @@ class StudyEvaluator:
             column: Column name.
             config: Configuration name.
             shift: Shift value. Defaults to GEOMETRIC_MEAN_SHIFT.
+            filter_type: Instance filter to apply.
 
         Returns:
             Shifted geometric mean or None if no data.
@@ -256,7 +529,7 @@ class StudyEvaluator:
         if shift is None:
             shift = self.GEOMETRIC_MEAN_SHIFT
 
-        values = self.get_column_values_for_config(column, config)
+        values = self.get_column_values_for_config(column, config, filter_type)
         if not values:
             return None
 
@@ -268,18 +541,22 @@ class StudyEvaluator:
         return float(np.exp(log_mean) - shift)
 
     def compute_statistics_for_config(
-        self, column: str, config: str
+        self,
+        column: str,
+        config: str,
+        filter_type: InstanceFilter = InstanceFilter.NONE,
     ) -> dict[str, float | None]:
         """Computes comprehensive statistics for a column and configuration.
 
         Args:
             column: Column name.
             config: Configuration name.
+            filter_type: Instance filter to apply.
 
         Returns:
             Dictionary with mean, std, min, max, median, q25, q75 values.
         """
-        values = self.get_column_values_for_config(column, config)
+        values = self.get_column_values_for_config(column, config, filter_type)
 
         if not values:
             return {
@@ -304,12 +581,15 @@ class StudyEvaluator:
         }
 
     def get_instances_solved_over_time(
-        self, time_column: str = None
+        self,
+        time_column: str = None,
+        filter_type: InstanceFilter = InstanceFilter.NONE,
     ) -> dict[str, list[tuple[float, int]]]:
         """Computes cumulative instances solved over time for each config.
 
         Args:
             time_column: Column containing solving times.
+            filter_type: Instance filter to apply.
 
         Returns:
             Dictionary mapping config to list of (time, cumulative_count) tuples.
@@ -317,11 +597,12 @@ class StudyEvaluator:
         if time_column is None:
             time_column = lsf.stats_solving_time()
 
+        instances = self.get_filtered_instances(filter_type)
         result = {}
 
         for config in self.data.configs:
             times = []
-            for instance in self.data.instances:
+            for instance in instances:
                 val = self.data.data_matrix.get((instance, config), {}).get(time_column)
                 if val is not None:
                     times.append(val)
@@ -340,18 +621,22 @@ class StudyEvaluator:
         return result
 
     def get_pivot_data(
-        self, columns: list[str]
+        self,
+        columns: list[str],
+        filter_type: InstanceFilter = InstanceFilter.NONE,
     ) -> dict[str, dict[str, dict[str, float | None]]]:
         """Creates pivot data for instances with multiple columns per config.
 
         Args:
             columns: List of column names to include.
+            filter_type: Instance filter to apply.
 
         Returns:
             Nested dict: {instance: {config: {column: value}}}.
         """
+        instances = self.get_filtered_instances(filter_type)
         pivot = {}
-        for instance in self.data.instances:
+        for instance in instances:
             pivot[instance] = {}
             for config in self.data.configs:
                 pivot[instance][config] = {}
@@ -364,12 +649,14 @@ class StudyEvaluator:
         self,
         columns: list[str],
         use_shifted_geom_mean: list[str] | None = None,
+        filter_type: InstanceFilter = InstanceFilter.NONE,
     ) -> dict[str, dict[str, float | None]]:
         """Aggregates data by configuration with specified aggregation methods.
 
         Args:
             columns: List of column names to aggregate.
             use_shifted_geom_mean: Columns to use shifted geometric mean.
+            filter_type: Instance filter to apply.
 
         Returns:
             Nested dict: {config: {column: aggregated_value}}.
@@ -383,30 +670,39 @@ class StudyEvaluator:
             for column in columns:
                 if column in use_shifted_geom_mean:
                     result[config][column] = self.compute_shifted_geometric_mean(
-                        column, config
+                        column, config, filter_type=filter_type
                     )
                 else:
-                    result[config][column] = self.compute_mean(column, config)
+                    result[config][column] = self.compute_mean(
+                        column, config, filter_type=filter_type
+                    )
         return result
 
     def get_boxplot_data_for_config(
-        self, column: str
+        self,
+        column: str,
+        filter_type: InstanceFilter = InstanceFilter.NONE,
     ) -> dict[str, dict[str, float | None]]:
         """Gets boxplot statistics for a column across all configurations.
 
         Args:
             column: Column name.
+            filter_type: Instance filter to apply.
 
         Returns:
             Dictionary mapping config to boxplot statistics.
         """
         result = {}
         for config in self.data.configs:
-            result[config] = self.compute_statistics_for_config(column, config)
+            result[config] = self.compute_statistics_for_config(
+                column, config, filter_type
+            )
         return result
 
     def get_instance_data(
-        self, columns: list[str]
+        self,
+        columns: list[str],
+        filter_type: InstanceFilter = InstanceFilter.NONE,
     ) -> dict[str, dict[str, float | None]]:
         """Gets instance-level data for specified columns (first config's values).
 
@@ -414,12 +710,14 @@ class StudyEvaluator:
 
         Args:
             columns: List of column names.
+            filter_type: Instance filter to apply.
 
         Returns:
             Dictionary mapping instance to column values.
         """
+        instances = self.get_filtered_instances(filter_type)
         result = {}
-        for instance in self.data.instances:
+        for instance in instances:
             result[instance] = {}
             first_config = self.data.configs[0] if self.data.configs else None
             if first_config:
@@ -427,3 +725,33 @@ class StudyEvaluator:
                 for column in columns:
                     result[instance][column] = row_data.get(column)
         return result
+
+    def get_filter_statistics(self) -> dict[str, dict[str, int]]:
+        """Gets statistics about filtered instances.
+
+        Returns:
+            Dictionary with filter statistics.
+        """
+        return {
+            "instance_counts": {
+                "total_complete": len(self.data.instances),
+                "all_terminated": len(
+                    self._filter_cache[InstanceFilter.ALL_TERMINATED].instances
+                ),
+                "all_terminated_consistent": len(
+                    self._filter_cache[
+                        InstanceFilter.ALL_TERMINATED_CONSISTENT
+                    ].instances
+                ),
+            },
+            "warning_counts": {
+                "all_terminated": len(
+                    self._filter_cache[InstanceFilter.ALL_TERMINATED].warnings
+                ),
+                "all_terminated_consistent": len(
+                    self._filter_cache[
+                        InstanceFilter.ALL_TERMINATED_CONSISTENT
+                    ].warnings
+                ),
+            },
+        }
