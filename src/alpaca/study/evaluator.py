@@ -117,8 +117,6 @@ class StudyEvaluator:
         lsf.stats_mpip_ratio(),
     }
 
-    GEOMETRIC_MEAN_SHIFT = 10.0
-
     def __init__(
         self,
         csv_path: str,
@@ -485,61 +483,6 @@ class StudyEvaluator:
             values[config] = val
         return values
 
-    def compute_mean(
-        self,
-        column: str,
-        config: str,
-        filter_type: InstanceFilter = InstanceFilter.NONE,
-    ) -> float | None:
-        """Computes arithmetic mean for a column and configuration.
-
-        Args:
-            column: Column name.
-            config: Configuration name.
-            filter_type: Instance filter to apply.
-
-        Returns:
-            Mean value or None if no data.
-        """
-        values = self.get_column_values_for_config(column, config, filter_type)
-        if not values:
-            return None
-        return float(np.mean(values))
-
-    def compute_shifted_geometric_mean(
-        self,
-        column: str,
-        config: str,
-        shift: float | None = None,
-        filter_type: InstanceFilter = InstanceFilter.NONE,
-    ) -> float | None:
-        """Computes shifted geometric mean for a column and configuration.
-
-        Formula: exp(mean(log(values + shift))) - shift
-
-        Args:
-            column: Column name.
-            config: Configuration name.
-            shift: Shift value. Defaults to GEOMETRIC_MEAN_SHIFT.
-            filter_type: Instance filter to apply.
-
-        Returns:
-            Shifted geometric mean or None if no data.
-        """
-        if shift is None:
-            shift = self.GEOMETRIC_MEAN_SHIFT
-
-        values = self.get_column_values_for_config(column, config, filter_type)
-        if not values:
-            return None
-
-        shifted_values = [v + shift for v in values]
-        if any(v <= 0 for v in shifted_values):
-            return None
-
-        log_mean = np.mean(np.log(shifted_values))
-        return float(np.exp(log_mean) - shift)
-
     def compute_statistics_for_config(
         self,
         column: str,
@@ -644,39 +587,6 @@ class StudyEvaluator:
                 for column in columns:
                     pivot[instance][config][column] = row_data.get(column)
         return pivot
-
-    def get_config_aggregated_data(
-        self,
-        columns: list[str],
-        use_shifted_geom_mean: list[str] | None = None,
-        filter_type: InstanceFilter = InstanceFilter.NONE,
-    ) -> dict[str, dict[str, float | None]]:
-        """Aggregates data by configuration with specified aggregation methods.
-
-        Args:
-            columns: List of column names to aggregate.
-            use_shifted_geom_mean: Columns to use shifted geometric mean.
-            filter_type: Instance filter to apply.
-
-        Returns:
-            Nested dict: {config: {column: aggregated_value}}.
-        """
-        if use_shifted_geom_mean is None:
-            use_shifted_geom_mean = []
-
-        result = {}
-        for config in self.data.configs:
-            result[config] = {}
-            for column in columns:
-                if column in use_shifted_geom_mean:
-                    result[config][column] = self.compute_shifted_geometric_mean(
-                        column, config, filter_type=filter_type
-                    )
-                else:
-                    result[config][column] = self.compute_mean(
-                        column, config, filter_type=filter_type
-                    )
-        return result
 
     def get_boxplot_data_for_config(
         self,

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+
 """
 @authors: kuen,
 """
@@ -9,9 +10,10 @@ from alpaca.utils.lsf.external_solvers import ExternalSolvers
 from alpaca.utils.lsf.reformulations import Reformulations
 from alpaca.utils.lsf.model_reading import ModelReading
 from alpaca.utils.lsf.statistics import Statistics
+from alpaca.utils.lsf.latex import Latex
 
 
-class LocalizedStringFactory(
+class LocalizedStringFactory(  # pylint: disable=too-many-ancestors
     General,
     MathModel,
     Messages,
@@ -19,6 +21,7 @@ class LocalizedStringFactory(
     Reformulations,
     ModelReading,
     Statistics,
+    Latex,
 ):
     """
     Localized string factory.

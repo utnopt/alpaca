@@ -1,1381 +1,489 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=too-many-locals, too-many-lines
-"""
-@authors: Claude Opus,
-"""
-import os
-from dataclasses import dataclass
 
-from alpaca.study.evaluator import StudyEvaluator, InstanceFilter
+"""
+LaTeX table generator for study evaluation results.
+
+@authors: kuen,
+"""
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Callable
+import numpy as np
+
 from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
-from alpaca.utils.logger import logger
-import alpaca.utils.inout as uio
+from alpaca.study.evaluator import StudyEvaluator, InstanceFilter
 
 
 @dataclass
-class LaTeXConfig:
-    """Configuration for LaTeX output generation.
+class TableFormatOptions:
+    """Formatting options for table values.
 
     Attributes:
-        tables_dir: Directory for LaTeX table files.
-        plots_dir: Directory for TikZ plot files.
-        float_precision: Number of decimal places for floats.
-        use_siunitx: Whether to use siunitx package for numbers.
+        precision: Decimal precision for values.
+        percentage: Bool if use percentage format.
     """
 
-    tables_dir: str
-    plots_dir: str
-    float_precision: int = 3
-    use_siunitx: bool = True
+    precision: int = 2
+    percentage: bool = False
 
 
-class LaTeXGenerator:
-    """Generates LaTeX tables and TikZ plots from study results."""
+@dataclass
+class TableMetadata:
+    """Metadata for a LaTeX table.
 
-    COLORS = [
-        "MidnightNavy",
-        "BrickRose",
-        "OceanTeal",
-        "AmberGold",
+    Attributes:
+        filename: Output filename.
+        caption: Table caption.
+        label: Table label for referencing.
+    """
+
+    filename: str
+    caption: str = lsf.empty_string()
+    label: str = lsf.empty_string()
+
+
+@dataclass
+class TableDefinition:
+    """Definition of a table to generate.
+
+    Attributes:
+        column: Column name(s) to compare.
+        metadata: Table metadata (filename, caption, label).
+        config: Config to get model size from (only for model size tables).
+        use_shifted_geom_mean: Bool if use geometric mean else mean.
+        filter_type: Instance filter to apply.
+        format_options: Formatting options for values.
+    """
+
+    column: str | list[str]
+    metadata: TableMetadata
+    config: str = lsf.empty_string()
+    use_shifted_geom_mean: bool = False
+    filter_type: InstanceFilter = InstanceFilter.NONE
+    format_options: TableFormatOptions = field(default_factory=TableFormatOptions)
+
+
+@dataclass
+class GeneratorConfig:
+    """Configuration for the LaTeX table generator.
+
+    Attributes:
+        evaluator: StudyEvaluator instance with loaded data.
+        output_dir: Directory to save generated LaTeX files.
+        config_shortener: Optional function to shorten config names.
+    """
+
+    evaluator: StudyEvaluator
+    output_dir: str
+    config_shortener: Callable[[str], str] | None = None
+
+
+class LatexTableGenerator:
+    """Generates LaTeX tables from study evaluation results."""
+
+    _LSF_METHODS: list[Callable[[], str]] = [
+        lsf.stats_solving_time,
+        lsf.stats_nr_nodes,
+        lsf.stats_mip_gap,
+        lsf.stats_solution_value,
+        lsf.stats_final_nr_vars,
+        lsf.stats_final_nr_constraints,
+        lsf.stats_presolved_nr_vars,
+        lsf.stats_presolved_nr_constraints,
+        lsf.stats_presolved_nr_nonzeros,
+        lsf.stats_root_solution_value,
+        lsf.stats_root_solving_time,
+        lsf.stats_build_time,
+        lsf.stats_original_nr_variables,
+        lsf.stats_original_nr_constraints,
+        lsf.stats_original_nr_bilinear_expressions,
+        lsf.stats_original_nr_bilinear_binary_expressions,
+        lsf.stats_original_nr_mixed_binary_expressions,
+        lsf.stats_original_nr_multilinear_expressions,
+        lsf.stats_original_nr_one_dim_expressions,
+        lsf.stats_pwl_nr_variables,
+        lsf.stats_pwl_nr_constraints,
+        lsf.stats_pwl_nr_bilinear_expressions,
+        lsf.stats_pwl_nr_bilinear_binary_expressions,
+        lsf.stats_pwl_nr_mixed_binary_expressions,
+        lsf.stats_pwl_nr_multilinear_expressions,
+        lsf.stats_pwl_nr_one_dim_expressions,
+        lsf.stats_locatelli_domain_volume_polygon,
+        lsf.stats_locatelli_domain_volume_polytope,
+        lsf.stats_locatelli_nr_cuts,
+        lsf.stats_stair_locatelli_domain_volume_polytope,
+        lsf.stats_stair_locatelli_domain_volume_polygon,
+        lsf.stats_mpip_nr_instances,
+        lsf.stats_mpip_ratio,
+        lsf.stats_instance_name,
+        lsf.stats_config_name,
     ]
 
-    # Define which filter to use for each metric category
-    PERFORMANCE_FILTER = InstanceFilter.ALL_TERMINATED_CONSISTENT
-    SOLUTION_FILTER = InstanceFilter.ALL_TERMINATED  # Allow different solutions
-    MODEL_FILTER = InstanceFilter.NONE  # Model properties, no filter needed
-    SURVIVAL_FILTER = InstanceFilter.NONE  # Survival plot shows all instances
+    COLUMN_TO_LSF_METHOD: dict[str, Callable[[], str]] = {
+        method(): method for method in _LSF_METHODS
+    }
 
-    def __init__(self, evaluator: StudyEvaluator, config: LaTeXConfig) -> None:
-        """Initializes the generator with an evaluator and configuration.
+    GEOMETRIC_MEAN_SHIFT = 10.0
 
-        Args:
-            evaluator: StudyEvaluator instance with loaded data.
-            config: LaTeXConfig with output settings.
-        """
-        self.evaluator = evaluator
-        self.config = config
-
-        os.makedirs(config.tables_dir, exist_ok=True)
-        os.makedirs(config.plots_dir, exist_ok=True)
-
-        # Log filter statistics
-        stats = self.evaluator.get_filter_statistics()
-        logger.info("Instance filter statistics:")
-        logger.info("  Total complete: %d", stats["instance_counts"]["total_complete"])
-        logger.info("  All terminated: %d", stats["instance_counts"]["all_terminated"])
-        logger.info(
-            "  All terminated + consistent: %d",
-            stats["instance_counts"]["all_terminated_consistent"],
-        )
-
-    def _format_float(self, value: float | None) -> str:
-        """Formats a float value for LaTeX output.
+    def __init__(self, config: GeneratorConfig) -> None:
+        """Initialize the LaTeX table generator.
 
         Args:
-            value: Float value to format, or None.
-
-        Returns:
-            Formatted string, or "--" if None.
+            config: Generator configuration containing evaluator, output_dir,
+                    and optional config_shortener.
         """
-        if value is None:
-            return "--"
+        self._config = config
+        self._output_dir = Path(config.output_dir)
+        self._output_dir.mkdir(parents=True, exist_ok=True)
+        self._config_shortnames = self._build_config_shortnames()
 
-        formatted = f"{value:.{self.config.float_precision}f}"
+    @property
+    def evaluator(self) -> StudyEvaluator:
+        """Get the study evaluator."""
+        return self._config.evaluator
 
-        if self.config.use_siunitx:
-            return f"\\num{{{formatted}}}"
-        return formatted
+    @property
+    def config_shortener(self) -> Callable[[str], str]:
+        """Get the config shortener function."""
+        if self._config.config_shortener is not None:
+            return self._config.config_shortener
+        return self._default_config_shortener
 
-    def _format_percent(self, value: float | None) -> str:
-        """Formats a percentage value for LaTeX output.
+    def _build_config_shortnames(self) -> dict[str, str]:
+        """Build mapping of config names to short names."""
+        shortnames = {}
+        used_shortnames: set[str] = set()
 
-        Args:
-            value: Percentage value to format (0-100), or None.
+        for config in self.evaluator.data.configs:
+            short = self._get_unique_shortname(config, used_shortnames)
+            shortnames[config] = short
+            used_shortnames.add(short)
 
-        Returns:
-            Formatted string with percent sign, or "--" if None.
-        """
-        if value is None:
-            return "--"
+        return shortnames
 
-        formatted = f"{value:.{self.config.float_precision}f}"
-
-        if self.config.use_siunitx:
-            return f"\\SI{{{formatted}}}{{\\percent}}"
-        return f"{formatted}\\%"
-
-    def _format_int(self, value: int | float | None) -> str:
-        """Formats an integer value for LaTeX output.
-
-        Args:
-            value: Integer value to format, or None.
-
-        Returns:
-            Formatted string, or "--" if None.
-        """
-        if value is None:
-            return "--"
-
-        int_val = int(value)
-        if self.config.use_siunitx:
-            return f"\\num{{{int_val}}}"
-        return str(int_val)
+    def _get_unique_shortname(self, config: str, used: set[str]) -> str:
+        """Get a unique short name for a config."""
+        short = self.config_shortener(config)
+        original_short = short
+        counter = 1
+        while short in used:
+            short = f"{original_short}{counter}"
+            counter += 1
+        return short
 
     @staticmethod
-    def _escape_latex(text: str) -> str:
-        """Escapes special LaTeX characters in text.
+    def _default_config_shortener(config_name: str) -> str:
+        """Default config name shortener."""
+        if lsf.underscore() in config_name:
+            parts = config_name.split(lsf.underscore())
+            abbrev = lsf.empty_string().join(p[0].upper() for p in parts if p)
+            if len(abbrev) >= 2:
+                return abbrev
 
-        Args:
-            text: Text to escape.
+        capitals = [c for c in config_name if c.isupper()]
+        if len(capitals) >= 2:
+            return lsf.empty_string().join(capitals)
 
-        Returns:
-            Escaped text safe for LaTeX.
-        """
-        replacements = {
-            "%": "\\%",
-            "_": "\\_",
-            "&": "\\&",
-            "#": "\\#",
-            "{": "\\{",
-            "}": "\\}",
-            "$": "\\$",
-            "~": "\\textasciitilde{}",
-            "^": "\\textasciicircum{}",
-        }
-        for char, replacement in replacements.items():
-            text = text.replace(char, replacement)
-        return text
+        return config_name[:4].upper()
 
     @staticmethod
-    def _escape_latex_comment(text: str) -> str:
-        """Escapes text for use in LaTeX comments.
+    def _format_value(
+        value: float | None,
+        fmt: TableFormatOptions,
+    ) -> str:
+        """Format a numeric value for LaTeX."""
+        if value is None:
+            return lsf.placeholder()
 
-        In comments, % starts a new comment, so we need to escape it.
+        if fmt.percentage:
+            value *= 100
+            return lsf.math_mode(f"{value:.{fmt.precision}f}{lsf.percentage_suffix()}")
 
-        Args:
-            text: Text to escape for comment.
+        if fmt.precision == 0:
+            return lsf.math_mode(str(int(round(value))))
 
-        Returns:
-            Escaped text safe for LaTeX comments.
-        """
-        # In comments, we only need to handle % specially
-        # but since comments are already prefixed with %,
-        # we just replace % in the content
-        return text.replace("%", "pct")
+        return lsf.math_mode(f"{value:.{fmt.precision}f}")
 
-    @staticmethod
-    def _get_latex_column_name(column: str) -> str:
-        """Gets the LaTeX display name for a column using LSF.
-
-        Args:
-            column: Internal column name.
-
-        Returns:
-            LaTeX-formatted display name.
-        """
+    def _get_column_header(self, column: str) -> str:
+        """Get LaTeX formatted column header."""
         latex_format = lsf.stats_format_latex()
-        column_map = {
-            lsf.stats_solving_time(): lsf.stats_solving_time(latex_format),
-            lsf.stats_nr_nodes(): lsf.stats_nr_nodes(latex_format),
-            lsf.stats_mip_gap(): lsf.stats_mip_gap(latex_format),
-            lsf.stats_solution_value(): lsf.stats_solution_value(latex_format),
-            lsf.stats_root_solution_value(): lsf.stats_root_solution_value(
-                latex_format
-            ),
-            lsf.stats_final_nr_vars(): lsf.stats_final_nr_vars(latex_format),
-            lsf.stats_final_nr_constraints(): lsf.stats_final_nr_constraints(
-                latex_format
-            ),
-            lsf.stats_presolved_nr_vars(): lsf.stats_presolved_nr_vars(latex_format),
-            lsf.stats_presolved_nr_constraints(): lsf.stats_presolved_nr_constraints(
-                latex_format
-            ),
-            lsf.stats_locatelli_domain_volume_polygon(): (
-                lsf.stats_locatelli_domain_volume_polygon(latex_format)
-            ),
-            lsf.stats_locatelli_domain_volume_polytope(): (
-                lsf.stats_locatelli_domain_volume_polytope(latex_format)
-            ),
-            lsf.stats_locatelli_nr_cuts(): lsf.stats_locatelli_nr_cuts(latex_format),
-            lsf.stats_pwl_nr_bilinear_expressions(): (
-                lsf.stats_pwl_nr_bilinear_expressions(latex_format)
-            ),
-            lsf.stats_pwl_nr_multilinear_expressions(): (
-                lsf.stats_pwl_nr_multilinear_expressions(latex_format)
-            ),
-            lsf.stats_pwl_nr_one_dim_expressions(): (
-                lsf.stats_pwl_nr_one_dim_expressions(latex_format)
-            ),
-            lsf.stats_pwl_nr_bilinear_binary_expressions(): (
-                lsf.stats_pwl_nr_bilinear_binary_expressions(latex_format)
-            ),
-            lsf.stats_pwl_nr_mixed_binary_expressions(): (
-                lsf.stats_pwl_nr_mixed_binary_expressions(latex_format)
-            ),
-            lsf.stats_instance_name(): lsf.stats_instance_name(latex_format),
-            lsf.stats_config_name(): lsf.stats_config_name(latex_format),
-        }
-        return column_map.get(column, column)
 
-    def _get_color(self, index: int) -> str:
-        """Gets color for a given index, cycling through available colors.
+        if column in self.COLUMN_TO_LSF_METHOD:
+            return self.COLUMN_TO_LSF_METHOD[column](latex_format)
 
-        Args:
-            index: Color index.
+        return lsf.escape_underscore(column)
 
-        Returns:
-            Color name string.
-        """
-        return self.COLORS[index % len(self.COLORS)]
+    @staticmethod
+    def _build_latex_table(
+        headers: list[str],
+        rows: list[list[str]],
+        metadata: TableMetadata,
+        alignment: str | None = None,
+    ) -> str:
+        """Build a complete LaTeX table."""
+        if alignment is None:
+            alignment = lsf.default_alignment(len(headers))
 
-    def _get_filter_note(self, filter_type: InstanceFilter) -> str:
-        """Gets a note about the filter applied.
+        lines = [lsf.begin_table(), lsf.centering()]
 
-        Args:
-            filter_type: The filter type used.
+        if metadata.caption:
+            lines.append(lsf.caption(metadata.caption))
+        if metadata.label:
+            lines.append(lsf.label(metadata.label))
 
-        Returns:
-            LaTeX-formatted note about the filter.
-        """
-        instances = self.evaluator.get_filtered_instances(filter_type)
-        total = len(self.evaluator.data.instances)
-
-        if filter_type == InstanceFilter.NONE:
-            return f"All {len(instances)} instances included."
-        if filter_type == InstanceFilter.ALL_TERMINATED:
-            return (
-                f"{len(instances)}/{total} instances "
-                "(only instances where all configs terminated)."
-            )
-        if filter_type == InstanceFilter.ALL_TERMINATED_CONSISTENT:
-            return (
-                f"{len(instances)}/{total} instances "
-                "(only instances where all configs terminated with consistent solutions)."
-            )
-        return ""
-
-    def _compute_relative_domain_volumes(
-        self,
-        filter_type: InstanceFilter = InstanceFilter.NONE,
-    ) -> dict[str, dict[str, float | None]]:
-        """Computes relative domain volumes as percentage of maximum.
-
-        For each domain volume column, finds the config with the highest mean
-        and expresses all other values as percentage of that maximum.
-
-        Args:
-            filter_type: Instance filter to apply.
-
-        Returns:
-            Nested dict: {config: {column: relative_percentage}}.
-        """
-        columns = [
-            lsf.stats_locatelli_domain_volume_polygon(),
-            lsf.stats_locatelli_domain_volume_polytope(),
-        ]
-
-        # Get absolute values first
-        absolute_data = self.evaluator.get_config_aggregated_data(
-            columns, filter_type=filter_type
+        lines.extend(
+            [
+                lsf.begin_tabular(alignment),
+                lsf.toprule(),
+                lsf.column_separator().join(headers) + lsf.row_end(),
+                lsf.midrule(),
+            ]
         )
 
-        # Compute relative values for each column
-        result = {config: {} for config in self.evaluator.data.configs}
+        for row in rows[:-1]:
+            lines.append(lsf.column_separator().join(row) + lsf.row_end())
 
+        lines.extend(
+            [
+                lsf.bottomrule(),
+                lsf.column_separator().join(rows[-1]) + lsf.row_end(),
+                lsf.end_tabular(),
+                lsf.end_table(),
+            ]
+        )
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _compute_mean(values: list[float]) -> float | None:
+        """Compute arithmetic mean of values."""
+        return float(np.mean(values))
+
+    def _compute_shifted_geometric_mean(self, values: list[float]) -> float | None:
+        """Compute shifted geometric mean of values."""
+        shifted_values = [v + self.GEOMETRIC_MEAN_SHIFT for v in values]
+        if any(v <= 0 for v in shifted_values):
+            return None
+
+        log_mean = np.mean(np.log(shifted_values))
+        return float(np.exp(log_mean) - self.GEOMETRIC_MEAN_SHIFT)
+
+    def _build_model_size_headers(self, columns: list[str]) -> list[str]:
+        """Build headers for model size table."""
+        headers = [lsf.stats_instance_name(lsf.stats_format_latex())]
         for col in columns:
-            # Find maximum value for this column
-            max_value = None
+            header = self.COLUMN_TO_LSF_METHOD[col](lsf.stats_format_latex())
+            headers.append(lsf.escape_underscore(header))
+        return headers
+
+    def _build_model_size_rows(
+        self, definition: TableDefinition
+    ) -> tuple[list[list[str]], dict[str, list[float]]]:
+        """Build rows and collect values for model size table."""
+        instances = self.evaluator.get_filtered_instances(InstanceFilter.NONE)
+        columns = definition.column
+        fmt = definition.format_options
+
+        rows = []
+        all_values = {col: [] for col in columns}
+
+        for instance in instances:
+            row = [lsf.escape_underscore(instance)]
+            for col in columns:
+                value = self.evaluator.get_column_values_for_instance(col, instance)[
+                    definition.config
+                ]
+                all_values[col].append(value)
+                row.append(self._format_value(value, fmt))
+            rows.append(row)
+
+        return rows, all_values
+
+    def generate_instance_model_size_table(self, definition: TableDefinition) -> str:
+        """Generate table with instances as rows and model sizes as columns.
+
+        Args:
+            definition: Table definition with column as list of column names.
+
+        Returns:
+            LaTeX table code.
+        """
+        columns = definition.column
+        fmt = definition.format_options
+
+        headers = self._build_model_size_headers(columns)
+        rows, all_values = self._build_model_size_rows(definition)
+
+        mean_row = [lsf.mean_label()]
+        for col in columns:
+            mean_value = self._compute_mean(all_values[col])
+            mean_row.append(self._format_value(mean_value, fmt))
+        rows.append(mean_row)
+
+        return self._build_latex_table(headers, rows, definition.metadata)
+
+    def _build_pivot_headers(self) -> list[str]:
+        """Build headers for pivot table."""
+        headers = [lsf.stats_instance_name(lsf.stats_format_latex())]
+        for config in self.evaluator.data.configs:
+            headers.append(lsf.escape_underscore(self._config_shortnames[config]))
+        return headers
+
+    def _build_pivot_rows(
+        self, definition: TableDefinition
+    ) -> tuple[list[list[str]], dict[str, list[float]]]:
+        """Build rows and collect values for pivot table."""
+        instances = self.evaluator.get_filtered_instances(definition.filter_type)
+        fmt = definition.format_options
+
+        rows = []
+        all_values = {cfg: [] for cfg in self.evaluator.data.configs}
+
+        for instance in instances:
+            row = [lsf.escape_underscore(instance)]
+            values = self.evaluator.get_column_values_for_instance(
+                definition.column, instance
+            )
             for config in self.evaluator.data.configs:
-                val = absolute_data[config][col]
-                if val is not None:
-                    if max_value is None or val > max_value:
-                        max_value = val
+                value = values.get(config)
+                all_values[config].append(value)
+                row.append(self._format_value(value, fmt))
+            rows.append(row)
 
-            # Compute relative percentages
-            for config in self.evaluator.data.configs:
-                val = absolute_data[config][col]
-                if val is not None and max_value is not None and max_value > 0:
-                    result[config][col] = (max_value - val) / max_value * 100.0
-                else:
-                    result[config][col] = None
+        return rows, all_values
 
-        return result
-
-    def _compute_relative_domain_volumes_per_instance(
-        self,
-        filter_type: InstanceFilter = InstanceFilter.NONE,
-    ) -> dict[str, dict[str, dict[str, float | None]]]:
-        """Computes relative domain volumes per instance as percentage of maximum.
-
-        For each instance and domain volume column, finds the config with the
-        highest value and expresses all other values as percentage of that maximum.
+    def generate_instance_pivot_table(self, definition: TableDefinition) -> str:
+        """Generate table with instances as rows and configs as columns.
 
         Args:
-            filter_type: Instance filter to apply.
+            definition: Table definition with column as single column name.
 
         Returns:
-            Nested dict: {instance: {config: {column: relative_percentage}}}.
+            LaTeX table code.
         """
-        columns = [
-            lsf.stats_locatelli_domain_volume_polygon(),
-            lsf.stats_locatelli_domain_volume_polytope(),
-        ]
+        fmt = definition.format_options
+        use_geom = definition.use_shifted_geom_mean
 
-        pivot_data = self.evaluator.get_pivot_data(columns, filter_type=filter_type)
-        instances = self.evaluator.get_filtered_instances(filter_type)
-        configs = self.evaluator.data.configs
+        headers = self._build_pivot_headers()
+        rows, all_values = self._build_pivot_rows(definition)
 
-        result = {}
+        label = lsf.shifted_geometric_mean_label() if use_geom else lsf.mean_label()
+        mean_row = [label]
 
-        for instance in instances:
-            result[instance] = {config: {} for config in configs}
-
-            for col in columns:
-                # Find maximum value for this instance and column
-                max_value = None
-                for config in configs:
-                    val = pivot_data[instance][config][col]
-                    if val is not None:
-                        if max_value is None or val > max_value:
-                            max_value = val
-
-                # Compute relative percentages
-                for config in configs:
-                    val = pivot_data[instance][config][col]
-                    if val is not None and max_value is not None and max_value > 0:
-                        result[instance][config][col] = (max_value - val) / max_value * 100.0
-                    else:
-                        result[instance][config][col] = None
-
-        return result
-
-    def generate_config_performance_table(
-        self, filename: str = "config_performance.tex"
-    ) -> str:
-        """Generates table: Configs x (SGM solving_time, Mean mip_gap, Mean nr_nodes).
-
-        Filter: ALL_TERMINATED_CONSISTENT - only instances where all configs
-        terminated and found consistent solutions.
-
-        Args:
-            filename: Output filename.
-
-        Returns:
-            Path to the generated file.
-        """
-        filter_type = self.PERFORMANCE_FILTER
-
-        columns = [
-            lsf.stats_solving_time(),
-            lsf.stats_mip_gap(),
-            lsf.stats_nr_nodes(),
-        ]
-        data = self.evaluator.get_config_aggregated_data(
-            columns,
-            use_shifted_geom_mean=[lsf.stats_solving_time()],
-            filter_type=filter_type,
-        )
-
-        col_spec = "l" + "r" * len(columns)
-        header_parts = [self._get_latex_column_name(lsf.stats_config_name())] + [
-            f"SGM {self._get_latex_column_name(columns[0])}"
-        ]
-        for col in columns[1:]:
-            header_parts.append(f"Mean {self._get_latex_column_name(col)}")
-        header_row = " & ".join(header_parts) + " \\\\"
-
-        data_rows = []
         for config in self.evaluator.data.configs:
-            row_parts = [self._escape_latex(config)]
-            for col in columns:
-                row_parts.append(self._format_float(data[config][col]))
-            data_rows.append(" & ".join(row_parts) + " \\\\")
-
-        filter_note = self._get_filter_note(filter_type)
-
-        table_content = uio.build_latex_table(
-            col_spec=col_spec,
-            header=header_row,
-            rows=data_rows,
-            caption=f"Configuration performance metrics. {filter_note}",
-            label="tab:config_performance",
-        )
-
-        output_path = os.path.join(self.config.tables_dir, filename)
-        uio.write_file(output_path, table_content)
-        logger.info("Generated config performance table: %s", output_path)
-        return output_path
-
-    def generate_config_performance_barplot(
-        self, filename: str = "config_performance_barplot.tex"
-    ) -> str:
-        """Generates grouped bar plot for config performance metrics.
-
-        Filter: ALL_TERMINATED_CONSISTENT
-
-        Args:
-            filename: Output filename.
-
-        Returns:
-            Path to the generated file.
-        """
-        filter_type = self.PERFORMANCE_FILTER
-
-        columns = [
-            lsf.stats_solving_time(),
-            lsf.stats_mip_gap(),
-            lsf.stats_nr_nodes(),
-        ]
-        data = self.evaluator.get_config_aggregated_data(
-            columns,
-            use_shifted_geom_mean=[lsf.stats_solving_time()],
-            filter_type=filter_type,
-        )
-
-        configs = self.evaluator.data.configs
-        symbolic_coords = ",".join(self._escape_latex(c) for c in configs)
-
-        filter_note = self._escape_latex_comment(self._get_filter_note(filter_type))
-
-        lines = [
-            f"% Filter: {filter_note}",
-            "\\begin{tikzpicture}",
-            "\\begin{axis}[",
-            "    ybar,",
-            "    bar width=0.2cm,",
-            "    width=0.9\\textwidth,",
-            "    height=8cm,",
-            "    ylabel={Value},",
-            f"    symbolic x coords={{{symbolic_coords}}},",
-            "    xtick=data,",
-            "    x tick label style={rotate=45, anchor=east},",
-            "    legend style={at={(0.5,-0.25)}, anchor=north, legend columns=-1},",
-            "    ymin=0,",
-            "    enlarge x limits=0.15,",
-            "    nodes near coords,",
-            "    nodes near coords style={font=\\tiny, rotate=90, anchor=west},",
-            "]",
-        ]
-
-        for i, col in enumerate(columns):
-            color = self._get_color(i)
-            col_label = self._get_latex_column_name(col)
-            if col == lsf.stats_solving_time():
-                col_label = f"SGM {col_label}"
+            values = all_values[config]
+            if use_geom:
+                mean_value = self._compute_shifted_geometric_mean(values)
             else:
-                col_label = f"Mean {col_label}"
+                mean_value = self._compute_mean(values)
+            mean_row.append(self._format_value(mean_value, fmt))
+        rows.append(mean_row)
 
-            lines.append(f"\\addplot[fill={color}] coordinates {{")
-            for config in configs:
-                val = data[config][col]
-                if val is not None:
-                    lines.append(f"    ({self._escape_latex(config)}, {val:.4f})")
-            lines.append("};")
-            lines.append(f"\\addlegendentry{{{self._escape_latex(col_label)}}}")
+        return self._build_latex_table(headers, rows, definition.metadata)
 
-        lines.append("\\end{axis}")
-        lines.append("\\end{tikzpicture}")
+    def save_table(self, latex_code: str, filename: str) -> Path:
+        """Save LaTeX code to a file."""
+        filepath = self._output_dir / filename
+        with open(
+            filepath, lsf.file_mode_write(), encoding=lsf.file_encoding_utf8()
+        ) as file:
+            file.write(latex_code)
+        return filepath
 
-        content = "\n".join(lines)
+    def generate_table_from_definition(self, definition: TableDefinition) -> str:
+        """Generate a table from a TableDefinition."""
+        if isinstance(definition.column, list):
+            return self.generate_instance_model_size_table(definition)
+        return self.generate_instance_pivot_table(definition)
 
-        output_path = os.path.join(self.config.plots_dir, filename)
-        uio.write_file(output_path, content)
-        logger.info("Generated config performance bar plot: %s", output_path)
-        return output_path
+    def generate_and_save_table(self, definition: TableDefinition) -> Path:
+        """Generate and save a table from a definition."""
+        latex_code = self.generate_table_from_definition(definition)
+        return self.save_table(latex_code, definition.metadata.filename)
 
-    def generate_config_solution_table(
-        self, filename: str = "config_solution.tex"
-    ) -> str:
-        """Generates table: Configs x (Mean solution_value, Mean root_solution_value).
+    def generate_tables(self, definitions: list[TableDefinition]) -> list[Path]:
+        """Generate and save multiple tables from definitions."""
+        return [self.generate_and_save_table(defn) for defn in definitions]
 
-        Filter: ALL_TERMINATED - only instances where all configs terminated,
-        but allows different solution values.
-
-        Args:
-            filename: Output filename.
-
-        Returns:
-            Path to the generated file.
-        """
-        filter_type = self.SOLUTION_FILTER
-
-        columns = [lsf.stats_solution_value(), lsf.stats_root_solution_value()]
-        data = self.evaluator.get_config_aggregated_data(
-            columns, filter_type=filter_type
-        )
-
-        col_spec = "l" + "r" * len(columns)
-        header_parts = [self._get_latex_column_name(lsf.stats_config_name())]
-        for col in columns:
-            header_parts.append(f"Mean {self._get_latex_column_name(col)}")
-        header_row = " & ".join(header_parts) + " \\\\"
-
-        data_rows = []
-        for config in self.evaluator.data.configs:
-            row_parts = [self._escape_latex(config)]
-            for col in columns:
-                row_parts.append(self._format_float(data[config][col]))
-            data_rows.append(" & ".join(row_parts) + " \\\\")
-
-        filter_note = self._get_filter_note(filter_type)
-
-        table_content = uio.build_latex_table(
-            col_spec=col_spec,
-            header=header_row,
-            rows=data_rows,
-            caption=f"Configuration solution values. {filter_note}",
-            label="tab:config_solution",
-        )
-
-        output_path = os.path.join(self.config.tables_dir, filename)
-        uio.write_file(output_path, table_content)
-        logger.info("Generated config solution table: %s", output_path)
-        return output_path
-
-    def generate_config_solution_barplot(
-        self, filename: str = "config_solution_barplot.tex"
-    ) -> str:
-        """Generates grouped bar plot for config solution values.
-
-        Filter: ALL_TERMINATED
-
-        Args:
-            filename: Output filename.
-
-        Returns:
-            Path to the generated file.
-        """
-        filter_type = self.SOLUTION_FILTER
-
-        columns = [lsf.stats_solution_value(), lsf.stats_root_solution_value()]
-        data = self.evaluator.get_config_aggregated_data(
-            columns, filter_type=filter_type
-        )
-
-        configs = self.evaluator.data.configs
-        symbolic_coords = ",".join(self._escape_latex(c) for c in configs)
-
-        filter_note = self._escape_latex_comment(self._get_filter_note(filter_type))
-
-        lines = [
-            f"% Filter: {filter_note}",
-            "\\begin{tikzpicture}",
-            "\\begin{axis}[",
-            "    ybar,",
-            "    bar width=0.3cm,",
-            "    width=0.9\\textwidth,",
-            "    height=8cm,",
-            "    ylabel={Value},",
-            f"    symbolic x coords={{{symbolic_coords}}},",
-            "    xtick=data,",
-            "    x tick label style={rotate=45, anchor=east},",
-            "    legend style={at={(0.5,-0.25)}, anchor=north, legend columns=-1},",
-            "    enlarge x limits=0.15,",
-            "]",
-        ]
-
-        for i, col in enumerate(columns):
-            color = self._get_color(i)
-            col_label = f"Mean {self._get_latex_column_name(col)}"
-
-            lines.append(f"\\addplot[fill={color}] coordinates {{")
-            for config in configs:
-                val = data[config][col]
-                if val is not None:
-                    lines.append(f"    ({self._escape_latex(config)}, {val:.4f})")
-            lines.append("};")
-            lines.append(f"\\addlegendentry{{{self._escape_latex(col_label)}}}")
-
-        lines.append("\\end{axis}")
-        lines.append("\\end{tikzpicture}")
-
-        content = "\n".join(lines)
-
-        output_path = os.path.join(self.config.plots_dir, filename)
-        uio.write_file(output_path, content)
-        logger.info("Generated config solution bar plot: %s", output_path)
-        return output_path
-
-    def generate_config_domain_volume_table(
-        self, filename: str = "config_domain_volume.tex"
-    ) -> str:
-        """Generates table: Configs x (Relative domain volumes in percent of max).
-
-        Filter: NONE - domain volumes are model properties.
-        Values are shown as percentage of the maximum value per column.
-
-        Args:
-            filename: Output filename.
-
-        Returns:
-            Path to the generated file.
-        """
-        filter_type = self.MODEL_FILTER
-
-        columns = [
-            lsf.stats_locatelli_domain_volume_polygon(),
-            lsf.stats_locatelli_domain_volume_polytope(),
-        ]
-        data = self._compute_relative_domain_volumes(filter_type=filter_type)
-
-        col_spec = "l" + "r" * len(columns)
-        header_parts = [self._get_latex_column_name(lsf.stats_config_name())]
-        for col in columns:
-            header_parts.append(f"Rel. {self._get_latex_column_name(col)}")
-        header_row = " & ".join(header_parts) + " \\\\"
-
-        data_rows = []
-        for config in self.evaluator.data.configs:
-            row_parts = [self._escape_latex(config)]
-            for col in columns:
-                row_parts.append(self._format_percent(data[config][col]))
-            data_rows.append(" & ".join(row_parts) + " \\\\")
-
-        table_content = uio.build_latex_table(
-            col_spec=col_spec,
-            header=header_row,
-            rows=data_rows,
-            caption=(
-                "Configuration domain volume metrics "
-                "(relative to maximum, 100\\% = largest volume)."
+    def get_predefined_table_definitions(self) -> list[TableDefinition]:
+        """Get the predefined table definitions."""
+        return [
+            TableDefinition(
+                column=lsf.stats_solving_time(),
+                use_shifted_geom_mean=True,
+                filter_type=InstanceFilter.NONE,
+                metadata=TableMetadata(
+                    filename="table_instance_solution_time.tex",
+                    caption="Solving time per instance and configuration",
+                    label="tab:instance_solution_time",
+                ),
             ),
-            label="tab:config_domain_volume",
-        )
-
-        output_path = os.path.join(self.config.tables_dir, filename)
-        uio.write_file(output_path, table_content)
-        logger.info("Generated config domain volume table: %s", output_path)
-        return output_path
-
-    def generate_config_domain_volume_barplot(
-        self, filename: str = "config_domain_volume_barplot.tex"
-    ) -> str:
-        """Generates grouped bar plot for config domain volumes (relative).
-
-        Filter: NONE - domain volumes are model properties.
-        Values are shown as percentage of the maximum value per column.
-
-        Args:
-            filename: Output filename.
-
-        Returns:
-            Path to the generated file.
-        """
-        filter_type = self.MODEL_FILTER
-
-        columns = [
-            lsf.stats_locatelli_domain_volume_polygon(),
-            lsf.stats_locatelli_domain_volume_polytope(),
-        ]
-        data = self._compute_relative_domain_volumes(filter_type=filter_type)
-
-        configs = self.evaluator.data.configs
-        symbolic_coords = ",".join(self._escape_latex(c) for c in configs)
-
-        lines = [
-            "% Domain volumes shown as percentage of maximum (100 = largest)",
-            "\\begin{tikzpicture}",
-            "\\begin{axis}[",
-            "    ybar,",
-            "    bar width=0.3cm,",
-            "    width=0.9\\textwidth,",
-            "    height=8cm,",
-            "    ylabel={Relative Volume (\\%)},",
-            f"    symbolic x coords={{{symbolic_coords}}},",
-            "    xtick=data,",
-            "    x tick label style={rotate=45, anchor=east},",
-            "    legend style={at={(0.5,-0.25)}, anchor=north, legend columns=-1},",
-            "    ymin=0,",
-            "    ymax=105,",
-            "    enlarge x limits=0.15,",
-            "]",
-        ]
-        for i, col in enumerate(columns):
-            color = self._get_color(i)
-            col_label = f"Rel. {self._get_latex_column_name(col)}"
-            lines.append(f"\\addplot[fill={color}] coordinates {{")
-            for config in configs:
-                val = data[config][col]
-                if val is not None:
-                    lines.append(f"    ({self._escape_latex(config)}, {val:.2f})")
-            lines.append("};")
-            lines.append(f"\\addlegendentry{{{self._escape_latex(col_label)}}}")
-        lines.append("\\end{axis}")
-        lines.append("\\end{tikzpicture}")
-        content = "\n".join(lines)
-        output_path = os.path.join(self.config.plots_dir, filename)
-        uio.write_file(output_path, content)
-        logger.info("Generated config domain volume bar plot: %s", output_path)
-        return output_path
-
-    def generate_instance_performance_table(
-        self, filename: str = "instance_performance.tex"
-    ) -> str:
-        """Generates table: Instances x (solving_time, mip_gap, nr_nodes) per config.
-
-        Filter: ALL_TERMINATED_CONSISTENT
-
-        Args:
-            filename: Output filename.
-
-        Returns:
-            Path to the generated file.
-        """
-        filter_type = self.PERFORMANCE_FILTER
-
-        columns = [
-            lsf.stats_solving_time(),
-            lsf.stats_mip_gap(),
-            lsf.stats_nr_nodes(),
-        ]
-        pivot_data = self.evaluator.get_pivot_data(columns, filter_type=filter_type)
-        instances = self.evaluator.get_filtered_instances(filter_type)
-        configs = self.evaluator.data.configs
-
-        num_cols = len(columns) * len(configs)
-        col_spec = "l" + "r" * num_cols
-        header_parts = [self._get_latex_column_name(lsf.stats_instance_name())]
-        for config in configs:
-            for col in columns:
-                header_parts.append(
-                    f"{self._escape_latex(config)}: {self._get_latex_column_name(col)}"
-                )
-        header_row = " & ".join(header_parts) + " \\\\"
-
-        data_rows = []
-        for instance in instances:
-            row_parts = [self._escape_latex(instance)]
-            for config in configs:
-                for col in columns:
-                    val = pivot_data[instance][config][col]
-                    row_parts.append(self._format_float(val))
-            data_rows.append(" & ".join(row_parts) + " \\\\")
-
-        filter_note = self._get_filter_note(filter_type)
-
-        table_content = uio.build_latex_table(
-            col_spec=col_spec,
-            header=header_row,
-            rows=data_rows,
-            caption=f"Instance performance metrics. {filter_note}",
-            label="tab:instance_performance",
-        )
-        output_path = os.path.join(self.config.tables_dir, filename)
-        uio.write_file(output_path, table_content)
-        logger.info("Generated instance performance table: %s", output_path)
-        return output_path
-
-    def generate_instance_performance_lineplot(
-        self,
-        column: str,
-        filename: str,
-        filter_type: InstanceFilter | None = None,
-    ) -> str:
-        """Generates line plot for instance performance metric.
-
-        Args:
-            column: Column to plot.
-            filename: Output filename.
-            filter_type: Filter to apply. Defaults to PERFORMANCE_FILTER for
-                performance metrics, MODEL_FILTER for model properties.
-
-        Returns:
-            Path to the generated file.
-        """
-        # Determine appropriate filter based on column type
-        if filter_type is None:
-            performance_columns = {
-                lsf.stats_solving_time(),
-                lsf.stats_mip_gap(),
-                lsf.stats_nr_nodes(),
-            }
-            solution_columns = {
-                lsf.stats_solution_value(),
-                lsf.stats_root_solution_value(),
-            }
-
-            if column in performance_columns:
-                filter_type = self.PERFORMANCE_FILTER
-            elif column in solution_columns:
-                filter_type = self.SOLUTION_FILTER
-            else:
-                filter_type = self.MODEL_FILTER
-
-        pivot_data = self.evaluator.get_pivot_data([column], filter_type=filter_type)
-        instances = self.evaluator.get_filtered_instances(filter_type)
-        configs = self.evaluator.data.configs
-
-        filter_note = self._escape_latex_comment(self._get_filter_note(filter_type))
-
-        lines = [
-            f"% Filter: {filter_note}",
-            "\\begin{tikzpicture}",
-            "\\begin{axis}[",
-            "    width=\\textwidth,",
-            "    height=10cm,",
-            f"    ylabel={{{self._get_latex_column_name(column)}}},",
-            "    xlabel={Instance},",
-            "    xtick=data,",
-            "    xticklabels={},",
-            "    legend style={at={(1.02,1)}, anchor=north west},",
-            "    grid=major,",
-            "    cycle list name=color list,",
-            "]",
-        ]
-        for i, config in enumerate(configs):
-            color = self._get_color(i)
-            lines.append(
-                f"\\addplot[{color}, thick, mark=*, mark size=1pt] coordinates {{"
-            )
-            for j, instance in enumerate(instances):
-                val = pivot_data[instance][config][column]
-                if val is not None:
-                    lines.append(f"    ({j}, {val})")
-            lines.append("};")
-            lines.append(f"\\addlegendentry{{{self._escape_latex(config)}}}")
-        lines.append("\\end{axis}")
-        lines.append("\\end{tikzpicture}")
-        content = "\n".join(lines)
-        output_path = os.path.join(self.config.plots_dir, filename)
-        uio.write_file(output_path, content)
-        logger.info("Generated instance performance line plot: %s", output_path)
-        return output_path
-
-    def generate_instance_domain_volume_lineplot(
-        self,
-        column: str,
-        filename: str,
-    ) -> str:
-        """Generates line plot for instance domain volumes (relative).
-
-        Args:
-            column: Domain volume column to plot.
-            filename: Output filename.
-
-        Returns:
-            Path to the generated file.
-        """
-        filter_type = self.MODEL_FILTER
-
-        relative_data = self._compute_relative_domain_volumes_per_instance(
-            filter_type=filter_type
-        )
-        instances = self.evaluator.get_filtered_instances(filter_type)
-        configs = self.evaluator.data.configs
-
-        lines = [
-            "% Domain volumes shown as percentage of maximum per instance (100 = largest)",
-            "\\begin{tikzpicture}",
-            "\\begin{axis}[",
-            "    width=\\textwidth,",
-            "    height=10cm,",
-            f"    ylabel={{Rel. {self._get_latex_column_name(column)} (\\%)}},",
-            "    xlabel={Instance},",
-            "    xtick=data,",
-            "    xticklabels={},",
-            "    legend style={at={(1.02,1)}, anchor=north west},",
-            "    grid=major,",
-            "    ymin=0,",
-            "    ymax=105,",
-            "    cycle list name=color list,",
-            "]",
-        ]
-        for i, config in enumerate(configs):
-            color = self._get_color(i)
-            lines.append(
-                f"\\addplot[{color}, thick, mark=*, mark size=1pt] coordinates {{"
-            )
-            for j, instance in enumerate(instances):
-                val = relative_data[instance][config][column]
-                if val is not None:
-                    lines.append(f"    ({j}, {val:.2f})")
-            lines.append("};")
-            lines.append(f"\\addlegendentry{{{self._escape_latex(config)}}}")
-        lines.append("\\end{axis}")
-        lines.append("\\end{tikzpicture}")
-        content = "\n".join(lines)
-        output_path = os.path.join(self.config.plots_dir, filename)
-        uio.write_file(output_path, content)
-        logger.info("Generated instance domain volume line plot: %s", output_path)
-        return output_path
-
-    def generate_instance_solution_table(
-        self, filename: str = "instance_solution.tex"
-    ) -> str:
-        """Generates table: Instances x (solution_value, root_solution_value) per config.
-
-        Filter: ALL_TERMINATED
-
-        Args:
-            filename: Output filename.
-
-        Returns:
-            Path to the generated file.
-        """
-        filter_type = self.SOLUTION_FILTER
-
-        columns = [lsf.stats_solution_value(), lsf.stats_root_solution_value()]
-        pivot_data = self.evaluator.get_pivot_data(columns, filter_type=filter_type)
-        instances = self.evaluator.get_filtered_instances(filter_type)
-        configs = self.evaluator.data.configs
-
-        num_cols = len(columns) * len(configs)
-        col_spec = "l" + "r" * num_cols
-        header_parts = [self._get_latex_column_name(lsf.stats_instance_name())]
-        for config in configs:
-            for col in columns:
-                header_parts.append(
-                    f"{self._escape_latex(config)}: {self._get_latex_column_name(col)}"
-                )
-        header_row = " & ".join(header_parts) + " \\\\"
-
-        data_rows = []
-        for instance in instances:
-            row_parts = [self._escape_latex(instance)]
-            for config in configs:
-                for col in columns:
-                    val = pivot_data[instance][config][col]
-                    row_parts.append(self._format_float(val))
-            data_rows.append(" & ".join(row_parts) + " \\\\")
-
-        filter_note = self._get_filter_note(filter_type)
-
-        table_content = uio.build_latex_table(
-            col_spec=col_spec,
-            header=header_row,
-            rows=data_rows,
-            caption=f"Instance solution values. {filter_note}",
-            label="tab:instance_solution",
-        )
-        output_path = os.path.join(self.config.tables_dir, filename)
-        uio.write_file(output_path, table_content)
-        logger.info("Generated instance solution table: %s", output_path)
-        return output_path
-
-    def generate_instance_domain_volume_table(
-        self, filename: str = "instance_domain_volume.tex"
-    ) -> str:
-        """Generates table: Instances x (relative domain volumes) per config.
-
-        Filter: NONE - domain volumes are model properties.
-        Values are shown as percentage of the maximum value per instance.
-
-        Args:
-            filename: Output filename.
-
-        Returns:
-            Path to the generated file.
-        """
-        filter_type = self.MODEL_FILTER
-
-        columns = [
-            lsf.stats_locatelli_domain_volume_polygon(),
-            lsf.stats_locatelli_domain_volume_polytope(),
-        ]
-        relative_data = self._compute_relative_domain_volumes_per_instance(
-            filter_type=filter_type
-        )
-        instances = self.evaluator.get_filtered_instances(filter_type)
-
-        configs = self.evaluator.data.configs
-        num_cols = len(columns) * len(configs)
-        col_spec = "l" + "r" * num_cols
-
-        header_parts = [self._get_latex_column_name(lsf.stats_instance_name())]
-        for config in configs:
-            for col in columns:
-                header_parts.append(
-                    f"{self._escape_latex(config)}: Rel. {self._get_latex_column_name(col)}"
-                )
-        header_row = " & ".join(header_parts) + " \\\\"
-
-        data_rows = []
-        for instance in instances:
-            row_parts = [self._escape_latex(instance)]
-            for config in configs:
-                for col in columns:
-                    val = relative_data[instance][config][col]
-                    row_parts.append(self._format_percent(val))
-            data_rows.append(" & ".join(row_parts) + " \\\\")
-
-        table_content = uio.build_latex_table(
-            col_spec=col_spec,
-            header=header_row,
-            rows=data_rows,
-            caption=(
-                "Instance domain volume metrics "
-                "(relative to maximum per instance, 100\\% = largest volume)."
+            TableDefinition(
+                column=lsf.stats_nr_nodes(),
+                filter_type=InstanceFilter.NONE,
+                metadata=TableMetadata(
+                    filename="table_instance_nr_nodes.tex",
+                    caption="Number of nodes per instance and configuration",
+                    label="tab:instance_nr_nodes",
+                ),
+                format_options=TableFormatOptions(precision=0),
             ),
-            label="tab:instance_domain_volume",
-        )
-
-        output_path = os.path.join(self.config.tables_dir, filename)
-        uio.write_file(output_path, table_content)
-        logger.info("Generated instance domain volume table: %s", output_path)
-        return output_path
-
-    def generate_config_model_size_table(
-        self, filename: str = "config_model_size.tex"
-    ) -> str:
-        """Generates table: Configs x (Mean model size metrics).
-
-        Filter: NONE - model size is a model property.
-
-        Args:
-            filename: Output filename.
-
-        Returns:
-            Path to the generated file.
-        """
-        filter_type = self.MODEL_FILTER
-
-        columns = [
-            lsf.stats_final_nr_vars(),
-            lsf.stats_final_nr_constraints(),
-            lsf.stats_presolved_nr_vars(),
-            lsf.stats_presolved_nr_constraints(),
-        ]
-        data = self.evaluator.get_config_aggregated_data(
-            columns, filter_type=filter_type
-        )
-
-        col_spec = "l" + "r" * len(columns)
-        header_parts = [self._get_latex_column_name(lsf.stats_config_name())]
-        for col in columns:
-            header_parts.append(f"Mean {self._get_latex_column_name(col)}")
-        header_row = " & ".join(header_parts) + " \\\\"
-
-        data_rows = []
-        for config in self.evaluator.data.configs:
-            row_parts = [self._escape_latex(config)]
-            for col in columns:
-                row_parts.append(self._format_float(data[config][col]))
-            data_rows.append(" & ".join(row_parts) + " \\\\")
-
-        table_content = uio.build_latex_table(
-            col_spec=col_spec,
-            header=header_row,
-            rows=data_rows,
-            caption="Configuration model size metrics",
-            label="tab:config_model_size",
-        )
-
-        output_path = os.path.join(self.config.tables_dir, filename)
-        uio.write_file(output_path, table_content)
-        logger.info("Generated config model size table: %s", output_path)
-        return output_path
-
-    def generate_instance_expressions_table(
-        self, filename: str = "instance_expressions.tex"
-    ) -> str:
-        """Generates table: Instances x (PWL expression counts).
-
-        Filter: NONE - expression counts are model properties.
-
-        Args:
-            filename: Output filename.
-
-        Returns:
-            Path to the generated file.
-        """
-        filter_type = self.MODEL_FILTER
-
-        columns = [
-            lsf.stats_pwl_nr_bilinear_expressions(),
-            lsf.stats_pwl_nr_multilinear_expressions(),
-            lsf.stats_pwl_nr_one_dim_expressions(),
-            lsf.stats_pwl_nr_bilinear_binary_expressions(),
-            lsf.stats_pwl_nr_mixed_binary_expressions(),
-        ]
-        data = self.evaluator.get_instance_data(columns, filter_type=filter_type)
-        instances = self.evaluator.get_filtered_instances(filter_type)
-
-        col_spec = "l" + "r" * len(columns)
-        header_parts = [self._get_latex_column_name(lsf.stats_instance_name())]
-        for col in columns:
-            header_parts.append(self._get_latex_column_name(col))
-        header_row = " & ".join(header_parts) + " \\\\"
-
-        data_rows = []
-        for instance in instances:
-            row_parts = [self._escape_latex(instance)]
-            for col in columns:
-                row_parts.append(self._format_int(data[instance][col]))
-            data_rows.append(" & ".join(row_parts) + " \\\\")
-
-        table_content = uio.build_latex_table(
-            col_spec=col_spec,
-            header=header_row,
-            rows=data_rows,
-            caption="Instance expression counts",
-            label="tab:instance_expressions",
-        )
-
-        output_path = os.path.join(self.config.tables_dir, filename)
-        uio.write_file(output_path, table_content)
-        logger.info("Generated instance expressions table: %s", output_path)
-        return output_path
-
-    def generate_instances_solved_over_time_plot(
-        self, filename: str = "instances_solved_over_time.tex"
-    ) -> str:
-        """Generates survival curve: time vs. number of instances solved.
-
-        Filter: NONE - shows all instances to display survival behavior.
-
-        Args:
-            filename: Output filename.
-
-        Returns:
-            Path to the generated file.
-        """
-        filter_type = self.SURVIVAL_FILTER
-
-        data = self.evaluator.get_instances_solved_over_time(filter_type=filter_type)
-        total_instances = len(self.evaluator.get_filtered_instances(filter_type))
-
-        lines = [
-            "% Filter: NONE - showing all instances for survival analysis",
-            "\\begin{tikzpicture}",
-            "\\begin{axis}[",
-            "    width=0.9\\textwidth,",
-            "    height=8cm,",
-            f"    xlabel={{{self._get_latex_column_name(lsf.stats_solving_time())}}},",
-            "    ylabel={Number of instances solved},",
-            f"    ymax={total_instances + 1},",
-            "    ymin=0,",
-            "    xmin=0,",
-            "    legend style={at={(0.02,0.98)}, anchor=north west},",
-            "    grid=both,",
-            "    minor grid style={gray!25},",
-            "    major grid style={gray!50},",
-            "]",
+            TableDefinition(
+                column=lsf.stats_mip_gap(),
+                filter_type=InstanceFilter.NONE,
+                metadata=TableMetadata(
+                    filename="table_instance_mip_gap.tex",
+                    caption="MIP gap per instance and configuration",
+                    label="tab:instance_mip_gap",
+                ),
+                format_options=TableFormatOptions(percentage=True),
+            ),
+            TableDefinition(
+                config=self.evaluator.data.configs[0],
+                column=[
+                    lsf.stats_pwl_nr_variables(),
+                    lsf.stats_pwl_nr_constraints(),
+                    lsf.stats_pwl_nr_bilinear_expressions(),
+                ],
+                metadata=TableMetadata(
+                    filename="table_instance_model_size.tex",
+                    caption="Model size per instance and configuration",
+                    label="tab:instance_model_size",
+                ),
+                format_options=TableFormatOptions(precision=0),
+            ),
         ]
 
-        for i, (config, points) in enumerate(data.items()):
-            color = self._get_color(i)
-            config_escaped = self._escape_latex(config)
+    def generate_all_predefined_tables(self) -> list[Path]:
+        """Generate all predefined tables."""
+        definitions = self.get_predefined_table_definitions()
+        return self.generate_tables(definitions)
 
-            if not points:
-                continue
+    def get_config_legend(self) -> str:
+        """Get LaTeX code for config name legend."""
+        lines = [lsf.begin_itemize()]
+        for config, short in self._config_shortnames.items():
+            escaped_config = lsf.escape_underscore(config)
+            escaped_short = lsf.escape_underscore(short)
+            lines.append(lsf.item(escaped_short, escaped_config))
+        lines.append(lsf.end_itemize())
+        return "\n".join(lines)
 
-            lines.append(
-                f"\\addplot[{color}, thick, mark=none, const plot] coordinates {{"
-            )
-            lines.append("    (0, 0)")
-            for time, count in points:
-                lines.append(f"    ({time:.4f}, {count})")
-            lines.append("};")
-            lines.append(f"\\addlegendentry{{{config_escaped}}}")
+    def save_config_legend(self, filename: str = "config_legend.tex") -> Path:
+        """Save config name legend to file."""
+        legend = self.get_config_legend()
+        return self.save_table(legend, filename)
 
-        lines.append("\\end{axis}")
-        lines.append("\\end{tikzpicture}")
 
-        content = "\n".join(lines)
-        output_path = os.path.join(self.config.plots_dir, filename)
-        uio.write_file(output_path, content)
-        logger.info("Generated instances solved over time plot: %s", output_path)
-        return output_path
+if __name__ == "__main__":
+    RESULTS_PATH = (
+        "C:/Users/kuen/Documents/Git/alpaca/data/study/"
+        "study_results_2026-03-15_19-36-27.csv"
+    )
+    TABLES_PATH = "C:/Users/kuen/Documents/Git/alpaca/data/study/tables/"
+    evalu = StudyEvaluator(RESULTS_PATH)
 
-    def generate_config_performance_boxplot(
-        self, filename: str = "config_performance_boxplot.tex"
-    ) -> str:
-        """Generates boxplot for config performance metrics.
-
-        Filter: ALL_TERMINATED_CONSISTENT
-
-        Args:
-            filename: Output filename.
-
-        Returns:
-            Path to the generated file.
-        """
-        filter_type = self.PERFORMANCE_FILTER
-
-        columns = [
-            lsf.stats_solving_time(),
-            lsf.stats_mip_gap(),
-            lsf.stats_nr_nodes(),
-        ]
-        configs = self.evaluator.data.configs
-
-        if not columns:
-            content = "% No columns specified for boxplot"
-            output_path = os.path.join(self.config.plots_dir, filename)
-            uio.write_file(output_path, content)
-            return output_path
-
-        filter_note = self._escape_latex_comment(self._get_filter_note(filter_type))
-
-        lines = [
-            f"% Filter: {filter_note}",
-            "\\begin{tikzpicture}",
-        ]
-
-        for col_idx, column in enumerate(columns):
-            x_offset = col_idx * 6
-            col_label = self._get_latex_column_name(column)
-
-            lines.append("\\begin{axis}[")
-            lines.append(f"    at={{({x_offset}cm, 0)}},")
-            lines.append("    boxplot/draw direction=y,")
-            lines.append("    width=5cm,")
-            lines.append("    height=8cm,")
-            lines.append(f"    title={{{self._escape_latex(col_label)}}},")
-            lines.append(
-                f"    xtick={{{','.join(str(i + 1) for i in range(len(configs)))}}},"
-            )
-            lines.append(
-                f"    xticklabels={{{','.join(self._escape_latex(c) for c in configs)}}},"
-            )
-            lines.append(
-                "    x tick label style={rotate=45, anchor=east, font=\\small},"
-            )
-            lines.append("    ylabel={Value},")
-            lines.append("]")
-
-            for i, config in enumerate(configs):
-                color = self._get_color(i)
-                stats = self.evaluator.compute_statistics_for_config(
-                    column, config, filter_type=filter_type
-                )
-
-                if stats["median"] is None:
-                    continue
-
-                lines.append("\\addplot+[")
-                lines.append("    boxplot prepared={")
-                lines.append(f"        lower whisker={stats['min']:.6f},")
-                lines.append(f"        lower quartile={stats['q25']:.6f},")
-                lines.append(f"        median={stats['median']:.6f},")
-                lines.append(f"        upper quartile={stats['q75']:.6f},")
-                lines.append(f"        upper whisker={stats['max']:.6f},")
-                lines.append("    },")
-                lines.append(f"    fill={color}!50,")
-                lines.append(f"    draw={color},")
-                lines.append("] coordinates {};")
-
-            lines.append("\\end{axis}")
-
-        lines.append("\\end{tikzpicture}")
-
-        content = "\n".join(lines)
-
-        output_path = os.path.join(self.config.plots_dir, filename)
-        uio.write_file(output_path, content)
-        logger.info("Generated config performance boxplot: %s", output_path)
-        return output_path
-
-    def generate_filter_summary_table(
-        self, filename: str = "filter_summary.tex"
-    ) -> str:
-        """Generates a summary table of filter statistics.
-
-        Args:
-            filename: Output filename.
-
-        Returns:
-            Path to the generated file.
-        """
-        stats = self.evaluator.get_filter_statistics()
-
-        col_spec = "lrr"
-        header_row = "Filter & Instances & Removed \\\\"
-
-        total = stats["instance_counts"]["total_complete"]
-        terminated = stats["instance_counts"]["all_terminated"]
-        consistent = stats["instance_counts"]["all_terminated_consistent"]
-
-        data_rows = [
-            f"All complete & {total} & -- \\\\",
-            f"All terminated & {terminated} & {total - terminated} \\\\",
-            f"All terminated + consistent & {consistent} & {total - consistent} \\\\",
-        ]
-
-        table_content = uio.build_latex_table(
-            col_spec=col_spec,
-            header=header_row,
-            rows=data_rows,
-            caption="Summary of instance filtering",
-            label="tab:filter_summary",
-        )
-
-        output_path = os.path.join(self.config.tables_dir, filename)
-        uio.write_file(output_path, table_content)
-        logger.info("Generated filter summary table: %s", output_path)
-        return output_path
-
-    def generate_all(self) -> dict[str, list[str]]:
-        """Generates all tables and plots.
-
-        Returns:
-            Dictionary with lists of generated file paths.
-        """
-        tables = []
-        plots = []
-
-        # Filter summary
-        tables.append(self.generate_filter_summary_table())
-
-        # Performance tables and plots (filtered: ALL_TERMINATED_CONSISTENT)
-        tables.append(self.generate_config_performance_table())
-        plots.append(self.generate_config_performance_barplot())
-        plots.append(self.generate_config_performance_boxplot())
-        tables.append(self.generate_instance_performance_table())
-        plots.append(
-            self.generate_instance_performance_lineplot(
-                lsf.stats_solving_time(), "instance_solving_time_lineplot.tex"
-            )
-        )
-        plots.append(
-            self.generate_instance_performance_lineplot(
-                lsf.stats_mip_gap(), "instance_mip_gap_lineplot.tex"
-            )
-        )
-        plots.append(
-            self.generate_instance_performance_lineplot(
-                lsf.stats_nr_nodes(), "instance_nr_nodes_lineplot.tex"
-            )
-        )
-
-        # Solution tables and plots (filtered: ALL_TERMINATED)
-        tables.append(self.generate_config_solution_table())
-        plots.append(self.generate_config_solution_barplot())
-        tables.append(self.generate_instance_solution_table())
-        plots.append(
-            self.generate_instance_performance_lineplot(
-                lsf.stats_solution_value(), "instance_solution_value_lineplot.tex"
-            )
-        )
-        plots.append(
-            self.generate_instance_performance_lineplot(
-                lsf.stats_root_solution_value(),
-                "instance_root_solution_value_lineplot.tex",
-            )
-        )
-
-        # Domain volume tables and plots (no filter, relative values)
-        tables.append(self.generate_config_domain_volume_table())
-        plots.append(self.generate_config_domain_volume_barplot())
-        tables.append(self.generate_instance_domain_volume_table())
-        plots.append(
-            self.generate_instance_domain_volume_lineplot(
-                lsf.stats_locatelli_domain_volume_polygon(),
-                "instance_domain_volume_polygon_lineplot.tex",
-            )
-        )
-        plots.append(
-            self.generate_instance_domain_volume_lineplot(
-                lsf.stats_locatelli_domain_volume_polytope(),
-                "instance_domain_volume_polytope_lineplot.tex",
-            )
-        )
-
-        # Other model property tables (no filter)
-        tables.append(self.generate_config_model_size_table())
-        tables.append(self.generate_instance_expressions_table())
-
-        # Survival plot (no filter - shows complete picture)
-        plots.append(self.generate_instances_solved_over_time_plot())
-
-        return {"tables": tables, "plots": plots}
+    gen_config = GeneratorConfig(evaluator=evalu, output_dir=TABLES_PATH)
+    generator = LatexTableGenerator(gen_config)
+    outputs = generator.generate_all_predefined_tables()
