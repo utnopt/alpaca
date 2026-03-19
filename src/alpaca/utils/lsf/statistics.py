@@ -145,18 +145,6 @@ class Statistics:
         return "build_time"
 
     @classmethod
-    def stats_stair_locatelli_domain_volume_polytope(cls, f="") -> str:
-        if f == cls.stats_format_latex():
-            return "SL PT"
-        return "stair_locatelli_domain_volume_polytope"
-
-    @classmethod
-    def stats_stair_locatelli_domain_volume_polygon(cls, f="") -> str:
-        if f == cls.stats_format_latex():
-            return "SL PG"
-        return "stair_locatelli_domain_volume_polygon"
-
-    @classmethod
     def stats_original_nr_variables(cls, f="") -> str:
         if f == cls.stats_format_latex():
             return r"OG \# Var"

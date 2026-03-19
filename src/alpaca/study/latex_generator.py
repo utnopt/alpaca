@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-
 """
-LaTeX table generator for study evaluation results.
-
 @authors: kuen,
 """
 
@@ -50,7 +47,7 @@ class TableDefinition:
     Attributes:
         column: Column name(s) to compare.
         metadata: Table metadata (filename, caption, label).
-        config: Config to get model size from (only for model size tables).
+        config: Config to get model size from or to compare.
         use_shifted_geom_mean: Bool if use geometric mean else mean.
         filter_type: Instance filter to apply.
         format_options: Formatting options for values.
@@ -112,8 +109,6 @@ class LatexTableGenerator:
         lsf.stats_locatelli_domain_volume_polygon,
         lsf.stats_locatelli_domain_volume_polytope,
         lsf.stats_locatelli_nr_cuts,
-        lsf.stats_stair_locatelli_domain_volume_polytope,
-        lsf.stats_stair_locatelli_domain_volume_polygon,
         lsf.stats_mpip_nr_instances,
         lsf.stats_mpip_ratio,
         lsf.stats_instance_name,
@@ -187,14 +182,22 @@ class LatexTableGenerator:
 
         return config_name[:4].upper()
 
-    @staticmethod
     def _format_value(
+        self,
         value: float | None,
         fmt: TableFormatOptions,
+        relative_to: float | None = None,
     ) -> str:
         """Format a numeric value for LaTeX."""
         if value is None:
             return lsf.placeholder()
+
+        if relative_to is not None:
+            value = 100 * (relative_to - value) / relative_to
+            return lsf.math_mode(f"{value:.{fmt.precision}f}{lsf.percentage_suffix()}")
+
+        if value == self._config.evaluator.time_limit:
+            return lsf.timeout_placeholder()
 
         if fmt.percentage:
             value *= 100
@@ -345,10 +348,15 @@ class LatexTableGenerator:
             values = self.evaluator.get_column_values_for_instance(
                 definition.column, instance
             )
+            relative_to = (
+                None
+                if definition.config == lsf.empty_string()
+                else values.get(definition.config)
+            )
             for config in self.evaluator.data.configs:
                 value = values.get(config)
                 all_values[config].append(value)
-                row.append(self._format_value(value, fmt))
+                row.append(self._format_value(value, fmt, relative_to))
             rows.append(row)
 
         return rows, all_values
@@ -370,14 +378,25 @@ class LatexTableGenerator:
 
         label = lsf.shifted_geometric_mean_label() if use_geom else lsf.mean_label()
         mean_row = [label]
-
+        if use_geom:
+            relative_to = (
+                self._compute_shifted_geometric_mean(all_values[definition.config])
+                if definition.config != lsf.empty_string()
+                else None
+            )
+        else:
+            relative_to = (
+                self._compute_mean(all_values[definition.config])
+                if definition.config != lsf.empty_string()
+                else None
+            )
         for config in self.evaluator.data.configs:
             values = all_values[config]
             if use_geom:
                 mean_value = self._compute_shifted_geometric_mean(values)
             else:
                 mean_value = self._compute_mean(values)
-            mean_row.append(self._format_value(mean_value, fmt))
+            mean_row.append(self._format_value(mean_value, fmt, relative_to))
         rows.append(mean_row)
 
         return self._build_latex_table(headers, rows, definition.metadata)
@@ -448,10 +467,32 @@ class LatexTableGenerator:
                 ],
                 metadata=TableMetadata(
                     filename="table_instance_model_size.tex",
-                    caption="Model size per instance and configuration",
+                    caption="Model size per instance",
                     label="tab:instance_model_size",
                 ),
                 format_options=TableFormatOptions(precision=0),
+            ),
+            TableDefinition(
+                config="nonlinear_gurobi",
+                column=lsf.stats_locatelli_domain_volume_polygon(),
+                metadata=TableMetadata(
+                    filename="table_instance_domain_volume_polygon.tex",
+                    caption="Domain volume reduction relative to McCormick"
+                    " per instance and configuration",
+                    label="tab:instance_domain_volume_polygon",
+                ),
+                format_options=TableFormatOptions(precision=2),
+            ),
+            TableDefinition(
+                config="nonlinear_gurobi",
+                column=lsf.stats_locatelli_domain_volume_polytope(),
+                metadata=TableMetadata(
+                    filename="table_instance_domain_volume_polytope.tex",
+                    caption="Domain volume reduction relative to McCormick"
+                    " per instance and configuration",
+                    label="tab:instance_domain_volume_polytope",
+                ),
+                format_options=TableFormatOptions(precision=2),
             ),
         ]
 

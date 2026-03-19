@@ -81,7 +81,7 @@ class Latex:
 
     @classmethod
     def escape_underscore(cls, text: str) -> str:
-        return text.replace("_", r"\\_")
+        return text.replace("_", r"\_").replace(r"\\_", r"\_")
 
     @classmethod
     def math_mode(cls, value: str) -> str:
@@ -102,3 +102,7 @@ class Latex:
     @classmethod
     def default_alignment(cls, num_columns: int) -> str:
         return "l " + "r " * (num_columns - 1)
+
+    @classmethod
+    def timeout_placeholder(cls) -> str:
+        return r"\textit{TL}"

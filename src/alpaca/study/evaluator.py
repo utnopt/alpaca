@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
-
 """
-@authors: Claude Opus,
+@authors: kuen,
 """
 import csv
 from dataclasses import dataclass, field
@@ -13,6 +12,7 @@ import numpy as np
 
 from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 from alpaca.utils.logger import logger
+import alpaca.settings as s
 
 
 class InstanceFilter(Enum):
@@ -26,22 +26,6 @@ class InstanceFilter(Enum):
 
     ALL_TERMINATED_CONSISTENT = auto()
     """All terminated + consistent solution values across configs."""
-
-
-@dataclass
-class FilterConfig:
-    """Configuration for instance filtering.
-
-    Attributes:
-        solution_value_rel_tol: Relative tolerance for solution value comparison.
-        solution_value_abs_tol: Absolute tolerance for solution value comparison.
-        optimal_gap_threshold: MIP gap threshold to consider as terminated
-            (0.0 means only optimal, e.g., 0.01 means 1% gap is acceptable).
-    """
-
-    solution_value_rel_tol: float = 1e-6
-    solution_value_abs_tol: float = 1e-9
-    optimal_gap_threshold: float = 0.0
 
 
 @dataclass
@@ -120,16 +104,15 @@ class StudyEvaluator:
     def __init__(
         self,
         csv_path: str,
-        filter_config: FilterConfig | None = None,
+        time_limit: int = 3600,
     ) -> None:
         """Initializes the evaluator with a CSV file path.
 
         Args:
             csv_path: Path to the CSV results file.
-            filter_config: Configuration for filtering instances.
         """
         self.csv_path = csv_path
-        self.filter_config = filter_config or FilterConfig()
+        self.time_limit = time_limit
         self.data = StudyData()
 
         # Cached filter results
@@ -137,6 +120,7 @@ class StudyEvaluator:
 
         self._load_csv()
         self._filter_complete_instances()
+        self._filter_converged_inconsistent_instances()
         self._compute_filter_results()
 
     def _load_csv(self) -> None:
@@ -145,7 +129,9 @@ class StudyEvaluator:
         if not csv_file.exists():
             raise FileNotFoundError(f"CSV file not found: {self.csv_path}")
 
-        with open(self.csv_path, "r", encoding="utf-8") as file:
+        with open(
+            self.csv_path, lsf.file_mode_read(), encoding=lsf.file_encoding_utf8()
+        ) as file:
             reader = csv.DictReader(file)
             self.data.headers = reader.fieldnames or []
 
@@ -153,15 +139,22 @@ class StudyEvaluator:
                 parsed_row = self._parse_row(row)
                 self.data.rows.append(parsed_row)
 
-                instance = parsed_row.get(lsf.stats_instance_name(), "")
-                config = parsed_row.get(lsf.stats_config_name(), "")
+                instance = parsed_row.get(lsf.stats_instance_name(), lsf.empty_string())
+                config = parsed_row.get(lsf.stats_config_name(), lsf.empty_string())
+                self._cap_solving_time(parsed_row)
                 self.data.data_matrix[(instance, config)] = parsed_row
 
         all_instances = sorted(
-            {row.get(lsf.stats_instance_name(), "") for row in self.data.rows}
+            {
+                row.get(lsf.stats_instance_name(), lsf.empty_string())
+                for row in self.data.rows
+            }
         )
         self.data.configs = sorted(
-            {row.get(lsf.stats_config_name(), "") for row in self.data.rows}
+            {
+                row.get(lsf.stats_config_name(), lsf.empty_string())
+                for row in self.data.rows
+            }
         )
         self.data.instances = all_instances
 
@@ -171,6 +164,12 @@ class StudyEvaluator:
             len(self.data.instances),
             len(self.data.configs),
         )
+
+    def _cap_solving_time(self, row: dict[str, Any]) -> None:
+        """Caps the solving time in the row to the specified time limit."""
+        solving_time = row.get(lsf.stats_solving_time())
+        if isinstance(solving_time, (int, float)) and solving_time > self.time_limit:
+            row[lsf.stats_solving_time()] = self.time_limit
 
     def _filter_complete_instances(self) -> None:
         """Filters to keep only instances where all configurations have results."""
@@ -190,7 +189,8 @@ class StudyEvaluator:
         filtered_rows = [
             row
             for row in self.data.rows
-            if row.get(lsf.stats_instance_name(), "") in complete_instances
+            if row.get(lsf.stats_instance_name(), lsf.empty_string())
+            in complete_instances
         ]
         self.data.rows = filtered_rows
 
@@ -204,6 +204,45 @@ class StudyEvaluator:
         logger.info(
             "Filtered to %d complete instances (removed %d incomplete)",
             len(complete_instances),
+            removed_count,
+        )
+
+    def _filter_converged_inconsistent_instances(self) -> None:
+        """Filters out instances that converged but have inconsistent solution values."""
+        consistent_or_terminated_instances = []
+        for instance in self.data.instances:
+            is_terminated_by_time_limit = any(
+                self._is_terminated_by_time_limit(instance, config)
+                for config in self.data.configs
+            )
+            if is_terminated_by_time_limit:
+                consistent_or_terminated_instances.append(instance)
+            elif self._compute_consistent_solution_filter([instance]).instances:
+                consistent_or_terminated_instances.append(instance)
+
+        removed_count = len(self.data.instances) - len(
+            consistent_or_terminated_instances
+        )
+        self.data.instances = consistent_or_terminated_instances
+
+        filtered_rows = [
+            row
+            for row in self.data.rows
+            if row.get(lsf.stats_instance_name(), lsf.empty_string())
+            in consistent_or_terminated_instances
+        ]
+        self.data.rows = filtered_rows
+
+        filtered_matrix = {
+            key: value
+            for key, value in self.data.data_matrix.items()
+            if key[0] in consistent_or_terminated_instances
+        }
+        self.data.data_matrix = filtered_matrix
+
+        logger.info(
+            "Filtered to %d consistent instances (removed %d inconsistent)",
+            len(consistent_or_terminated_instances),
             removed_count,
         )
 
@@ -255,13 +294,9 @@ class StudyEvaluator:
             True if terminated by time limit, False otherwise.
         """
         row_data = self.data.data_matrix.get((instance, config), {})
-        mip_gap = row_data.get(lsf.stats_mip_gap())
+        solving_time = row_data.get(lsf.stats_solving_time())
 
-        if mip_gap is None:
-            # No gap data - assume time limit hit
-            return True
-
-        return mip_gap > self.filter_config.optimal_gap_threshold
+        return solving_time == self.time_limit
 
     def _compute_all_terminated_filter(self) -> FilterResult:
         """Computes instances where all configs terminated successfully.
@@ -368,13 +403,7 @@ class StudyEvaluator:
         reference = values[0]
 
         for val in values[1:]:
-            max_abs = max(abs(reference), abs(val))
-            tolerance = max(
-                self.filter_config.solution_value_rel_tol * max_abs,
-                self.filter_config.solution_value_abs_tol,
-            )
-
-            if abs(reference - val) > tolerance:
+            if abs(reference - val) > s.StaticSettings.feasibility_tolerance:
                 return False
 
         return True
@@ -434,7 +463,7 @@ class StudyEvaluator:
         Returns:
             Float value or None if empty/invalid.
         """
-        if value is None or value.strip() == "":
+        if value is None or value.strip() == lsf.empty_string():
             return None
         try:
             return float(value)
