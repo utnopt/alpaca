@@ -25,6 +25,23 @@ class BoundPropagator:
     def __init__(self, model_data: mda.ModelData):
         self.model_data = model_data
 
+    def set_variable_bounds_from_cache(
+        self, obbt_variable_bounds: dict[str, tuple[float, float]]
+    ) -> None:
+        """Sets variable bounds based on cached OBBT results."""
+        for var_name, (lb, ub) in obbt_variable_bounds.items():
+            if var_name in self.model_data.variables:
+                variable = self.model_data.variables[var_name]
+                variable.lb = max(variable.lb, lb)
+                variable.ub = min(variable.ub, ub)
+
+    def get_variable_bounds_for_cache(self) -> dict[str, tuple[float, float]]:
+        """Retrieves current variable bounds for caching OBBT results."""
+        return {
+            var_name: (variable.lb, variable.ub)
+            for var_name, variable in self.model_data.variables.items()
+        }
+
     def propagate_bounds(self):
         """Performs bound propagation on constraints and expressions."""
         logger.info(lsf.info_propagate_bounds())

@@ -288,16 +288,24 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         osr.OsilReader(self, path).build_from_osil()
         etr.ExpressionTree(self).decompose()
 
-    def build_pwl_relaxation_model(self) -> None:
+    def build_pwl_relaxation_model(
+        self, obbt_variable_bounds=None
+    ) -> dict[str, tuple[float, float]]:
         """Builds the piecewise linear relaxation model."""
+        if self.settings.filter_max_nr_variables:
+            self._check_nr_variables()
         multilinear_handler = mlh.MultilinearHandler(self)
         multilinear_handler.handle()
 
         bound_propagator = bpr.BoundPropagator(self)
-        bound_propagator.propagate_bounds()
-        if self.settings.bound_propagation >= 1:
-            self._translate_linear_expressions_to_constraints()
-            bound_propagator.apply_obbt()
+        if obbt_variable_bounds:
+            bound_propagator.set_variable_bounds_from_cache(obbt_variable_bounds)
+        else:
+            bound_propagator.propagate_bounds()
+            if self.settings.bound_propagation >= 1:
+                self._translate_linear_expressions_to_constraints()
+                bound_propagator.apply_obbt()
+                obbt_variable_bounds = bound_propagator.get_variable_bounds_for_cache()
 
         if self.settings.filter_unbounded_variables:
             self._check_infinite_bounds()
@@ -307,13 +315,14 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
 
         if self.settings.pwl_method == lsf.pwl_method_none():
             self._translate_linear_expressions_to_constraints()
-            return
+            return obbt_variable_bounds
 
         dis.BreakpointGenerator(self).generate_breakpoints()
 
         pwh.PWLHandler(self).apply_relaxations()
 
         self._translate_linear_expressions_to_constraints()
+        return obbt_variable_bounds
 
     def _check_infinite_bounds(self) -> None:
         for variable in self.variables.values():
@@ -325,6 +334,14 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
                     raise ValueError(
                         lsf.error_filter_infinite_bounds_discretized_var(variable.name)
                     )
+
+    def _check_nr_variables(self) -> None:
+        if len(self.variables) > self.settings.filter_max_nr_variables:
+            raise ValueError(
+                lsf.error_filter_too_many_variables(
+                    len(self.variables), self.settings.filter_max_nr_variables
+                )
+            )
 
     def _translate_linear_expressions_to_constraints(
         self,

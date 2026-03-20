@@ -203,18 +203,14 @@ class StudyPipeline:
             results: StudyResults to update.
             max_workers: Maximum parallel processes.
         """
-        jobs = [
-            (instance, config) for instance in self.instances for config in self.configs
-        ]
+        jobs = self.instances
 
         num_cores = os.cpu_count() or 1
         core_sets = self._compute_core_sets(max_workers, num_cores)
 
-        # Explicitly track free worker slots as suggested by Copilot
         available_slots = list(range(max_workers))
 
-        # We now store the assigned slot in the tuple so we know what to free later
-        running: dict[subprocess.Popen, tuple[str, str, int, int]] = {}
+        running: dict[subprocess.Popen, tuple[str, int, int]] = {}
         job_index = 0
         completed = 0
         total = len(jobs)
@@ -222,37 +218,23 @@ class StudyPipeline:
         while completed < total:
             # Only start a new job if there's a slot explicitly available
             while available_slots and job_index < total:
-                instance_path, config_path = jobs[job_index]
+                instance_path = jobs[job_index]
                 instance_name = extract_name(instance_path)
-
-                if instance_name in self._failed_instances:
-                    completed += 1
-                    results.skipped_runs += 1
-                    logger.info(
-                        "[%d/%d] SKIPPED: %s + %s (prior failure)",
-                        completed,
-                        total,
-                        instance_name,
-                        extract_name(config_path),
-                    )
-                    job_index += 1
-                    continue
 
                 # Take the next available slot identifier (e.g., 0, 1, or 2)
                 slot = available_slots.pop(0)
                 core_set = core_sets[slot % len(core_sets)]
 
-                proc = self._start_job(instance_path, config_path, core_set)
+                proc = self._start_job(instance_path, core_set)
 
                 # Store the slot alongside the process so we can return it when done
-                running[proc] = (instance_path, config_path, job_index, slot)
+                running[proc] = (instance_path, job_index, slot)
 
                 logger.info(
-                    "[%d/%d] RUNNING: %s + %s (cores %s, PID %d)",
+                    "[%d/%d] RUNNING: %s (cores %s, PID %d)",
                     job_index + 1,
                     total,
                     instance_name,
-                    extract_name(config_path),
                     core_set,
                     proc.pid,
                 )
@@ -271,13 +253,12 @@ class StudyPipeline:
 
                 for proc in finished_procs:
                     # Retrieve the specific slot that this process was occupying
-                    instance_path, config_path, _, slot = running.pop(proc)
+                    instance_path, _, slot = running.pop(proc)
 
                     # Return the slot back to the available pool
                     available_slots.append(slot)
 
                     instance_name = extract_name(instance_path)
-                    config_name = extract_name(config_path)
                     completed += 1
 
                     stdout, stderr = proc.communicate()
@@ -287,35 +268,30 @@ class StudyPipeline:
                         csv_file.flush()
                         results.successful_runs += 1
                         logger.info(
-                            "[%d/%d] SUCCESS: %s + %s",
+                            "[%d/%d] SUCCESS: %s",
                             completed,
                             total,
                             instance_name,
-                            config_name,
                         )
                     else:
                         self._failed_instances.add(instance_name)
                         results.failed_instances.add(instance_name)
-                        error_file.write(f"=== {instance_name} + {config_name} ===\n")
+                        error_file.write(f"=== {instance_name} ===\n")
                         error_file.write(stderr)
                         error_file.write("\n\n")
                         error_file.flush()
                         logger.error(
-                            "[%d/%d] FAILED: %s + %s",
+                            "[%d/%d] FAILED: %s",
                             completed,
                             total,
                             instance_name,
-                            config_name,
                         )
 
-    def _start_job(
-        self, instance_path: str, config_path: str, core_set: str
-    ) -> subprocess.Popen:
+    def _start_job(self, instance_path: str, core_set: str) -> subprocess.Popen:
         """Starts a single job as a subprocess.
 
         Args:
             instance_path: Path to the instance file.
-            config_path: Path to the config file.
             core_set: CPU cores to use (e.g., "0-3").
 
         Returns:
@@ -327,8 +303,8 @@ class StudyPipeline:
             "alpaca.study.run_job",
             "--instance",
             instance_path,
-            "--config",
-            config_path,
+            "--configs",
+            tuple(self.configs),
             "--threads",
             str(self.config.threads_per_job),
         ]

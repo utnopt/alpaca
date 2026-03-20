@@ -45,6 +45,8 @@ class Alpaca:
         self.model_data = mda.ModelData(self.user_settings)
         self.stair_locatelli: slo.StairLocatelli | None = None
         self.solver: slv.Solver | None = None
+        self.obbt_variable_bounds: dict[str, tuple[float, float]] = {}
+        self.locatelli_vertices: dict[str, list[tuple[float, float]]] = {}
 
     def configure_logging(self, path: str, level: str = "INFO") -> None:
         """Configures global logging for both console and file output.
@@ -82,11 +84,22 @@ class Alpaca:
         """
         self.statistics.build_started()
         self.statistics.track_statistics_original_model()
-        self.model_data.build_pwl_relaxation_model()
+        obbt_variable_bounds = (
+            self.obbt_variable_bounds if self.obbt_variable_bounds else None
+        )
+        self.obbt_variable_bounds = self.model_data.build_pwl_relaxation_model(
+            obbt_variable_bounds=obbt_variable_bounds
+        )
         self.statistics.track_statistics_pwl_model()
 
         if self.user_settings.feature_stair_locatelli:
-            self.stair_locatelli = slo.StairLocatelli(self.model_data)
+            locatelli_vertices = (
+                self.locatelli_vertices if self.locatelli_vertices else None
+            )
+            self.stair_locatelli = slo.StairLocatelli(
+                self.model_data, locatelli_vertices=locatelli_vertices
+            )
+            self.locatelli_vertices = self.stair_locatelli.locatelli_vertices
 
         external_solver = mm.MIPModel(
             self.model_data,

@@ -20,13 +20,16 @@ import alpaca.settings as s
 class StairLocatelli:
     """Adds stair locatelli cuts to model data."""
 
-    def __init__(self, model_data: md.ModelData):
+    def __init__(self, model_data: md.ModelData, locatelli_vertices=None):
         logger.info(lsf.info_init_stair_locatelli())
         self.model_data = model_data
         self.settings = model_data.settings
+        self.locatelli_vertices = (
+            locatelli_vertices if locatelli_vertices is not None else {}
+        )
 
         # Initialize components
-        self.projector = dop.DomainProjector(model_data)
+        self.projector = dop.DomainProjector(model_data, self.locatelli_vertices)
         self.cut_generator = lcg.LocatelliCutGenerator(model_data)
 
         # Storage for results
@@ -49,6 +52,8 @@ class StairLocatelli:
                 if self.settings.feature_stair_locatelli <= 2
                 else self.projector.get_projected_vertices_indicator(expr)
             )
+            if self.settings.feature_stair_locatelli <= 2:
+                self.locatelli_vertices[expr.name] = vertices
             self.bilinear_projected_domains_polygon.append((expr, vertices))
             if self.settings.feature_stair_locatelli == 1:
                 vertices = uge.calculate_convex_hull_2d(vertices)

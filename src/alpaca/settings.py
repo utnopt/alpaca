@@ -124,6 +124,9 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.filter_unbounded_variables = int(
             config_dict.get("filter/unbounded_variables", 1)
         )
+        self.filter_max_nr_variables = int(
+            config_dict.get("filter/max_nr_variables", StaticSettings.infinity)
+        )
 
     def update_from_other(self, other_settings: "UserSettings") -> None:
         """
