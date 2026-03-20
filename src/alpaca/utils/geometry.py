@@ -8,6 +8,16 @@ from scipy.spatial import ConvexHull, Delaunay  # pylint: disable=no-name-in-mod
 import alpaca.settings as s
 
 
+def calculate_convex_hull_2d(
+    vertices: list[tuple[float, float]],
+) -> list[tuple[float, float]]:
+    """Calculate the convex hull of a set of 2D vertices."""
+    if len(vertices) < 3:
+        return vertices
+    hull = ConvexHull(vertices)
+    return [tuple(vertices[i]) for i in hull.vertices]
+
+
 def calculate_hyperplane_for_vertex_triple(v1, v2, v3):
     """
     Calculate hyperplane coefficients for three points in 2D (z = ax + by + c).

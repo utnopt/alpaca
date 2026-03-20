@@ -26,10 +26,10 @@ def parse_arguments() -> argparse.Namespace:
         help="Path to the .osil instance file.",
     )
     parser.add_argument(
-        "--config",
+        "--configs",
         type=str,
         required=True,
-        help="Path to the .json configuration file.",
+        help="Paths to the .json configuration files.",
     )
     parser.add_argument(
         "--threads",
@@ -68,7 +68,6 @@ def run_single_job(args: argparse.Namespace) -> int:
         Exit code (0 for success, 1 for error).
     """
     instance_name = extract_name(args.instance)
-    config_name = extract_name(args.config)
 
     original_stdout = sys.stdout
     original_stderr = sys.stderr
@@ -78,33 +77,45 @@ def run_single_job(args: argparse.Namespace) -> int:
             sys.stdout = devnull
             sys.stderr = devnull
 
-            alpaca = alp.read_model_from_osil(args.instance)
+            csv_rows = []
+            obbt_variable_bounds = {}
+            locatelli_vertices = {}
+            for config_path in args.configs.split(","):
+                config_name = extract_name(config_path)
 
-            if args.log_dir is not None:
-                os.makedirs(args.log_dir, exist_ok=True)
-                log_path = os.path.join(
-                    args.log_dir, f"{instance_name}_{config_name}.log"
-                )
-                alpaca.configure_logging(log_path, level="INFO")
+                alpaca = alp.read_model_from_osil(args.instance)
+                alpaca.obbt_variable_bounds = obbt_variable_bounds
+                alpaca.locatelli_vertices = locatelli_vertices
 
-            alpaca.customize_settings(args.config)
-            alpaca.user_settings.solver_thread_limit = min(8, args.threads)
-            alpaca.build_pwl_relaxation_solver()
-            alpaca.solve()
+                if args.log_dir is not None:
+                    os.makedirs(args.log_dir, exist_ok=True)
+                    log_path = os.path.join(
+                        args.log_dir, f"{instance_name}_{config_name}.log"
+                    )
+                    alpaca.configure_logging(log_path, level="INFO")
 
-            csv_row = alpaca.statistics.result_row_print
+                alpaca.customize_settings(config_path)
+                alpaca.user_settings.solver_thread_limit = min(8, args.threads)
+                alpaca.build_pwl_relaxation_solver()
+                alpaca.solve()
+
+                obbt_variable_bounds = alpaca.obbt_variable_bounds
+                locatelli_vertices = alpaca.locatelli_vertices
+
+                csv_rows.append(alpaca.statistics.result_row_print)
 
         sys.stdout = original_stdout
         sys.stderr = original_stderr
 
-        print(csv_row)
+        for csv_row in csv_rows:
+            print(csv_row)
         return 0
 
     except Exception as exc:  # pylint: disable=broad-exception-caught
         sys.stdout = original_stdout
         sys.stderr = original_stderr
 
-        error_msg = f"{instance_name} + {config_name}: {type(exc).__name__}: {exc}"
+        error_msg = f"{instance_name}: {type(exc).__name__}: {exc}"
         print(error_msg, file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
 

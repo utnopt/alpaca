@@ -16,7 +16,7 @@ from pathlib import Path
 
 from alpaca.study.pipeline import run_study, StudyResults
 from alpaca.study.evaluator import StudyEvaluator
-from alpaca.study.latex_generator import LaTeXGenerator, LaTeXConfig
+from alpaca.study.latex_generator import LatexTableGenerator, GeneratorConfig
 from alpaca.utils.logger import logger
 from alpaca.utils import inout as ut_io
 
@@ -134,9 +134,10 @@ def create_parser() -> argparse.ArgumentParser:
         help="Directory for output files (tables, plots).",
     )
     eval_parser.add_argument(
-        "--standalone",
-        action="store_true",
-        help="Generate standalone LaTeX documents.",
+        "--time-limit",
+        type=int,
+        default=3600,
+        help="Time limit in seconds.",
     )
 
     return parser
@@ -171,7 +172,7 @@ def run_command(args: argparse.Namespace) -> int:
     )
 
     if not args.no_evaluate and results.successful_runs > 0:
-        evaluate_csv(results.csv_path, args.results)
+        evaluate_csv(results.csv_path, args.results, args.time_limit)
 
     if results.failed_instances:
         return 1
@@ -188,36 +189,33 @@ def evaluate_command(args: argparse.Namespace) -> int:
         Exit code (0 for success, 1 for failure).
     """
     logger.info("Evaluating CSV: %s", args.csv)
-    evaluate_csv(args.csv, args.results)
+    evaluate_csv(args.csv, args.results, args.time_limit)
     return 0
 
 
-def evaluate_csv(csv_path: str, results_dir: str) -> None:
+def evaluate_csv(csv_path: str, results_dir: str, time_limit: int) -> None:
     """Evaluates a CSV file and generates LaTeX outputs.
 
     Args:
         csv_path: Path to the CSV results file.
         results_dir: Base directory for output.
+        time_limit: Time limit for runs (in seconds).
     """
     logger.info("Starting evaluation...")
 
-    evaluator = StudyEvaluator(csv_path)
+    evaluator = StudyEvaluator(csv_path, time_limit)
 
-    latex_config = LaTeXConfig(
-        tables_dir=str(Path(results_dir) / "tables"),
-        plots_dir=str(Path(results_dir) / "plots"),
+    latex_config = GeneratorConfig(
+        evaluator,
+        output_dir=str(Path(results_dir) / "tables"),
     )
 
-    generator = LaTeXGenerator(evaluator, latex_config)
-    outputs = generator.generate_all()
+    generator = LatexTableGenerator(latex_config)
+    outputs = generator.generate_all_predefined_tables()
 
-    logger.info("Generated %d tables:", len(outputs["tables"]))
-    for table_path in outputs["tables"]:
+    logger.info("Generated %d tables:", len(outputs))
+    for table_path in outputs:
         logger.info("  - %s", table_path)
-
-    logger.info("Generated %d plots:", len(outputs["plots"]))
-    for plot_path in outputs["plots"]:
-        logger.info("  - %s", plot_path)
 
 
 def main() -> int:

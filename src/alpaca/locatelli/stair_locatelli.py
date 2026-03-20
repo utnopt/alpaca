@@ -20,19 +20,23 @@ import alpaca.settings as s
 class StairLocatelli:
     """Adds stair locatelli cuts to model data."""
 
-    def __init__(self, model_data: md.ModelData):
+    def __init__(self, model_data: md.ModelData, locatelli_vertices=None):
         logger.info(lsf.info_init_stair_locatelli())
         self.model_data = model_data
         self.settings = model_data.settings
+        self.locatelli_vertices = (
+            locatelli_vertices if locatelli_vertices is not None else {}
+        )
 
         # Initialize components
-        self.projector = dop.DomainProjector(model_data)
+        self.projector = dop.DomainProjector(model_data, self.locatelli_vertices)
         self.cut_generator = lcg.LocatelliCutGenerator(model_data)
 
         # Storage for results
         self.bilinear_projected_domains_polygon: list[
             tuple[ble.BilinearExpression, list[tuple[float, float]]]
         ] = []
+        self.nr_cuts = 0
 
         # Execute
         self._run()
@@ -48,12 +52,17 @@ class StairLocatelli:
                 if self.settings.feature_stair_locatelli <= 2
                 else self.projector.get_projected_vertices_indicator(expr)
             )
+            if self.settings.feature_stair_locatelli <= 2:
+                self.locatelli_vertices[expr.name] = vertices
             self.bilinear_projected_domains_polygon.append((expr, vertices))
+            if self.settings.feature_stair_locatelli == 1:
+                vertices = uge.calculate_convex_hull_2d(vertices)
 
             # 2. Generate Cuts (Constraint creation)
             cuts_added = self.cut_generator.generate_cuts(expr, vertices)
             total_cuts += cuts_added
 
+        self.nr_cuts = total_cuts
         logger.info(lsf.info_total_stair_locatelli_cuts_added(total_cuts))
 
     def calculate_mean_bilinear_domain_volume(self, is_polytope=True):

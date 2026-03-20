@@ -16,8 +16,11 @@ class DomainProjector:
     """Calculates polygon containing the feasible set
     of the projected domain of a bilinear term."""
 
-    def __init__(self, model_data):
+    def __init__(
+        self, model_data, locatelli_vertices: dict[str, list[tuple[float, float]]]
+    ):
         self.model_data = model_data
+        self.locatelli_vertices = locatelli_vertices
         self.settings = model_data.settings
         self.external_solver = mm.MIPModel(model_data)
         self._configure_solver()
@@ -97,6 +100,8 @@ class DomainProjector:
         Main entry point to find the feasible polygon for a bilinear expression.
         Executes the exact scanning and tracing logic from the original StairLocatelli.
         """
+        if bilinear_expression.name in self.locatelli_vertices:
+            return self.locatelli_vertices[bilinear_expression.name]
         x, y = tuple(bilinear_expression.variables)
 
         # Initialize boundary trackers

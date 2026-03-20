@@ -31,7 +31,7 @@ from alpaca.study.evaluator import (
     StudyEvaluator,
     StudyData,
 )
-from alpaca.study.latex_generator import LaTeXGenerator, LaTeXConfig
+from alpaca.study.latex_generator import LatexTableGenerator
 
 __all__ = [
     "StudyConfig",
@@ -41,6 +41,5 @@ __all__ = [
     "discover_files",
     "StudyEvaluator",
     "StudyData",
-    "LaTeXGenerator",
-    "LaTeXConfig",
+    "LatexTableGenerator",
 ]
