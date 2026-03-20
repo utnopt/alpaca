@@ -525,16 +525,3 @@ class LatexTableGenerator:
         """Save config name legend to file."""
         legend = self.get_config_legend()
         return self.save_table(legend, filename)
-
-
-if __name__ == "__main__":
-    RESULTS_PATH = (
-        "C:/Users/kuen/Documents/Git/alpaca/data/study/"
-        "study_results_2026-03-15_19-36-27.csv"
-    )
-    TABLES_PATH = "C:/Users/kuen/Documents/Git/alpaca/data/study/tables/"
-    evalu = StudyEvaluator(RESULTS_PATH)
-
-    gen_config = GeneratorConfig(evaluator=evalu, output_dir=TABLES_PATH)
-    generator = LatexTableGenerator(gen_config)
-    outputs = generator.generate_all_predefined_tables()

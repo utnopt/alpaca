@@ -27,7 +27,7 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument(
         "--configs",
-        type=tuple[str],
+        type=str,
         required=True,
         help="Paths to the .json configuration files.",
     )
@@ -80,7 +80,7 @@ def run_single_job(args: argparse.Namespace) -> int:
             csv_rows = []
             obbt_variable_bounds = {}
             locatelli_vertices = {}
-            for config_path in args.configs:
+            for config_path in args.configs.split(","):
                 config_name = extract_name(config_path)
 
                 alpaca = alp.read_model_from_osil(args.instance)
@@ -94,7 +94,7 @@ def run_single_job(args: argparse.Namespace) -> int:
                     )
                     alpaca.configure_logging(log_path, level="INFO")
 
-                alpaca.customize_settings(args.config)
+                alpaca.customize_settings(config_path)
                 alpaca.user_settings.solver_thread_limit = min(8, args.threads)
                 alpaca.build_pwl_relaxation_solver()
                 alpaca.solve()

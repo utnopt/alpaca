@@ -63,8 +63,10 @@ class Messages:
     def error_filter_too_many_variables(
         cls, num_variables: int, max_variables: int
     ) -> str:
-        return (f"Model has {num_variables} variables, "
-                f"which exceeds the maximum of {max_variables} allowed.")
+        return (
+            f"Model has {num_variables} variables, "
+            f"which exceeds the maximum of {max_variables} allowed."
+        )
 
     @classmethod
     def error_filter_no_bilinear_expressions(cls) -> str:

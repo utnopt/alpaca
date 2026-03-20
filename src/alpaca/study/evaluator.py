@@ -281,10 +281,7 @@ class StudyEvaluator:
     def _is_terminated_by_time_limit(self, instance: str, config: str) -> bool:
         """Checks if a run was terminated by the time limit.
 
-        Uses MIP gap to determine termination status:
-        - gap == 0 (or <= threshold): terminated successfully (optimal or within threshold)
-        - gap > threshold: terminated by time limit (or other limit)
-        - gap is None: treat as terminated by time limit (inconclusive)
+        Uses solving time to determine termination status.
 
         Args:
             instance: Instance name.
@@ -385,11 +382,9 @@ class StudyEvaluator:
 
         return FilterResult(instances=consistent_instances, warnings=warnings)
 
-    def _are_solution_values_consistent(self, values: list[float]) -> bool:
+    @staticmethod
+    def _are_solution_values_consistent(values: list[float]) -> bool:
         """Checks if solution values are consistent within tolerance.
-
-        Uses both relative and absolute tolerance:
-        |a - b| <= max(rel_tol * max(|a|, |b|), abs_tol)
 
         Args:
             values: List of solution values to compare.

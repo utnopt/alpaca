@@ -249,7 +249,7 @@ class Statistics:
     @classmethod
     def stats_mpip_nr_instances(cls, f="") -> str:
         if f == cls.stats_format_latex():
-            return r"\# Cuts MPIP"
+            return r"\# Instances MPIP"
         return "mpip_nr_instances"
 
     @classmethod

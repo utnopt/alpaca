@@ -56,7 +56,7 @@ class StudyResults:
         successful_runs: Number of successful runs written to CSV.
         failed_instances: Set of instance names that had at least one failure.
         skipped_runs: Number of runs skipped due to prior failures.
-        total_combinations: Total number of instance-config combinations.
+        total_instances: Total number of instances.
         execution_time: Total execution time in seconds.
     """
 
@@ -64,7 +64,7 @@ class StudyResults:
     successful_runs: int = 0
     failed_instances: set[str] = field(default_factory=set)
     skipped_runs: int = 0
-    total_combinations: int = 0
+    total_instances: int = 0
     execution_time: float = 0.0
 
 
@@ -157,7 +157,7 @@ class StudyPipeline:
 
         results = StudyResults(
             csv_path=csv_path,
-            total_combinations=len(self.instances) * len(self.configs),
+            total_instances=len(self.instances),
         )
 
         effective_workers = self.config.get_effective_max_workers()
@@ -304,7 +304,7 @@ class StudyPipeline:
             "--instance",
             instance_path,
             "--configs",
-            tuple(self.configs),
+            ",".join(self.configs),
             "--threads",
             str(self.config.threads_per_job),
         ]
@@ -370,7 +370,7 @@ class StudyPipeline:
         """
         logger.info("=" * 60)
         logger.info("Study completed!")
-        logger.info("  Total combinations: %d", results.total_combinations)
+        logger.info("  Total instances: %d", results.total_instances)
         logger.info("  Successful runs: %d", results.successful_runs)
         logger.info("  Skipped runs: %d", results.skipped_runs)
         logger.info("  Failed instances: %d", len(results.failed_instances))

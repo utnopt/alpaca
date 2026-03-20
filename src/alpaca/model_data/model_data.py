@@ -315,14 +315,14 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
 
         if self.settings.pwl_method == lsf.pwl_method_none():
             self._translate_linear_expressions_to_constraints()
-            return obbt_variable_bounds
+            return obbt_variable_bounds if obbt_variable_bounds else {}
 
         dis.BreakpointGenerator(self).generate_breakpoints()
 
         pwh.PWLHandler(self).apply_relaxations()
 
         self._translate_linear_expressions_to_constraints()
-        return obbt_variable_bounds
+        return obbt_variable_bounds if obbt_variable_bounds else {}
 
     def _check_infinite_bounds(self) -> None:
         for variable in self.variables.values():
