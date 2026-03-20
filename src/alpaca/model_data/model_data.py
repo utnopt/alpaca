@@ -292,8 +292,7 @@ class ModelData:  # pylint: disable=too-many-instance-attributes
         self, obbt_variable_bounds=None
     ) -> dict[str, tuple[float, float]]:
         """Builds the piecewise linear relaxation model."""
-        if self.settings.filter_max_nr_variables:
-            self._check_nr_variables()
+        self._check_nr_variables()
         multilinear_handler = mlh.MultilinearHandler(self)
         multilinear_handler.handle()
 
