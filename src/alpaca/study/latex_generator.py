@@ -440,11 +440,21 @@ class LatexTableGenerator:
             ),
             TableDefinition(
                 column=lsf.stats_nr_nodes(),
-                filter_type=InstanceFilter.NONE,
+                filter_type=InstanceFilter.ALL_TERMINATED,
                 metadata=TableMetadata(
                     filename="table_instance_nr_nodes.tex",
                     caption="Number of nodes per instance and configuration",
                     label="tab:instance_nr_nodes",
+                ),
+                format_options=TableFormatOptions(precision=0),
+            ),
+            TableDefinition(
+                column=lsf.stats_root_solution_value(),
+                filter_type=InstanceFilter.NONE,
+                metadata=TableMetadata(
+                    filename="table_instance_root_solution.tex",
+                    caption="Root relaxation solution per instance and configuration",
+                    label="tab:instance_root_solution",
                 ),
                 format_options=TableFormatOptions(precision=0),
             ),
@@ -478,7 +488,7 @@ class LatexTableGenerator:
                 metadata=TableMetadata(
                     filename="table_instance_domain_volume_polygon.tex",
                     caption="Domain volume reduction relative to McCormick"
-                    " per instance and configuration",
+                    " over polygon per instance and configuration",
                     label="tab:instance_domain_volume_polygon",
                 ),
                 format_options=TableFormatOptions(precision=2),
@@ -489,7 +499,7 @@ class LatexTableGenerator:
                 metadata=TableMetadata(
                     filename="table_instance_domain_volume_polytope.tex",
                     caption="Domain volume reduction relative to McCormick"
-                    " per instance and configuration",
+                    " over polytope per instance and configuration",
                     label="tab:instance_domain_volume_polytope",
                 ),
                 format_options=TableFormatOptions(precision=2),
