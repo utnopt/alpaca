@@ -90,7 +90,8 @@ class DomainProjector:
                 (x_ub, y_ub),
                 (x_ub, y.lb),
                 (x.ub, y.lb),
-            ]
+            ],
+            atol=2 * self.settings.feature_stair_locatelli_mu,
         )
 
     def get_projected_vertices(  # pylint: disable=too-many-locals, too-many-statements, too-many-branches

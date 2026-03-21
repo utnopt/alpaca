@@ -52,6 +52,7 @@ class StairLocatelli:
                 if self.settings.feature_stair_locatelli <= 2
                 else self.projector.get_projected_vertices_indicator(expr)
             )
+            vertices = uge.straighten_vertices(vertices)
             if self.settings.feature_stair_locatelli <= 2:
                 self.locatelli_vertices[expr.name] = vertices
             self.bilinear_projected_domains_polygon.append((expr, vertices))
