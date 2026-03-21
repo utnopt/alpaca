@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=too-many-locals
 """
 @authors: kuen,
 """
@@ -300,7 +299,7 @@ class LatexTableGenerator:
         """Build rows and collect values for model size table."""
         instances = self.evaluator.get_filtered_instances(InstanceFilter.NONE)
         columns = definition.column
-        fmt = definition.format_options
+        format_options = definition.format_options
 
         rows = []
         all_values = {col: [] for col in columns}
@@ -312,10 +311,38 @@ class LatexTableGenerator:
                     definition.config
                 ]
                 all_values[col].append(value)
-                row.append(self._format_value(value, fmt))
+                row.append(self._format_value(value, format_options))
             rows.append(row)
 
         return rows, all_values
+
+    def _append_model_size_summary_rows(
+        self,
+        rows: list[list[str]],
+        all_values: dict[str, list[float]],
+        columns: list[str],
+        format_options,
+    ) -> None:
+        """Append summary rows (mean, SGM, median) for model size table."""
+        mean_row = [lsf.mean_label()]
+        sgm_row = [lsf.shifted_geometric_mean_label()]
+        median_row = [lsf.median_label()]
+
+        for col in columns:
+            col_values = all_values[col]
+            mean_row.append(
+                self._format_value(self._compute_mean(col_values), format_options)
+            )
+            sgm_row.append(
+                self._format_value(
+                    self._compute_shifted_geometric_mean(col_values), format_options
+                )
+            )
+            median_row.append(
+                self._format_value(self._compute_median(col_values), format_options)
+            )
+
+        rows.extend([mean_row, sgm_row, median_row])
 
     def generate_instance_model_size_table(self, definition: TableDefinition) -> str:
         """Generate table with instances as rows and model sizes as columns.
@@ -326,26 +353,11 @@ class LatexTableGenerator:
         Returns:
             LaTeX table code.
         """
-        columns = definition.column
-        fmt = definition.format_options
-
-        headers = self._build_model_size_headers(columns)
+        headers = self._build_model_size_headers(definition.column)
         rows, all_values = self._build_model_size_rows(definition)
-
-        mean_row = [lsf.mean_label()]
-        sgm_row = [lsf.shifted_geometric_mean_label()]
-        median_row = [lsf.median_label()]
-        for col in columns:
-            mean_value = self._compute_mean(all_values[col])
-            sgm_value = self._compute_shifted_geometric_mean(all_values[col])
-            median_value = self._compute_median(all_values[col])
-            mean_row.append(self._format_value(mean_value, fmt))
-            sgm_row.append(self._format_value(sgm_value, fmt))
-            median_row.append(self._format_value(median_value, fmt))
-        rows.append(mean_row)
-        rows.append(sgm_row)
-        rows.append(median_row)
-
+        self._append_model_size_summary_rows(
+            rows, all_values, definition.column, definition.format_options
+        )
         return self._build_latex_table(headers, rows, definition.metadata)
 
     def _build_pivot_headers(self) -> list[str]:
@@ -355,57 +367,123 @@ class LatexTableGenerator:
             headers.append(lsf.escape_underscore(self._config_shortnames[config]))
         return headers
 
+    def _get_relative_to_value(
+        self, values: dict[str, float | None], config: str
+    ) -> float | None:
+        """Get the relative-to value from the specified config."""
+        if config == lsf.empty_string():
+            return None
+        return values.get(config)
+
+    def _compute_bold_value(
+        self, values: dict[str, float | None], bold_type: str | None
+    ) -> float | None:
+        """Compute the value that should be bolded based on bold_type."""
+        if bold_type is None:
+            return None
+
+        config_values = [values.get(config) for config in self.evaluator.data.configs]
+
+        if any(val is None for val in config_values):
+            return None
+
+        return max(config_values) if bold_type == "max" else min(config_values)
+
+    def _build_pivot_row_for_instance(
+        self, instance: str, definition: TableDefinition
+    ) -> tuple[list[str], dict[str, float | None]]:
+        """Build a single pivot table row for an instance."""
+        row = [lsf.escape_underscore(instance)]
+        values = self.evaluator.get_column_values_for_instance(
+            definition.column, instance
+        )
+        relative_to = self._get_relative_to_value(values, definition.config)
+        bold_value = self._compute_bold_value(values, definition.format_options.bold)
+
+        for config in self.evaluator.data.configs:
+            value = values.get(config)
+            bold = bold_value is not None and value == bold_value
+            formatted_value = 0.0 if value is None else value
+            row.append(
+                self._format_value(
+                    formatted_value, definition.format_options, relative_to, bold=bold
+                )
+            )
+
+        return row, values
+
     def _build_pivot_rows(
         self, definition: TableDefinition
     ) -> tuple[list[list[str]], dict[str, list[float]]]:
         """Build rows and collect values for pivot table."""
         instances = self.evaluator.get_filtered_instances(definition.filter_type)
-        fmt = definition.format_options
-
         rows = []
         all_values = {cfg: [] for cfg in self.evaluator.data.configs}
 
         for instance in instances:
-            row = [lsf.escape_underscore(instance)]
-            values = self.evaluator.get_column_values_for_instance(
-                definition.column, instance
-            )
-            relative_to = (
-                None
-                if definition.config == lsf.empty_string()
-                else values.get(definition.config)
-            )
-            bold_value = (
-                None
-                if (
-                    definition.format_options.bold is None
-                    or any(
-                        values.get(config) is None
-                        for config in self.evaluator.data.configs
-                    )
-                )
-                else (
-                    max(values.get(config) for config in self.evaluator.data.configs)
-                    if definition.format_options.bold == "max"
-                    else min(
-                        values.get(config) for config in self.evaluator.data.configs
-                    )
-                )
-            )
-            for config in self.evaluator.data.configs:
-                value = values.get(config)
-                bold = bold_value is not None and value == bold_value
-                value = 0.0 if value is None else value
-                row.append(self._format_value(value, fmt, relative_to, bold=bold))
-            if any(v is None or "inf" in v for v in row):
+            row, values = self._build_pivot_row_for_instance(instance, definition)
+
+            if any(cell is None or "inf" in cell for cell in row):
                 continue
+
             for config in self.evaluator.data.configs:
                 value = values.get(config)
-                value = 0.0 if value is None else value
-                all_values[config].append(value)
+                all_values[config].append(0.0 if value is None else value)
             rows.append(row)
 
         return rows, all_values
+
+    def _compute_relative_to_stats(
+        self, all_values: dict[str, list[float]], config: str
+    ) -> tuple[float | None, float | None, float | None]:
+        """Compute relative-to values for mean, SGM, and median."""
+        if config == lsf.empty_string():
+            return None, None, None
+
+        values = all_values[config]
+        return (
+            self._compute_mean(values),
+            self._compute_shifted_geometric_mean(values),
+            self._compute_median(values),
+        )
+
+    def _append_pivot_summary_rows(
+        self,
+        rows: list[list[str]],
+        all_values: dict[str, list[float]],
+        format_options,
+        relative_to_stats: tuple[float | None, float | None, float | None],
+    ) -> None:
+        """Append summary rows (mean, SGM, median) for pivot table."""
+        relative_to_mean, relative_to_sgm, relative_to_median = relative_to_stats
+
+        mean_row = [lsf.mean_label()]
+        sgm_row = [lsf.shifted_geometric_mean_label()]
+        median_row = [lsf.median_label()]
+
+        for config in self.evaluator.data.configs:
+            config_values = all_values[config]
+            mean_row.append(
+                self._format_value(
+                    self._compute_mean(config_values), format_options, relative_to_mean
+                )
+            )
+            sgm_row.append(
+                self._format_value(
+                    self._compute_shifted_geometric_mean(config_values),
+                    format_options,
+                    relative_to_sgm,
+                )
+            )
+            median_row.append(
+                self._format_value(
+                    self._compute_median(config_values),
+                    format_options,
+                    relative_to_median,
+                )
+            )
+
+        rows.extend([mean_row, sgm_row, median_row])
 
     def generate_instance_pivot_table(self, definition: TableDefinition) -> str:
         """Generate table with instances as rows and configs as columns.
@@ -416,40 +494,15 @@ class LatexTableGenerator:
         Returns:
             LaTeX table code.
         """
-        fmt = definition.format_options
-
         headers = self._build_pivot_headers()
         rows, all_values = self._build_pivot_rows(definition)
 
-        mean_row = [lsf.mean_label()]
-        sgm_row = [lsf.shifted_geometric_mean_label()]
-        median_row = [lsf.median_label()]
-        relative_to_sgm = (
-            self._compute_shifted_geometric_mean(all_values[definition.config])
-            if definition.config != lsf.empty_string()
-            else None
+        relative_to_stats = self._compute_relative_to_stats(
+            all_values, definition.config
         )
-        relative_to_mean = (
-            self._compute_mean(all_values[definition.config])
-            if definition.config != lsf.empty_string()
-            else None
+        self._append_pivot_summary_rows(
+            rows, all_values, definition.format_options, relative_to_stats
         )
-        relative_to_median = (
-            self._compute_median(all_values[definition.config])
-            if definition.config != lsf.empty_string()
-            else None
-        )
-        for config in self.evaluator.data.configs:
-            values = all_values[config]
-            sgm_value = self._compute_shifted_geometric_mean(values)
-            mean_value = self._compute_mean(values)
-            median_value = self._compute_median(values)
-            mean_row.append(self._format_value(mean_value, fmt, relative_to_mean))
-            sgm_row.append(self._format_value(sgm_value, fmt, relative_to_sgm))
-            median_row.append(self._format_value(median_value, fmt, relative_to_median))
-        rows.append(mean_row)
-        rows.append(sgm_row)
-        rows.append(median_row)
 
         return self._build_latex_table(headers, rows, definition.metadata)
 
