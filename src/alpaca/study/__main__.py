@@ -134,7 +134,7 @@ def create_parser() -> argparse.ArgumentParser:
         help="Directory for output files (tables, plots).",
     )
     eval_parser.add_argument(
-        "--time-limit",
+        "--timelimit",
         type=int,
         default=3600,
         help="Time limit in seconds.",
@@ -172,7 +172,7 @@ def run_command(args: argparse.Namespace) -> int:
     )
 
     if not args.no_evaluate and results.successful_runs > 0:
-        evaluate_csv(results.csv_path, args.results, args.time_limit)
+        evaluate_csv(results.csv_path, args.results, args.timelimit)
 
     if results.failed_instances:
         return 1
@@ -189,7 +189,7 @@ def evaluate_command(args: argparse.Namespace) -> int:
         Exit code (0 for success, 1 for failure).
     """
     logger.info("Evaluating CSV: %s", args.csv)
-    evaluate_csv(args.csv, args.results, args.time_limit)
+    evaluate_csv(args.csv, args.results, args.timelimit)
     return 0
 
 
