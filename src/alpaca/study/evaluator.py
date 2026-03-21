@@ -121,6 +121,7 @@ class StudyEvaluator:
         self._load_csv()
         self._filter_complete_instances()
         self._filter_converged_inconsistent_instances()
+        self._filter_nones_in_solving_time()
         self._compute_filter_results()
 
     def _load_csv(self) -> None:
@@ -243,6 +244,44 @@ class StudyEvaluator:
         logger.info(
             "Filtered to %d consistent instances (removed %d inconsistent)",
             len(consistent_or_terminated_instances),
+            removed_count,
+        )
+
+    def _filter_nones_in_solving_time(self) -> None:
+        """Filters out instances that have None in solving time for any config."""
+        valid_instances = []
+        for instance in self.data.instances:
+            has_none_solving_time = any(
+                self.data.data_matrix.get((instance, config), {}).get(
+                    lsf.stats_solving_time()
+                )
+                is None
+                for config in self.data.configs
+            )
+            if not has_none_solving_time:
+                valid_instances.append(instance)
+
+        removed_count = len(self.data.instances) - len(valid_instances)
+        self.data.instances = valid_instances
+
+        filtered_rows = [
+            row
+            for row in self.data.rows
+            if row.get(lsf.stats_instance_name(), lsf.empty_string())
+            in valid_instances
+        ]
+        self.data.rows = filtered_rows
+
+        filtered_matrix = {
+            key: value
+            for key, value in self.data.data_matrix.items()
+            if key[0] in valid_instances
+        }
+        self.data.data_matrix = filtered_matrix
+
+        logger.info(
+            "Filtered to %d instances with valid solving time (removed %d with None)",
+            len(valid_instances),
             removed_count,
         )
 
