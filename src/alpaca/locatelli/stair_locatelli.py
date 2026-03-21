@@ -278,4 +278,4 @@ class StairLocatelli:
             self._get_constraint_value(c, (x_val, y_val), (x_var, y_var))
             for c in expr.linear_relaxation_for_bilinear["underestimator"]
         )
-        return mc_upper - mc_lower
+        return max(0, mc_upper - mc_lower)

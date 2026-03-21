@@ -296,5 +296,6 @@ class Statistics:  # pylint: disable=too-many-instance-attributes
             f"{self.locatelli_domain_volume_polytope},"
             f"{self.locatelli_nr_cuts},"
             f"{self.mpip_nr_instances},"
-            f"{self.mpip_ratio}"
+            f"{self.mpip_ratio},"
+            f"{self.mpip_separation_nr_cuts}"
         )

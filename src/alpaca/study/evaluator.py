@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 from alpaca.utils.logger import logger
@@ -21,11 +22,20 @@ class InstanceFilter(Enum):
     NONE = auto()
     """No filtering - use all complete instances."""
 
+    ALL_REACHED_ROOT = auto()
+    """Only instances where all configs reached the root node (not by time limit)."""
+
+    NON_EMPTY_BILINEAR_DOMAIN = auto()
+    """Only instances where all configs have non-empty bilinear domains."""
+
     ALL_TERMINATED = auto()
     """Only instances where all configs terminated (not by time limit)."""
 
     ALL_TERMINATED_CONSISTENT = auto()
     """All terminated + consistent solution values across configs."""
+
+    BRANCH_AND_BOUND = auto()
+    """Instances where all configs have more than one branch and bound node."""
 
 
 @dataclass
@@ -58,6 +68,11 @@ class StudyData:
     instances: list[str] = field(default_factory=list)
     configs: list[str] = field(default_factory=list)
     data_matrix: dict[tuple[str, str], dict[str, Any]] = field(default_factory=dict)
+
+    @property
+    def df(self) -> pd.DataFrame:
+        """Converts the data to a pandas DataFrame for analysis."""
+        return pd.DataFrame(self.rows, columns=self.headers)
 
 
 class StudyEvaluator:
@@ -99,6 +114,7 @@ class StudyEvaluator:
         lsf.stats_locatelli_nr_cuts(),
         lsf.stats_mpip_nr_instances(),
         lsf.stats_mpip_ratio(),
+        lsf.stats_mpip_nr_cuts(),
     }
 
     def __init__(
@@ -267,8 +283,7 @@ class StudyEvaluator:
         filtered_rows = [
             row
             for row in self.data.rows
-            if row.get(lsf.stats_instance_name(), lsf.empty_string())
-            in valid_instances
+            if row.get(lsf.stats_instance_name(), lsf.empty_string()) in valid_instances
         ]
         self.data.rows = filtered_rows
 
@@ -292,6 +307,15 @@ class StudyEvaluator:
             instances=list(self.data.instances),
             warnings=[],
         )
+        # EMPTY_BILINEAR_DOMAIN filter
+        empty_bilinear_domain_result = self._compute_empty_bilinear_domain_filter()
+        self._filter_cache[InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN] = (
+            empty_bilinear_domain_result
+        )
+
+        # ALL_REACHED_ROOT filter
+        reached_root_result = self._compute_all_reached_root_filter()
+        self._filter_cache[InstanceFilter.ALL_REACHED_ROOT] = reached_root_result
 
         # ALL_TERMINATED filter
         terminated_result = self._compute_all_terminated_filter()
@@ -302,6 +326,12 @@ class StudyEvaluator:
             terminated_result.instances
         )
         self._filter_cache[InstanceFilter.ALL_TERMINATED_CONSISTENT] = consistent_result
+
+        # BRANCH_AND_BOUND filter
+        branch_and_bound_result = self._compute_branch_and_bound_filter(
+            consistent_result.instances
+        )
+        self._filter_cache[InstanceFilter.BRANCH_AND_BOUND] = branch_and_bound_result
 
         # Log filter statistics
         logger.info(
@@ -334,6 +364,62 @@ class StudyEvaluator:
 
         return solving_time == self.time_limit
 
+    def _compute_empty_bilinear_domain_filter(self) -> FilterResult:
+        """Computes instances where all configs have non-empty bilinear domains.
+
+        Returns:
+            FilterResult with instances that have non-empty bilinear domains for all configs.
+        """
+        non_empty_domain_instances = []
+        warnings = []
+
+        for instance in self.data.instances:
+            no_empty_domain = True
+
+            for config in self.data.configs:
+                row_data = self.data.data_matrix.get((instance, config), {})
+                polygon_domain = row_data.get(
+                    lsf.stats_locatelli_domain_volume_polygon()
+                )
+                polytope_domain = row_data.get(
+                    lsf.stats_locatelli_domain_volume_polytope()
+                )
+                if (
+                    abs(polytope_domain) < s.StaticSettings.feasibility_tolerance
+                    or abs(polygon_domain) < s.StaticSettings.feasibility_tolerance
+                ):
+                    no_empty_domain = False
+                    break
+
+            if no_empty_domain:
+                non_empty_domain_instances.append(instance)
+
+        return FilterResult(instances=non_empty_domain_instances, warnings=warnings)
+
+    def _compute_all_reached_root_filter(self) -> FilterResult:
+        """Computes instances where all configs reached the root node.
+
+        Returns:
+            FilterResult with instances that reached root for all configs.
+        """
+        reached_root_instances = []
+        warnings = []
+
+        for instance in self.data.instances:
+            all_reached_root = True
+
+            for config in self.data.configs:
+                row_data = self.data.data_matrix.get((instance, config), {})
+                root_solution = row_data.get(lsf.stats_root_solution_value())
+                if root_solution == -s.StaticSettings.infinity:
+                    all_reached_root = False
+                    break
+
+            if all_reached_root:
+                reached_root_instances.append(instance)
+
+        return FilterResult(instances=reached_root_instances, warnings=warnings)
+
     def _compute_all_terminated_filter(self) -> FilterResult:
         """Computes instances where all configs terminated successfully.
 
@@ -354,9 +440,6 @@ class StudyEvaluator:
 
             if all_terminated:
                 terminated_instances.append(instance)
-            elif time_limit_configs:
-                # Optional: log which configs hit time limit
-                pass
 
         return FilterResult(instances=terminated_instances, warnings=warnings)
 
@@ -420,6 +503,42 @@ class StudyEvaluator:
                 )
 
         return FilterResult(instances=consistent_instances, warnings=warnings)
+
+    def _compute_branch_and_bound_filter(
+        self,
+        base_instances: list[str],
+    ) -> FilterResult:
+        """Filters for instances where min one config has more than one branch and bound node.
+
+        Args:
+            base_instances: Pre-filtered list of instances to check.
+
+        Returns:
+            FilterResult with instances that have more than
+             one branch and bound node for min one config.
+        """
+        valid_instances = []
+        warnings = []
+
+        for instance in base_instances:
+            has_multiple_nodes = False
+            for config in self.data.configs:
+                row_data = self.data.data_matrix.get((instance, config), {})
+                nr_nodes = row_data.get(lsf.stats_nr_nodes())
+                if nr_nodes is not None and nr_nodes > 1:
+                    has_multiple_nodes = True
+                    break
+
+            if has_multiple_nodes:
+                valid_instances.append(instance)
+            else:
+                warnings.append(
+                    f"Instance '{instance}': "
+                    f"Not all configs have more than one branch and bound node, "
+                    "discarding from comparison."
+                )
+
+        return FilterResult(instances=valid_instances, warnings=warnings)
 
     @staticmethod
     def _are_solution_values_consistent(values: list[float]) -> bool:
@@ -708,6 +827,14 @@ class StudyEvaluator:
         return {
             "instance_counts": {
                 "total_complete": len(self.data.instances),
+                "non-empty_bilinear_domain": len(
+                    self._filter_cache[
+                        InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN
+                    ].instances
+                ),
+                "all_reached_root": len(
+                    self._filter_cache[InstanceFilter.ALL_REACHED_ROOT].instances
+                ),
                 "all_terminated": len(
                     self._filter_cache[InstanceFilter.ALL_TERMINATED].instances
                 ),
@@ -715,6 +842,9 @@ class StudyEvaluator:
                     self._filter_cache[
                         InstanceFilter.ALL_TERMINATED_CONSISTENT
                     ].instances
+                ),
+                "branch_and_bound": len(
+                    self._filter_cache[InstanceFilter.BRANCH_AND_BOUND].instances
                 ),
             },
             "warning_counts": {

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=too-many-locals
 """
 @authors: kuen,
 """
-
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -19,10 +19,12 @@ class TableFormatOptions:
     Attributes:
         precision: Decimal precision for values.
         percentage: Bool if use percentage format.
+        bold: Optional string to specify which value to bold (e.g., "max" or "min").
     """
 
     precision: int = 2
     percentage: bool = False
+    bold: str | None = None
 
 
 @dataclass
@@ -48,7 +50,6 @@ class TableDefinition:
         column: Column name(s) to compare.
         metadata: Table metadata (filename, caption, label).
         config: Config to get model size from or to compare.
-        use_shifted_geom_mean: Bool if use geometric mean else mean.
         filter_type: Instance filter to apply.
         format_options: Formatting options for values.
     """
@@ -56,7 +57,6 @@ class TableDefinition:
     column: str | list[str]
     metadata: TableMetadata
     config: str = lsf.empty_string()
-    use_shifted_geom_mean: bool = False
     filter_type: InstanceFilter = InstanceFilter.NONE
     format_options: TableFormatOptions = field(default_factory=TableFormatOptions)
 
@@ -187,26 +187,33 @@ class LatexTableGenerator:
         value: float | None,
         fmt: TableFormatOptions,
         relative_to: float | None = None,
+        bold: bool = False,
     ) -> str:
         """Format a numeric value for LaTeX."""
         if value is None:
             return lsf.placeholder()
 
         if relative_to is not None:
-            value = 100 * (relative_to - value) / relative_to
-            return lsf.math_mode(f"{value:.{fmt.precision}f}{lsf.percentage_suffix()}")
+            value = (
+                0.0 if relative_to == 0 else 100 * (relative_to - value) / relative_to
+            )
+            return lsf.math_mode(
+                f"{value:.{fmt.precision}f}{lsf.percentage_suffix()}", bold=bold
+            )
 
         if value == self._config.evaluator.time_limit:
             return lsf.timeout_placeholder()
 
         if fmt.percentage:
             value *= 100
-            return lsf.math_mode(f"{value:.{fmt.precision}f}{lsf.percentage_suffix()}")
+            return lsf.math_mode(
+                f"{value:.{fmt.precision}f}{lsf.percentage_suffix()}", bold=bold
+            )
 
         if fmt.precision == 0:
-            return lsf.math_mode(str(int(round(value))))
+            return lsf.math_mode(str(int(round(value))), bold=bold)
 
-        return lsf.math_mode(f"{value:.{fmt.precision}f}")
+        return lsf.math_mode(f"{value:.{fmt.precision}f}", bold=bold)
 
     def _get_column_header(self, column: str) -> str:
         """Get LaTeX formatted column header."""
@@ -244,12 +251,14 @@ class LatexTableGenerator:
             ]
         )
 
-        for row in rows[:-1]:
+        for row in rows[:-3]:
             lines.append(lsf.column_separator().join(row) + lsf.row_end())
 
         lines.extend(
             [
                 lsf.bottomrule(),
+                lsf.column_separator().join(rows[-3]) + lsf.row_end(),
+                lsf.column_separator().join(rows[-2]) + lsf.row_end(),
                 lsf.column_separator().join(rows[-1]) + lsf.row_end(),
                 lsf.end_tabular(),
                 lsf.end_table(),
@@ -262,6 +271,11 @@ class LatexTableGenerator:
     def _compute_mean(values: list[float]) -> float | None:
         """Compute arithmetic mean of values."""
         return float(np.mean(values))
+
+    @staticmethod
+    def _compute_median(values: list[float]) -> float | None:
+        """Compute median of values."""
+        return float(np.median(values))
 
     def _compute_shifted_geometric_mean(self, values: list[float]) -> float | None:
         """Compute shifted geometric mean of values."""
@@ -319,10 +333,18 @@ class LatexTableGenerator:
         rows, all_values = self._build_model_size_rows(definition)
 
         mean_row = [lsf.mean_label()]
+        sgm_row = [lsf.shifted_geometric_mean_label()]
+        median_row = [lsf.median_label()]
         for col in columns:
             mean_value = self._compute_mean(all_values[col])
+            sgm_value = self._compute_shifted_geometric_mean(all_values[col])
+            median_value = self._compute_median(all_values[col])
             mean_row.append(self._format_value(mean_value, fmt))
+            sgm_row.append(self._format_value(sgm_value, fmt))
+            median_row.append(self._format_value(median_value, fmt))
         rows.append(mean_row)
+        rows.append(sgm_row)
+        rows.append(median_row)
 
         return self._build_latex_table(headers, rows, definition.metadata)
 
@@ -353,10 +375,34 @@ class LatexTableGenerator:
                 if definition.config == lsf.empty_string()
                 else values.get(definition.config)
             )
+            bold_value = (
+                None
+                if (
+                    definition.format_options.bold is None
+                    or any(
+                        values.get(config) is None
+                        for config in self.evaluator.data.configs
+                    )
+                )
+                else (
+                    max(values.get(config) for config in self.evaluator.data.configs)
+                    if definition.format_options.bold == "max"
+                    else min(
+                        values.get(config) for config in self.evaluator.data.configs
+                    )
+                )
+            )
             for config in self.evaluator.data.configs:
                 value = values.get(config)
+                bold = bold_value is not None and value == bold_value
+                value = 0.0 if value is None else value
+                row.append(self._format_value(value, fmt, relative_to, bold=bold))
+            if any(v is None or "inf" in v for v in row):
+                continue
+            for config in self.evaluator.data.configs:
+                value = values.get(config)
+                value = 0.0 if value is None else value
                 all_values[config].append(value)
-                row.append(self._format_value(value, fmt, relative_to))
             rows.append(row)
 
         return rows, all_values
@@ -371,33 +417,39 @@ class LatexTableGenerator:
             LaTeX table code.
         """
         fmt = definition.format_options
-        use_geom = definition.use_shifted_geom_mean
 
         headers = self._build_pivot_headers()
         rows, all_values = self._build_pivot_rows(definition)
 
-        label = lsf.shifted_geometric_mean_label() if use_geom else lsf.mean_label()
-        mean_row = [label]
-        if use_geom:
-            relative_to = (
-                self._compute_shifted_geometric_mean(all_values[definition.config])
-                if definition.config != lsf.empty_string()
-                else None
-            )
-        else:
-            relative_to = (
-                self._compute_mean(all_values[definition.config])
-                if definition.config != lsf.empty_string()
-                else None
-            )
+        mean_row = [lsf.mean_label()]
+        sgm_row = [lsf.shifted_geometric_mean_label()]
+        median_row = [lsf.median_label()]
+        relative_to_sgm = (
+            self._compute_shifted_geometric_mean(all_values[definition.config])
+            if definition.config != lsf.empty_string()
+            else None
+        )
+        relative_to_mean = (
+            self._compute_mean(all_values[definition.config])
+            if definition.config != lsf.empty_string()
+            else None
+        )
+        relative_to_median = (
+            self._compute_median(all_values[definition.config])
+            if definition.config != lsf.empty_string()
+            else None
+        )
         for config in self.evaluator.data.configs:
             values = all_values[config]
-            if use_geom:
-                mean_value = self._compute_shifted_geometric_mean(values)
-            else:
-                mean_value = self._compute_mean(values)
-            mean_row.append(self._format_value(mean_value, fmt, relative_to))
+            sgm_value = self._compute_shifted_geometric_mean(values)
+            mean_value = self._compute_mean(values)
+            median_value = self._compute_median(values)
+            mean_row.append(self._format_value(mean_value, fmt, relative_to_mean))
+            sgm_row.append(self._format_value(sgm_value, fmt, relative_to_sgm))
+            median_row.append(self._format_value(median_value, fmt, relative_to_median))
         rows.append(mean_row)
+        rows.append(sgm_row)
+        rows.append(median_row)
 
         return self._build_latex_table(headers, rows, definition.metadata)
 
@@ -430,33 +482,33 @@ class LatexTableGenerator:
         return [
             TableDefinition(
                 column=lsf.stats_solving_time(),
-                use_shifted_geom_mean=True,
                 filter_type=InstanceFilter.NONE,
                 metadata=TableMetadata(
                     filename="table_instance_solution_time.tex",
                     caption="Solving time per instance and configuration",
                     label="tab:instance_solution_time",
                 ),
+                format_options=TableFormatOptions(precision=2, bold="min"),
             ),
             TableDefinition(
                 column=lsf.stats_nr_nodes(),
-                filter_type=InstanceFilter.ALL_TERMINATED,
+                filter_type=InstanceFilter.BRANCH_AND_BOUND,
                 metadata=TableMetadata(
                     filename="table_instance_nr_nodes.tex",
                     caption="Number of nodes per instance and configuration",
                     label="tab:instance_nr_nodes",
                 ),
-                format_options=TableFormatOptions(precision=0),
+                format_options=TableFormatOptions(precision=0, bold="min"),
             ),
             TableDefinition(
                 column=lsf.stats_root_solution_value(),
-                filter_type=InstanceFilter.NONE,
+                filter_type=InstanceFilter.ALL_REACHED_ROOT,
                 metadata=TableMetadata(
                     filename="table_instance_root_solution.tex",
                     caption="Root relaxation solution per instance and configuration",
                     label="tab:instance_root_solution",
                 ),
-                format_options=TableFormatOptions(precision=0),
+                format_options=TableFormatOptions(precision=0, bold="max"),
             ),
             TableDefinition(
                 column=lsf.stats_mip_gap(),
@@ -466,7 +518,7 @@ class LatexTableGenerator:
                     caption="MIP gap per instance and configuration",
                     label="tab:instance_mip_gap",
                 ),
-                format_options=TableFormatOptions(percentage=True),
+                format_options=TableFormatOptions(percentage=True, bold="min"),
             ),
             TableDefinition(
                 config=self.evaluator.data.configs[0],
@@ -484,6 +536,7 @@ class LatexTableGenerator:
             ),
             TableDefinition(
                 config="nonlinear_gurobi",
+                filter_type=InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
                 column=lsf.stats_locatelli_domain_volume_polygon(),
                 metadata=TableMetadata(
                     filename="table_instance_domain_volume_polygon.tex",
@@ -491,10 +544,11 @@ class LatexTableGenerator:
                     " over polygon per instance and configuration",
                     label="tab:instance_domain_volume_polygon",
                 ),
-                format_options=TableFormatOptions(precision=2),
+                format_options=TableFormatOptions(precision=2, bold="min"),
             ),
             TableDefinition(
                 config="nonlinear_gurobi",
+                filter_type=InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
                 column=lsf.stats_locatelli_domain_volume_polytope(),
                 metadata=TableMetadata(
                     filename="table_instance_domain_volume_polytope.tex",
@@ -502,7 +556,7 @@ class LatexTableGenerator:
                     " over polytope per instance and configuration",
                     label="tab:instance_domain_volume_polytope",
                 ),
-                format_options=TableFormatOptions(precision=2),
+                format_options=TableFormatOptions(precision=2, bold="min"),
             ),
         ]
 

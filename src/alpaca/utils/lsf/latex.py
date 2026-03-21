@@ -84,7 +84,9 @@ class Latex:
         return text.replace("_", r"\_").replace(r"\\_", r"\_")
 
     @classmethod
-    def math_mode(cls, value: str) -> str:
+    def math_mode(cls, value: str, bold=False) -> str:
+        if bold:
+            value = r"\mathbf{" + value + "}"
         return f"${value}$"
 
     @classmethod
@@ -94,6 +96,10 @@ class Latex:
     @classmethod
     def mean_label(cls) -> str:
         return "Mean"
+
+    @classmethod
+    def median_label(cls) -> str:
+        return "Median"
 
     @classmethod
     def shifted_geometric_mean_label(cls) -> str:

@@ -271,6 +271,12 @@ class Statistics:
         return "config_name"
 
     @classmethod
+    def stats_mpip_nr_cuts(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return r"\# Cuts MPIP"
+        return "mpip_nr_cuts"
+
+    @classmethod
     def stats_column_names(cls) -> str:
         return (
             f"{cls.stats_instance_name()},"
@@ -305,5 +311,6 @@ class Statistics:
             f"{cls.stats_locatelli_domain_volume_polytope()},"
             f"{cls.stats_locatelli_nr_cuts()},"
             f"{cls.stats_mpip_nr_instances()},"
-            f"{cls.stats_mpip_ratio()}"
+            f"{cls.stats_mpip_ratio()},"
+            f"{cls.stats_mpip_nr_cuts()}"
         )
