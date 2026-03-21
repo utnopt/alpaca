@@ -203,3 +203,19 @@ def calculate_feasible_height_convexified(
     if min_z > max_z + s.StaticSettings.feasibility_tolerance:
         return 0.0
     return max(0.0, float(max_z - min_z))
+
+
+def straighten_vertices(
+    vertices: list[tuple[float, float]],
+) -> list[tuple[float, float]]:
+    """Straighten edges of the stair polygon."""
+    if not vertices:
+        return []
+    for i, v1 in enumerate(vertices):
+        v2 = vertices[(i + 1) % len(vertices)]
+        if not v1[0] == v2[0] and not v1[1] == v2[1]:
+            if abs(v1[0] - v2[0]) <= abs(v1[1] - v2[1]):
+                vertices[i] = (v2[0], v1[1])
+            else:
+                vertices[i] = (v1[0], v2[1])
+    return vertices
