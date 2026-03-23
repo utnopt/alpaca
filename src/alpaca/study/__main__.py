@@ -85,18 +85,6 @@ def add_common_run_arguments(parser: argparse.ArgumentParser, defaults: dict) ->
         default=4,
         help="Number of threads each solver job uses internally.",
     )
-    parser.add_argument(
-        "--timelimit",
-        type=int,
-        default=3600,
-        help="Time limit in seconds.",
-    )
-    parser.add_argument(
-        "--base",
-        type=str,
-        default="b_a_s_e",
-        help="Base config name.",
-    )
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -144,6 +132,18 @@ def create_parser() -> argparse.ArgumentParser:
         type=str,
         default=defaults["results_dir"],
         help="Directory for output files (tables, plots).",
+    )
+    eval_parser.add_argument(
+        "--timelimit",
+        type=int,
+        default=3600,
+        help="Time limit in seconds.",
+    )
+    eval_parser.add_argument(
+        "--base",
+        type=str,
+        default="b_a_s_e",
+        help="Base config name.",
     )
 
     return parser
