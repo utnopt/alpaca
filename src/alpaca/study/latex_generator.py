@@ -588,7 +588,7 @@ class LatexTableGenerator:
                 format_options=TableFormatOptions(precision=0),
             ),
             TableDefinition(
-                config="nonlinear_gurobi",
+                config=self.evaluator.base_config,
                 filter_type=InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
                 column=lsf.stats_locatelli_domain_volume_polygon(),
                 metadata=TableMetadata(
@@ -600,7 +600,7 @@ class LatexTableGenerator:
                 format_options=TableFormatOptions(precision=2, bold="min"),
             ),
             TableDefinition(
-                config="nonlinear_gurobi",
+                config=self.evaluator.base_config,
                 filter_type=InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
                 column=lsf.stats_locatelli_domain_volume_polytope(),
                 metadata=TableMetadata(

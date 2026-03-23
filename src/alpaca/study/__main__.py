@@ -85,6 +85,18 @@ def add_common_run_arguments(parser: argparse.ArgumentParser, defaults: dict) ->
         default=4,
         help="Number of threads each solver job uses internally.",
     )
+    parser.add_argument(
+        "--timelimit",
+        type=int,
+        default=3600,
+        help="Time limit in seconds.",
+    )
+    parser.add_argument(
+        "--base",
+        type=str,
+        default="b_a_s_e",
+        help="Base config name.",
+    )
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -133,12 +145,6 @@ def create_parser() -> argparse.ArgumentParser:
         default=defaults["results_dir"],
         help="Directory for output files (tables, plots).",
     )
-    eval_parser.add_argument(
-        "--timelimit",
-        type=int,
-        default=3600,
-        help="Time limit in seconds.",
-    )
 
     return parser
 
@@ -172,7 +178,7 @@ def run_command(args: argparse.Namespace) -> int:
     )
 
     if not args.no_evaluate and results.successful_runs > 0:
-        evaluate_csv(results.csv_path, args.results, args.timelimit)
+        evaluate_csv(results.csv_path, args.results, args.timelimit, args.base)
 
     if results.failed_instances:
         return 1
@@ -189,21 +195,22 @@ def evaluate_command(args: argparse.Namespace) -> int:
         Exit code (0 for success, 1 for failure).
     """
     logger.info("Evaluating CSV: %s", args.csv)
-    evaluate_csv(args.csv, args.results, args.timelimit)
+    evaluate_csv(args.csv, args.results, args.timelimit, args.base)
     return 0
 
 
-def evaluate_csv(csv_path: str, results_dir: str, time_limit: int) -> None:
+def evaluate_csv(csv_path: str, results_dir: str, time_limit: int, base_config: str) -> None:
     """Evaluates a CSV file and generates LaTeX outputs.
 
     Args:
         csv_path: Path to the CSV results file.
         results_dir: Base directory for output.
         time_limit: Time limit for runs (in seconds).
+        base_config: Base config name to identify in the CSV.
     """
     logger.info("Starting evaluation...")
 
-    evaluator = StudyEvaluator(csv_path, time_limit)
+    evaluator = StudyEvaluator(csv_path, time_limit, base_config)
 
     latex_config = GeneratorConfig(
         evaluator,

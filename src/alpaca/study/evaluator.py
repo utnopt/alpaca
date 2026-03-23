@@ -121,14 +121,18 @@ class StudyEvaluator:
         self,
         csv_path: str,
         time_limit: int = 3600,
+        base_config: str = "b_a_s_e"
     ) -> None:
         """Initializes the evaluator with a CSV file path.
 
         Args:
             csv_path: Path to the CSV results file.
+            time_limit: Time limit for runs (in seconds) to identify timeouts.
+            base_config: Base config name to identify in the CSV.
         """
         self.csv_path = csv_path
         self.time_limit = time_limit
+        self.base_config = base_config
         self.data = StudyData()
 
         # Cached filter results
