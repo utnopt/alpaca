@@ -121,17 +121,20 @@ class StudyEvaluator:
         self,
         csv_path: str,
         time_limit: int = 3600,
-        base_config: str = "b_a_s_e"
+        mean_trim: float = 0.05,
+        base_config: str = "b_a_s_e",
     ) -> None:
         """Initializes the evaluator with a CSV file path.
 
         Args:
             csv_path: Path to the CSV results file.
             time_limit: Time limit for runs (in seconds) to identify timeouts.
+            mean_trim: Trimming of mean values for outlier filtering.
             base_config: Base config name to identify in the CSV.
         """
         self.csv_path = csv_path
         self.time_limit = time_limit
+        self.mean_trim = mean_trim
         self.base_config = base_config
         self.data = StudyData()
 

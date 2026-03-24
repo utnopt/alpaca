@@ -140,6 +140,12 @@ def create_parser() -> argparse.ArgumentParser:
         help="Time limit in seconds.",
     )
     eval_parser.add_argument(
+        "--meantrim",
+        type=float,
+        default=0.05,
+        help="Trim outliers for mean calculation.",
+    )
+    eval_parser.add_argument(
         "--base",
         type=str,
         default="b_a_s_e",
@@ -178,7 +184,9 @@ def run_command(args: argparse.Namespace) -> int:
     )
 
     if not args.no_evaluate and results.successful_runs > 0:
-        evaluate_csv(results.csv_path, args.results, args.timelimit, args.base)
+        evaluate_csv(
+            results.csv_path, args.results, args.timelimit, args.meantrim, args.base
+        )
 
     if results.failed_instances:
         return 1
@@ -195,11 +203,13 @@ def evaluate_command(args: argparse.Namespace) -> int:
         Exit code (0 for success, 1 for failure).
     """
     logger.info("Evaluating CSV: %s", args.csv)
-    evaluate_csv(args.csv, args.results, args.timelimit, args.base)
+    evaluate_csv(args.csv, args.results, args.timelimit, args.meantrim, args.base)
     return 0
 
 
-def evaluate_csv(csv_path: str, results_dir: str, time_limit: int, base_config: str) -> None:
+def evaluate_csv(
+    csv_path: str, results_dir: str, time_limit: int, mean_trim: float, base_config: str
+) -> None:
     """Evaluates a CSV file and generates LaTeX outputs.
 
     Args:
@@ -210,7 +220,7 @@ def evaluate_csv(csv_path: str, results_dir: str, time_limit: int, base_config: 
     """
     logger.info("Starting evaluation...")
 
-    evaluator = StudyEvaluator(csv_path, time_limit, base_config)
+    evaluator = StudyEvaluator(csv_path, time_limit, mean_trim, base_config)
 
     latex_config = GeneratorConfig(
         evaluator,
