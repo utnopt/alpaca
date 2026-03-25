@@ -187,32 +187,32 @@ class LatexTableGenerator:
         fmt: TableFormatOptions,
         relative_to: float | None = None,
         bold: bool = False,
-    ) -> str:
+    ) -> tuple[float | int, str]:
         """Format a numeric value for LaTeX."""
         if value is None:
-            return lsf.placeholder()
+            return 0.0, lsf.placeholder()
 
         if relative_to is not None:
             value = (
                 0.0 if relative_to == 0 else 100 * (relative_to - value) / relative_to
             )
-            return lsf.math_mode(
+            return value / 100, lsf.math_mode(
                 f"{value:.{fmt.precision}f}{lsf.percentage_suffix()}", bold=bold
             )
 
         if value == self._config.evaluator.time_limit:
-            return lsf.timeout_placeholder()
+            return 0.0, lsf.timeout_placeholder()
 
         if fmt.percentage:
             value *= 100
-            return lsf.math_mode(
+            return value, lsf.math_mode(
                 f"{value:.{fmt.precision}f}{lsf.percentage_suffix()}", bold=bold
             )
 
         if fmt.precision == 0:
-            return lsf.math_mode(str(int(round(value))), bold=bold)
+            return int(round(value)), lsf.math_mode(str(int(round(value))), bold=bold)
 
-        return lsf.math_mode(f"{value:.{fmt.precision}f}", bold=bold)
+        return value, lsf.math_mode(f"{value:.{fmt.precision}f}", bold=bold)
 
     def _get_column_header(self, column: str) -> str:
         """Get LaTeX formatted column header."""
@@ -311,7 +311,8 @@ class LatexTableGenerator:
                     definition.config
                 ]
                 all_values[col].append(value)
-                row.append(self._format_value(value, format_options))
+                _, value_str = self._format_value(value, format_options)
+                row.append(value_str)
             rows.append(row)
 
         return rows, all_values
@@ -330,17 +331,18 @@ class LatexTableGenerator:
 
         for col in columns:
             col_values = all_values[col]
-            mean_row.append(
-                self._format_value(self._compute_mean(col_values), format_options)
+            _, value_str = self._format_value(
+                self._compute_mean(col_values), format_options
             )
-            sgm_row.append(
-                self._format_value(
-                    self._compute_shifted_geometric_mean(col_values), format_options
-                )
+            mean_row.append(value_str)
+            _, value_str = self._format_value(
+                self._compute_shifted_geometric_mean(col_values), format_options
             )
-            median_row.append(
-                self._format_value(self._compute_median(col_values), format_options)
+            sgm_row.append(value_str)
+            _, value_str = self._format_value(
+                self._compute_median(col_values), format_options
             )
+            median_row.append(value_str)
 
         rows.extend([mean_row, sgm_row, median_row])
 
@@ -360,10 +362,12 @@ class LatexTableGenerator:
         )
         return self._build_latex_table(headers, rows, definition.metadata)
 
-    def _build_pivot_headers(self) -> list[str]:
+    def _build_pivot_headers(self, definition: TableDefinition) -> list[str]:
         """Build headers for pivot table."""
         headers = [lsf.stats_instance_name(lsf.stats_format_latex())]
         for config in self.evaluator.data.configs:
+            if config == definition.config:
+                continue
             headers.append(lsf.escape_underscore(self._config_shortnames[config]))
         return headers
 
@@ -397,20 +401,23 @@ class LatexTableGenerator:
         values = self.evaluator.get_column_values_for_instance(
             definition.column, instance
         )
+        relative_values = {}
         relative_to = self._get_relative_to_value(values, definition.config)
         bold_value = self._compute_bold_value(values, definition.format_options.bold)
 
         for config in self.evaluator.data.configs:
+            if relative_to is not None and config == definition.config:
+                continue
             value = values.get(config)
             bold = bold_value is not None and value == bold_value
             formatted_value = 0.0 if value is None else value
-            row.append(
-                self._format_value(
-                    formatted_value, definition.format_options, relative_to, bold=bold
-                )
+            relative_value, value_str = self._format_value(
+                formatted_value, definition.format_options, relative_to, bold=bold
             )
+            row.append(value_str)
+            relative_values[config] = relative_value
 
-        return row, values
+        return row, relative_values
 
     def _build_pivot_rows(
         self, definition: TableDefinition
@@ -433,55 +440,36 @@ class LatexTableGenerator:
 
         return rows, all_values
 
-    def _compute_relative_to_stats(
-        self, all_values: dict[str, list[float]], config: str
-    ) -> tuple[float | None, float | None, float | None]:
-        """Compute relative-to values for mean, SGM, and median."""
-        if config == lsf.empty_string():
-            return None, None, None
-
-        values = all_values[config]
-        return (
-            self._compute_mean(values),
-            self._compute_shifted_geometric_mean(values),
-            self._compute_median(values),
-        )
-
     def _append_pivot_summary_rows(
         self,
         rows: list[list[str]],
         all_values: dict[str, list[float]],
-        format_options,
-        relative_to_stats: tuple[float | None, float | None, float | None],
+        definition: TableDefinition,
     ) -> None:
         """Append summary rows (mean, SGM, median) for pivot table."""
-        relative_to_mean, relative_to_sgm, relative_to_median = relative_to_stats
 
         mean_row = [lsf.mean_label()]
         sgm_row = [lsf.shifted_geometric_mean_label()]
         median_row = [lsf.median_label()]
 
         for config in self.evaluator.data.configs:
+            if config == definition.config:
+                continue
             config_values = all_values[config]
-            mean_row.append(
-                self._format_value(
-                    self._compute_mean(config_values), format_options, relative_to_mean
-                )
+            _, value_str = self._format_value(
+                self._compute_mean(config_values), definition.format_options
             )
-            sgm_row.append(
-                self._format_value(
-                    self._compute_shifted_geometric_mean(config_values),
-                    format_options,
-                    relative_to_sgm,
-                )
+            mean_row.append(value_str)
+            _, value_str = self._format_value(
+                self._compute_shifted_geometric_mean(config_values),
+                definition.format_options,
             )
-            median_row.append(
-                self._format_value(
-                    self._compute_median(config_values),
-                    format_options,
-                    relative_to_median,
-                )
+            sgm_row.append(value_str)
+            _, value_str = self._format_value(
+                self._compute_median(config_values),
+                definition.format_options,
             )
+            median_row.append(value_str)
 
         rows.extend([mean_row, sgm_row, median_row])
 
@@ -502,16 +490,11 @@ class LatexTableGenerator:
         Returns:
             LaTeX table code.
         """
-        headers = self._build_pivot_headers()
+        headers = self._build_pivot_headers(definition)
         rows, all_values = self._build_pivot_rows(definition)
         all_values = self._trim_outliers(all_values)
 
-        relative_to_stats = self._compute_relative_to_stats(
-            all_values, definition.config
-        )
-        self._append_pivot_summary_rows(
-            rows, all_values, definition.format_options, relative_to_stats
-        )
+        self._append_pivot_summary_rows(rows, all_values, definition)
 
         return self._build_latex_table(headers, rows, definition.metadata)
 
@@ -547,7 +530,7 @@ class LatexTableGenerator:
                 filter_type=InstanceFilter.NONE,
                 metadata=TableMetadata(
                     filename="table_instance_solution_time.tex",
-                    caption="Solving time per instance and configuration",
+                    caption="Solving time per instance and configuration.",
                     label="tab:instance_solution_time",
                 ),
                 format_options=TableFormatOptions(precision=2, bold="min"),
@@ -557,7 +540,9 @@ class LatexTableGenerator:
                 filter_type=InstanceFilter.BRANCH_AND_BOUND,
                 metadata=TableMetadata(
                     filename="table_instance_nr_nodes.tex",
-                    caption="Number of nodes per instance and configuration",
+                    caption="Number of nodes per instance and configuration. "
+                    "Filtered to instances solved not "
+                    "in root node and solved to optimality.",
                     label="tab:instance_nr_nodes",
                 ),
                 format_options=TableFormatOptions(precision=0, bold="min"),
@@ -567,7 +552,9 @@ class LatexTableGenerator:
                 filter_type=InstanceFilter.ALL_REACHED_ROOT,
                 metadata=TableMetadata(
                     filename="table_instance_root_solution.tex",
-                    caption="Root relaxation solution per instance and configuration",
+                    caption="Root relaxation solution per instance and configuration. "
+                    "Filtered to instances that reached "
+                    "the root node.",
                     label="tab:instance_root_solution",
                 ),
                 format_options=TableFormatOptions(precision=0, bold="max"),
@@ -577,7 +564,7 @@ class LatexTableGenerator:
                 filter_type=InstanceFilter.NONE,
                 metadata=TableMetadata(
                     filename="table_instance_mip_gap.tex",
-                    caption="MIP gap per instance and configuration",
+                    caption="MIP gap per instance and configuration.",
                     label="tab:instance_mip_gap",
                 ),
                 format_options=TableFormatOptions(percentage=True, bold="min"),
@@ -591,7 +578,7 @@ class LatexTableGenerator:
                 ],
                 metadata=TableMetadata(
                     filename="table_instance_model_size.tex",
-                    caption="Model size per instance",
+                    caption="Model size per instance.",
                     label="tab:instance_model_size",
                 ),
                 format_options=TableFormatOptions(precision=0),
@@ -603,10 +590,13 @@ class LatexTableGenerator:
                 metadata=TableMetadata(
                     filename="table_instance_domain_volume_polygon.tex",
                     caption="Domain volume reduction relative to McCormick"
-                    " over polygon per instance and configuration",
+                    " over polygon per instance and configuration. "
+                    "Filtered to instances with non-empty bilinear domain.",
                     label="tab:instance_domain_volume_polygon",
                 ),
-                format_options=TableFormatOptions(precision=2, bold="min"),
+                format_options=TableFormatOptions(
+                    precision=2, bold="min", percentage=True
+                ),
             ),
             TableDefinition(
                 config=self.evaluator.base_config,
@@ -615,10 +605,13 @@ class LatexTableGenerator:
                 metadata=TableMetadata(
                     filename="table_instance_domain_volume_polytope.tex",
                     caption="Domain volume reduction relative to McCormick"
-                    " over polytope per instance and configuration",
+                    " over polytope per instance and configuration. "
+                    "Filtered to instances with non-empty bilinear domain.",
                     label="tab:instance_domain_volume_polytope",
                 ),
-                format_options=TableFormatOptions(precision=2, bold="min"),
+                format_options=TableFormatOptions(
+                    precision=2, bold="min", percentage=True
+                ),
             ),
         ]
 
