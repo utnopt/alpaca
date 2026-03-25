@@ -542,72 +542,72 @@ class LatexTableGenerator:
     def get_predefined_table_definitions(self) -> list[TableDefinition]:
         """Get the predefined table definitions."""
         return [
-            # TableDefinition(
-            #     column=lsf.stats_solving_time(),
-            #     filter_type=InstanceFilter.NONE,
-            #     metadata=TableMetadata(
-            #         filename="table_instance_solution_time.tex",
-            #         caption="Solving time per instance and configuration",
-            #         label="tab:instance_solution_time",
-            #     ),
-            #     format_options=TableFormatOptions(precision=2, bold="min"),
-            # ),
-            # TableDefinition(
-            #     column=lsf.stats_nr_nodes(),
-            #     filter_type=InstanceFilter.BRANCH_AND_BOUND,
-            #     metadata=TableMetadata(
-            #         filename="table_instance_nr_nodes.tex",
-            #         caption="Number of nodes per instance and configuration",
-            #         label="tab:instance_nr_nodes",
-            #     ),
-            #     format_options=TableFormatOptions(precision=0, bold="min"),
-            # ),
-            # TableDefinition(
-            #     column=lsf.stats_root_solution_value(),
-            #     filter_type=InstanceFilter.ALL_REACHED_ROOT,
-            #     metadata=TableMetadata(
-            #         filename="table_instance_root_solution.tex",
-            #         caption="Root relaxation solution per instance and configuration",
-            #         label="tab:instance_root_solution",
-            #     ),
-            #     format_options=TableFormatOptions(precision=0, bold="max"),
-            # ),
-            # TableDefinition(
-            #     column=lsf.stats_mip_gap(),
-            #     filter_type=InstanceFilter.NONE,
-            #     metadata=TableMetadata(
-            #         filename="table_instance_mip_gap.tex",
-            #         caption="MIP gap per instance and configuration",
-            #         label="tab:instance_mip_gap",
-            #     ),
-            #     format_options=TableFormatOptions(percentage=True, bold="min"),
-            # ),
-            # TableDefinition(
-            #     config=self.evaluator.data.configs[0],
-            #     column=[
-            #         lsf.stats_pwl_nr_variables(),
-            #         lsf.stats_pwl_nr_constraints(),
-            #         lsf.stats_pwl_nr_bilinear_expressions(),
-            #     ],
-            #     metadata=TableMetadata(
-            #         filename="table_instance_model_size.tex",
-            #         caption="Model size per instance",
-            #         label="tab:instance_model_size",
-            #     ),
-            #     format_options=TableFormatOptions(precision=0),
-            # ),
-            # TableDefinition(
-            #     config=self.evaluator.base_config,
-            #     filter_type=InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
-            #     column=lsf.stats_locatelli_domain_volume_polygon(),
-            #     metadata=TableMetadata(
-            #         filename="table_instance_domain_volume_polygon.tex",
-            #         caption="Domain volume reduction relative to McCormick"
-            #         " over polygon per instance and configuration",
-            #         label="tab:instance_domain_volume_polygon",
-            #     ),
-            #     format_options=TableFormatOptions(precision=2, bold="min"),
-            # ),
+            TableDefinition(
+                column=lsf.stats_solving_time(),
+                filter_type=InstanceFilter.NONE,
+                metadata=TableMetadata(
+                    filename="table_instance_solution_time.tex",
+                    caption="Solving time per instance and configuration",
+                    label="tab:instance_solution_time",
+                ),
+                format_options=TableFormatOptions(precision=2, bold="min"),
+            ),
+            TableDefinition(
+                column=lsf.stats_nr_nodes(),
+                filter_type=InstanceFilter.BRANCH_AND_BOUND,
+                metadata=TableMetadata(
+                    filename="table_instance_nr_nodes.tex",
+                    caption="Number of nodes per instance and configuration",
+                    label="tab:instance_nr_nodes",
+                ),
+                format_options=TableFormatOptions(precision=0, bold="min"),
+            ),
+            TableDefinition(
+                column=lsf.stats_root_solution_value(),
+                filter_type=InstanceFilter.ALL_REACHED_ROOT,
+                metadata=TableMetadata(
+                    filename="table_instance_root_solution.tex",
+                    caption="Root relaxation solution per instance and configuration",
+                    label="tab:instance_root_solution",
+                ),
+                format_options=TableFormatOptions(precision=0, bold="max"),
+            ),
+            TableDefinition(
+                column=lsf.stats_mip_gap(),
+                filter_type=InstanceFilter.NONE,
+                metadata=TableMetadata(
+                    filename="table_instance_mip_gap.tex",
+                    caption="MIP gap per instance and configuration",
+                    label="tab:instance_mip_gap",
+                ),
+                format_options=TableFormatOptions(percentage=True, bold="min"),
+            ),
+            TableDefinition(
+                config=self.evaluator.data.configs[0],
+                column=[
+                    lsf.stats_pwl_nr_variables(),
+                    lsf.stats_pwl_nr_constraints(),
+                    lsf.stats_pwl_nr_bilinear_expressions(),
+                ],
+                metadata=TableMetadata(
+                    filename="table_instance_model_size.tex",
+                    caption="Model size per instance",
+                    label="tab:instance_model_size",
+                ),
+                format_options=TableFormatOptions(precision=0),
+            ),
+            TableDefinition(
+                config=self.evaluator.base_config,
+                filter_type=InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
+                column=lsf.stats_locatelli_domain_volume_polygon(),
+                metadata=TableMetadata(
+                    filename="table_instance_domain_volume_polygon.tex",
+                    caption="Domain volume reduction relative to McCormick"
+                    " over polygon per instance and configuration",
+                    label="tab:instance_domain_volume_polygon",
+                ),
+                format_options=TableFormatOptions(precision=2, bold="min"),
+            ),
             TableDefinition(
                 config=self.evaluator.base_config,
                 filter_type=InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
