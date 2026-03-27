@@ -5,6 +5,8 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 import numpy as np
 
 from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
@@ -475,11 +477,31 @@ class LatexTableGenerator:
 
     def _trim_outliers(self, values: dict[str, list[float]]) -> dict[str, list[float]]:
         trim_percentage = self.evaluator.mean_trim
-        for config, vals in values.items():
-            trim_length = int(len(vals) * trim_percentage)
-            sorted_vals = sorted(vals)
-            values[config] = sorted_vals[trim_length:-trim_length]
-        return values
+        n_instances = len(next(iter(values.values())))
+
+        if n_instances <= 1 or trim_percentage <= 0:
+            return values
+
+        keys = list(values.keys())
+        data = np.array([[values[key][i] for key in keys] for i in range(n_instances)])
+
+        # Standardize features for better performance
+        scaler = StandardScaler()
+        data_scaled = scaler.fit_transform(data)
+
+        # Isolation Forest: contamination = fraction of outliers to remove
+        iso_forest = IsolationForest(
+            contamination=min(trim_percentage, 0.5),
+            random_state=42,
+            n_estimators=100
+        )
+        predictions = iso_forest.fit_predict(data_scaled)
+
+        # 1 = inlier, -1 = outlier
+        inlier_indices = [i for i in range(n_instances) if predictions[i] == 1]
+
+        return {key: [values[key][i] for i in inlier_indices] for key in keys}
+
 
     def generate_instance_pivot_table(self, definition: TableDefinition) -> str:
         """Generate table with instances as rows and configs as columns.
