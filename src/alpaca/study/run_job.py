@@ -8,6 +8,7 @@ import sys
 import traceback
 
 import alpaca as alp
+from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -73,7 +74,9 @@ def run_single_job(args: argparse.Namespace) -> int:
     original_stderr = sys.stderr
 
     try:
-        with open(os.devnull, "w", encoding="utf-8") as devnull:
+        with open(
+            os.devnull, lsf.file_mode_write(), encoding=lsf.file_encoding_utf8()
+        ) as devnull:
             sys.stdout = devnull
             sys.stderr = devnull
 

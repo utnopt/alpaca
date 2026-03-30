@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
-
 """
-TikZ plot generator for study evaluation results.
-
-Generates scatter plots and grouped bar plots as TikZ/pgfplots code.
+@authors: kuen,
 """
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,7 +20,7 @@ class PlotFormatOptions:
     """
 
     precision: int = 2
-    title: str = ""
+    title: str = lsf.empty_string()
 
 
 @dataclass
@@ -37,8 +34,8 @@ class PlotMetadata:
     """
 
     filename: str
-    caption: str = ""
-    label: str = ""
+    caption: str = lsf.empty_string()
+    label: str = lsf.empty_string()
 
 
 @dataclass
@@ -117,7 +114,7 @@ class TikzPlotGenerator:
         """Generate LaTeX color definition lines."""
         lines = []
         for name, (r, g, b) in self.COLORS.items():
-            lines.append(f"\\definecolor{{{name}}}{{RGB}}{{{r}, {g}, {b}}}")
+            lines.append(lsf.definecolor_rgb(name, r, g, b))
         return lines
 
     @property
@@ -225,26 +222,26 @@ class TikzPlotGenerator:
         )
 
         options = [
-            f"xlabel={{{base_short}}}",
-            "ylabel={Configurations}",
-            "legend pos=north west",
-            "legend cell align=left",
-            "grid=both",
-            "grid style={line width=.1pt, draw=gray!20}",
-            "major grid style={line width=.2pt, draw=gray!50}",
-            f"xmin={min_val}",
-            f"xmax={max_val}",
-            f"ymin={min_val}",
-            f"ymax={max_val}",
-            "width=10cm",
-            "height=10cm",
+            lsf.tikz_xlabel(base_short),
+            lsf.tikz_ylabel(lsf.tikz_configurations_label()),
+            lsf.tikz_legend_pos_north_west(),
+            lsf.tikz_legend_cell_align_left(),
+            lsf.tikz_grid_both(),
+            lsf.tikz_grid_style_minor(),
+            lsf.tikz_grid_style_major(),
+            lsf.tikz_xmin(min_val),
+            lsf.tikz_xmax(max_val),
+            lsf.tikz_ymin(min_val),
+            lsf.tikz_ymax(max_val),
+            lsf.tikz_width_10cm(),
+            lsf.tikz_height_10cm(),
         ]
 
         if definition.log_scale:
-            options.extend(["xmode=log", "ymode=log"])
+            options.extend([lsf.tikz_xmode_log(), lsf.tikz_ymode_log()])
 
         if definition.format_options.title:
-            options.append(f"title={{{definition.format_options.title}}}")
+            options.append(lsf.tikz_title(definition.format_options.title))
 
         return options
 
@@ -266,7 +263,7 @@ class TikzPlotGenerator:
         for instance, base_val in base_values.items():
             if instance in config_vals:
                 y_val = config_vals[instance]
-                coords.append(f"        ({base_val}, {y_val})")
+                coords.append(lsf.tikz_coordinate_indented(base_val, y_val))
         return coords
 
     def generate_scatter_plot(self, definition: PlotDefinition) -> str:
@@ -282,53 +279,50 @@ class TikzPlotGenerator:
         min_val, max_val = self._compute_axis_limits(base_values, config_values)
 
         lines = [
-            "% Scatter plot: configurations vs base",
-            f"% Column: {definition.column}",
-            f"% Instances: {len(base_values)}",
-            ""
-            ]
+            lsf.tikz_comment(lsf.tikz_scatter_plot_comment()),
+            lsf.tikz_comment(lsf.tikz_column_comment(definition.column)),
+            lsf.tikz_comment(lsf.tikz_instances_comment(len(base_values))),
+            lsf.empty_string(),
+        ]
 
         lines.extend(self._get_color_definitions())
-        lines.append("")
+        lines.append(lsf.empty_string())
 
-        lines.append("\\begin{tikzpicture}")
-        lines.append("\\begin{axis}[")
+        lines.append(lsf.begin_tikzpicture())
+        lines.append(lsf.begin_axis())
 
         axis_options = self._build_scatter_axis_options(definition, min_val, max_val)
         for i, opt in enumerate(axis_options):
-            comma = "," if i < len(axis_options) - 1 else ""
-            lines.append(f"    {opt}{comma}")
+            comma = lsf.comma() if i < len(axis_options) - 1 else lsf.empty_string()
+            lines.append(lsf.tikz_axis_option_line(opt, comma))
 
-        lines.append("]")
-        lines.append("")
+        lines.append(lsf.tikz_close_bracket())
+        lines.append(lsf.empty_string())
 
-        lines.append("% Diagonal reference line (y = x)")
-        lines.append(
-            f"\\addplot[black, dashed, thick, domain={min_val}:{max_val}] {{x}};"
-        )
-        lines.append("\\addlegendentry{$y = x$}")
-        lines.append("")
+        lines.append(lsf.tikz_comment(lsf.tikz_diagonal_line_comment()))
+        lines.append(lsf.tikz_diagonal_reference_line(min_val, max_val))
+        lines.append(lsf.tikz_addlegendentry(lsf.tikz_y_equals_x_label()))
+        lines.append(lsf.empty_string())
 
         for i, config in enumerate(self.evaluator.non_base_configs):
             color, marker = self._get_config_style(i)
             short_name = self._config_shortnames.get(config, config)
 
-            lines.append(f"% Configuration: {config}")
-            lines.append(
-                f"\\addplot[only marks, mark={marker}, mark size=2pt, "
-                f"color={color}, fill={color}, fill opacity=0.7] coordinates {{"
+            lines.append(lsf.tikz_comment(lsf.tikz_configuration_comment(config)))
+            lines.append(lsf.tikz_scatter_addplot(marker, color))
+
+            lines.extend(
+                self._build_scatter_coordinates(base_values, config_values[config])
             )
 
-            lines.extend(self._build_scatter_coordinates(base_values, config_values[config]))
+            lines.append(lsf.tikz_coordinates_end())
+            lines.append(lsf.tikz_addlegendentry(short_name))
+            lines.append(lsf.empty_string())
 
-            lines.append("};")
-            lines.append(f"\\addlegendentry{{{short_name}}}")
-            lines.append("")
+        lines.append(lsf.end_axis())
+        lines.append(lsf.end_tikzpicture())
 
-        lines.append("\\end{axis}")
-        lines.append("\\end{tikzpicture}")
-
-        return "\n".join(lines)
+        return lsf.newline().join(lines)
 
     def _collect_summary_data(
         self, definition: PlotDefinition
@@ -360,9 +354,9 @@ class TikzPlotGenerator:
             ).get(column)
 
             summary_data[config] = {
-                "mean": mean_val,
-                "median": median_val,
-                "sgm": sgm_val,
+                lsf.summary_key_mean(): mean_val,
+                lsf.summary_key_median(): median_val,
+                lsf.summary_key_sgm(): sgm_val,
             }
 
         return summary_data
@@ -380,24 +374,24 @@ class TikzPlotGenerator:
         bar_width = max(0.08, 0.6 / num_configs)
 
         options = [
-            "ybar",
-            f"bar width={bar_width:.2f}cm",
-            "enlarge x limits=0.3",
-            "legend style={at={(0.5,-0.2)}, anchor=north, legend columns=-1}",
-            "legend cell align=left",
-            "ylabel={Value}",
-            "symbolic x coords={Mean, Median, SGM}",
-            "xtick=data",
-            "grid=major",
-            "grid style={line width=.1pt, draw=gray!30}",
-            "ymin=0",
-            "width=12cm",
-            "height=8cm",
-            r"nodes near coords style={font=\tiny, rotate=90, anchor=west}",
+            lsf.tikz_ybar(),
+            lsf.tikz_bar_width(bar_width),
+            lsf.tikz_enlarge_x_limits(),
+            lsf.tikz_legend_style_bottom(),
+            lsf.tikz_legend_cell_align_left(),
+            lsf.tikz_ylabel(lsf.tikz_value_label()),
+            lsf.tikz_symbolic_x_coords_summary(),
+            lsf.tikz_xtick_data(),
+            lsf.tikz_grid_major(),
+            lsf.tikz_grid_style_bar(),
+            lsf.tikz_ymin_zero(),
+            lsf.tikz_width_12cm(),
+            lsf.tikz_height_8cm(),
+            lsf.tikz_nodes_near_coords_style(),
         ]
 
         if definition.format_options.title:
-            options.append(f"title={{{definition.format_options.title}}}")
+            options.append(lsf.tikz_title(definition.format_options.title))
 
         return options
 
@@ -414,23 +408,23 @@ class TikzPlotGenerator:
 
         lines: list[str] = []
 
-        lines.append("% Grouped bar plot: summary statistics")
-        lines.append(f"% Column: {definition.column}")
-        lines.append("")
+        lines.append(lsf.tikz_comment(lsf.tikz_bar_plot_comment()))
+        lines.append(lsf.tikz_comment(lsf.tikz_column_comment(definition.column)))
+        lines.append(lsf.empty_string())
 
         lines.extend(self._get_color_definitions())
-        lines.append("")
+        lines.append(lsf.empty_string())
 
-        lines.append("\\begin{tikzpicture}")
-        lines.append("\\begin{axis}[")
+        lines.append(lsf.begin_tikzpicture())
+        lines.append(lsf.begin_axis())
 
         axis_options = self._build_bar_axis_options(definition)
         for i, opt in enumerate(axis_options):
-            comma = "," if i < len(axis_options) - 1 else ""
-            lines.append(f"    {opt}{comma}")
+            comma = lsf.comma() if i < len(axis_options) - 1 else lsf.empty_string()
+            lines.append(lsf.tikz_axis_option_line(opt, comma))
 
-        lines.append("]")
-        lines.append("")
+        lines.append(lsf.tikz_close_bracket())
+        lines.append(lsf.empty_string())
 
         precision = definition.format_options.precision
 
@@ -438,25 +432,41 @@ class TikzPlotGenerator:
             color, _ = self._get_config_style(i)
 
             data = summary_data[config]
-            mean_val = data["mean"] if data["mean"] is not None else 0
-            median_val = data["median"] if data["median"] is not None else 0
-            sgm_val = data["sgm"] if data["sgm"] is not None else 0
-
-            lines.append(f"% Configuration: {config}")
-            lines.append(
-                f"\\addplot[fill={color}, draw={color}!80!black] coordinates {{"
+            mean_val = (
+                data[lsf.summary_key_mean()]
+                if data[lsf.summary_key_mean()] is not None
+                else 0
             )
-            lines.append(f"    (Mean, {mean_val:.{precision}f})")
-            lines.append(f"    (Median, {median_val:.{precision}f})")
-            lines.append(f"    (SGM, {sgm_val:.{precision}f})")
-            lines.append("};")
-            lines.append(f"\\addlegendentry{{{self._config_shortnames.get(config, config)}}}")
-            lines.append("")
+            median_val = (
+                data[lsf.summary_key_median()]
+                if data[lsf.summary_key_median()] is not None
+                else 0
+            )
+            sgm_val = (
+                data[lsf.summary_key_sgm()]
+                if data[lsf.summary_key_sgm()] is not None
+                else 0
+            )
 
-        lines.append("\\end{axis}")
-        lines.append("\\end{tikzpicture}")
+            lines.append(lsf.tikz_comment(lsf.tikz_configuration_comment(config)))
+            lines.append(lsf.tikz_bar_addplot(color))
+            lines.append(lsf.tikz_bar_coordinate(lsf.mean_label(), mean_val, precision))
+            lines.append(
+                lsf.tikz_bar_coordinate(lsf.median_label(), median_val, precision)
+            )
+            lines.append(
+                lsf.tikz_bar_coordinate(lsf.sgm_short_label(), sgm_val, precision)
+            )
+            lines.append(lsf.tikz_coordinates_end())
+            lines.append(
+                lsf.tikz_addlegendentry(self._config_shortnames.get(config, config))
+            )
+            lines.append(lsf.empty_string())
 
-        return "\n".join(lines)
+        lines.append(lsf.end_axis())
+        lines.append(lsf.end_tikzpicture())
+
+        return lsf.newline().join(lines)
 
     def save_plot(self, tikz_code: str, filename: str) -> Path:
         """Save TikZ code to a file.
@@ -469,7 +479,9 @@ class TikzPlotGenerator:
             Path to the saved file.
         """
         filepath = self._output_dir / filename
-        with open(filepath, "w", encoding="utf-8") as file:
+        with open(
+            filepath, lsf.file_mode_write(), encoding=lsf.file_encoding_utf8()
+        ) as file:
             file.write(tikz_code)
         return filepath
 
@@ -495,7 +507,9 @@ class TikzPlotGenerator:
             Path to the saved file.
         """
         tikz_code = self.generate_grouped_bar_plot(definition)
-        bar_filename = definition.metadata.filename.replace(".tex", "_bar.tex")
+        bar_filename = definition.metadata.filename.replace(
+            lsf.tex_extension(), lsf.bar_suffix_tex()
+        )
         return self.save_plot(tikz_code, bar_filename)
 
     def generate_plots_from_definition(self, definition: PlotDefinition) -> list[Path]:
