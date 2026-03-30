@@ -5,9 +5,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
-from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import StandardScaler
-import numpy as np
 
 from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 from alpaca.study.evaluator import StudyEvaluator, InstanceFilter
@@ -50,15 +47,15 @@ class TableDefinition:
     Attributes:
         column: Column name(s) to compare.
         metadata: Table metadata (filename, caption, label).
-        config: Config to get model size from or to compare.
-        filter_type: Instance filter to apply.
+        config: Config to get model size from.
+        instance_filter: Filter to apply to instances.
         format_options: Formatting options for values.
     """
 
     column: str | list[str]
     metadata: TableMetadata
     config: str = lsf.empty_string()
-    filter_type: InstanceFilter = InstanceFilter.NONE
+    instance_filter: InstanceFilter = InstanceFilter.NONE
     format_options: TableFormatOptions = field(default_factory=TableFormatOptions)
 
 
@@ -120,8 +117,6 @@ class LatexTableGenerator:
         method(): method for method in _LSF_METHODS
     }
 
-    GEOMETRIC_MEAN_SHIFT = 10.0
-
     def __init__(self, config: GeneratorConfig) -> None:
         """Initialize the LaTeX table generator.
 
@@ -132,89 +127,35 @@ class LatexTableGenerator:
         self._config = config
         self._output_dir = Path(config.output_dir)
         self._output_dir.mkdir(parents=True, exist_ok=True)
-        self._config_shortnames = self._build_config_shortnames()
+        self._config_shortnames = self.evaluator.build_config_shortnames()
 
     @property
     def evaluator(self) -> StudyEvaluator:
         """Get the study evaluator."""
         return self._config.evaluator
 
-    @property
-    def config_shortener(self) -> Callable[[str], str]:
-        """Get the config shortener function."""
-        if self._config.config_shortener is not None:
-            return self._config.config_shortener
-        return self._default_config_shortener
-
-    def _build_config_shortnames(self) -> dict[str, str]:
-        """Build mapping of config names to short names."""
-        shortnames = {}
-        used_shortnames: set[str] = set()
-
-        for config in self.evaluator.data.configs:
-            short = self._get_unique_shortname(config, used_shortnames)
-            shortnames[config] = short
-            used_shortnames.add(short)
-
-        return shortnames
-
-    def _get_unique_shortname(self, config: str, used: set[str]) -> str:
-        """Get a unique short name for a config."""
-        short = self.config_shortener(config)
-        original_short = short
-        counter = 1
-        while short in used:
-            short = f"{original_short}{counter}"
-            counter += 1
-        return short
-
-    @staticmethod
-    def _default_config_shortener(config_name: str) -> str:
-        """Default config name shortener."""
-        if lsf.underscore() in config_name:
-            parts = config_name.split(lsf.underscore())
-            abbrev = lsf.empty_string().join(p[0].upper() for p in parts if p)
-            if len(abbrev) >= 2:
-                return abbrev
-
-        capitals = [c for c in config_name if c.isupper()]
-        if len(capitals) >= 2:
-            return lsf.empty_string().join(capitals)
-
-        return config_name[:4].upper()
-
     def _format_value(
         self,
         value: float | None,
         fmt: TableFormatOptions,
-        relative_to: float | None = None,
         bold: bool = False,
-    ) -> tuple[float | int, str]:
+    ) -> str:
         """Format a numeric value for LaTeX."""
         if value is None:
-            return 0.0, lsf.placeholder()
-
-        if relative_to is not None:
-            value = (
-                0.0 if relative_to == 0 else 100 * (relative_to - value) / relative_to
-            )
-            return value / 100, lsf.math_mode(
-                f"{value:.{fmt.precision}f}{lsf.percentage_suffix()}", bold=bold
-            )
+            return lsf.placeholder()
 
         if value == self._config.evaluator.time_limit:
-            return 0.0, lsf.timeout_placeholder()
+            return lsf.timeout_placeholder()
 
         if fmt.percentage:
-            value *= 100
-            return value, lsf.math_mode(
-                f"{value:.{fmt.precision}f}{lsf.percentage_suffix()}", bold=bold
+            return lsf.math_mode(
+                f"{100 * value:.{fmt.precision}f}{lsf.percentage_suffix()}", bold=bold
             )
 
         if fmt.precision == 0:
-            return int(round(value)), lsf.math_mode(str(int(round(value))), bold=bold)
+            return lsf.math_mode(str(int(round(value))), bold=bold)
 
-        return value, lsf.math_mode(f"{value:.{fmt.precision}f}", bold=bold)
+        return lsf.math_mode(f"{value:.{fmt.precision}f}", bold=bold)
 
     def _get_column_header(self, column: str) -> str:
         """Get LaTeX formatted column header."""
@@ -268,25 +209,6 @@ class LatexTableGenerator:
 
         return "\n".join(lines)
 
-    @staticmethod
-    def _compute_mean(values: list[float]) -> float | None:
-        """Compute arithmetic mean of values."""
-        return float(np.mean(values))
-
-    @staticmethod
-    def _compute_median(values: list[float]) -> float | None:
-        """Compute median of values."""
-        return float(np.median(values))
-
-    def _compute_shifted_geometric_mean(self, values: list[float]) -> float | None:
-        """Compute shifted geometric mean of values."""
-        shifted_values = [v + self.GEOMETRIC_MEAN_SHIFT for v in values]
-        if any(v <= 0 for v in shifted_values):
-            return None
-
-        log_mean = np.mean(np.log(shifted_values))
-        return float(np.exp(log_mean) - self.GEOMETRIC_MEAN_SHIFT)
-
     def _build_model_size_headers(self, columns: list[str]) -> list[str]:
         """Build headers for model size table."""
         headers = [lsf.stats_instance_name(lsf.stats_format_latex())]
@@ -295,58 +217,29 @@ class LatexTableGenerator:
             headers.append(lsf.escape_underscore(header))
         return headers
 
-    def _build_model_size_rows(
-        self, definition: TableDefinition
-    ) -> tuple[list[list[str]], dict[str, list[float]]]:
+    def _build_model_size_rows(self, definition: TableDefinition) -> list[list[str]]:
         """Build rows and collect values for model size table."""
-        instances = self.evaluator.get_filtered_instances(InstanceFilter.NONE)
+        instances = self.evaluator.get_filtered_instances(definition.instance_filter)
         columns = definition.column
         format_options = definition.format_options
 
         rows = []
-        all_values = {col: [] for col in columns}
 
-        for instance in instances:
+        for instance in instances + [
+            lsf.mean_label(),
+            lsf.median_label(),
+            lsf.shifted_geometric_mean_label(),
+        ]:
             row = [lsf.escape_underscore(instance)]
             for col in columns:
                 value = self.evaluator.get_column_values_for_instance(col, instance)[
                     definition.config
                 ]
-                all_values[col].append(value)
-                _, value_str = self._format_value(value, format_options)
+                value_str = self._format_value(value, format_options)
                 row.append(value_str)
             rows.append(row)
 
-        return rows, all_values
-
-    def _append_model_size_summary_rows(
-        self,
-        rows: list[list[str]],
-        all_values: dict[str, list[float]],
-        columns: list[str],
-        format_options,
-    ) -> None:
-        """Append summary rows (mean, SGM, median) for model size table."""
-        mean_row = [lsf.mean_label()]
-        sgm_row = [lsf.shifted_geometric_mean_label()]
-        median_row = [lsf.median_label()]
-
-        for col in columns:
-            col_values = all_values[col]
-            _, value_str = self._format_value(
-                self._compute_mean(col_values), format_options
-            )
-            mean_row.append(value_str)
-            _, value_str = self._format_value(
-                self._compute_shifted_geometric_mean(col_values), format_options
-            )
-            sgm_row.append(value_str)
-            _, value_str = self._format_value(
-                self._compute_median(col_values), format_options
-            )
-            median_row.append(value_str)
-
-        rows.extend([mean_row, sgm_row, median_row])
+        return rows
 
     def generate_instance_model_size_table(self, definition: TableDefinition) -> str:
         """Generate table with instances as rows and model sizes as columns.
@@ -358,28 +251,15 @@ class LatexTableGenerator:
             LaTeX table code.
         """
         headers = self._build_model_size_headers(definition.column)
-        rows, all_values = self._build_model_size_rows(definition)
-        self._append_model_size_summary_rows(
-            rows, all_values, definition.column, definition.format_options
-        )
+        rows = self._build_model_size_rows(definition)
         return self._build_latex_table(headers, rows, definition.metadata)
 
-    def _build_pivot_headers(self, definition: TableDefinition) -> list[str]:
+    def _build_pivot_headers(self, header_configs: list[str]) -> list[str]:
         """Build headers for pivot table."""
         headers = [lsf.stats_instance_name(lsf.stats_format_latex())]
-        for config in self.evaluator.data.configs:
-            if config == definition.config:
-                continue
+        for config in header_configs:
             headers.append(lsf.escape_underscore(self._config_shortnames[config]))
         return headers
-
-    def _get_relative_to_value(
-        self, values: dict[str, float | None], config: str
-    ) -> float | None:
-        """Get the relative-to value from the specified config."""
-        if config == lsf.empty_string():
-            return None
-        return values.get(config)
 
     def _compute_bold_value(
         self, values: dict[str, float | None], bold_type: str | None
@@ -388,7 +268,7 @@ class LatexTableGenerator:
         if bold_type is None:
             return None
 
-        config_values = [values.get(config) for config in self.evaluator.data.configs]
+        config_values = list(values.values())
 
         if any(val is None for val in config_values):
             return None
@@ -397,111 +277,41 @@ class LatexTableGenerator:
 
     def _build_pivot_row_for_instance(
         self, instance: str, definition: TableDefinition
-    ) -> tuple[list[str], dict[str, float | None]]:
+    ) -> list[str]:
         """Build a single pivot table row for an instance."""
         row = [lsf.escape_underscore(instance)]
         values = self.evaluator.get_column_values_for_instance(
             definition.column, instance
         )
-        relative_values = {}
-        relative_to = self._get_relative_to_value(values, definition.config)
         bold_value = self._compute_bold_value(values, definition.format_options.bold)
 
         for config in self.evaluator.data.configs:
-            if relative_to is not None and config == definition.config:
+            if not config in values:
                 continue
             value = values.get(config)
             bold = bold_value is not None and value == bold_value
             formatted_value = 0.0 if value is None else value
-            relative_value, value_str = self._format_value(
-                formatted_value, definition.format_options, relative_to, bold=bold
+            value_str = self._format_value(
+                formatted_value, definition.format_options, bold=bold
             )
             row.append(value_str)
-            relative_values[config] = relative_value
 
-        return row, relative_values
+        return row
 
-    def _build_pivot_rows(
-        self, definition: TableDefinition
-    ) -> tuple[list[list[str]], dict[str, list[float]]]:
+    def _build_pivot_rows(self, definition: TableDefinition) -> list[list[str]]:
         """Build rows and collect values for pivot table."""
-        instances = self.evaluator.get_filtered_instances(definition.filter_type)
+        instances = self.evaluator.get_filtered_instances(definition.instance_filter)
         rows = []
-        all_values = {cfg: [] for cfg in self.evaluator.data.configs}
 
-        for instance in instances:
-            row, values = self._build_pivot_row_for_instance(instance, definition)
-
-            if any(cell is None or "inf" in cell for cell in row):
-                continue
-
-            for config in self.evaluator.data.configs:
-                value = values.get(config)
-                all_values[config].append(0.0 if value is None else value)
+        for instance in instances + [
+            lsf.mean_label(),
+            lsf.median_label(),
+            lsf.shifted_geometric_mean_label(),
+        ]:
+            row = self._build_pivot_row_for_instance(instance, definition)
             rows.append(row)
 
-        return rows, all_values
-
-    def _append_pivot_summary_rows(
-        self,
-        rows: list[list[str]],
-        all_values: dict[str, list[float]],
-        definition: TableDefinition,
-    ) -> None:
-        """Append summary rows (mean, SGM, median) for pivot table."""
-
-        mean_row = [lsf.mean_label()]
-        sgm_row = [lsf.shifted_geometric_mean_label()]
-        median_row = [lsf.median_label()]
-
-        for config in self.evaluator.data.configs:
-            if config == definition.config:
-                continue
-            config_values = all_values[config]
-            _, value_str = self._format_value(
-                self._compute_mean(config_values), definition.format_options
-            )
-            mean_row.append(value_str)
-            _, value_str = self._format_value(
-                self._compute_shifted_geometric_mean(config_values),
-                definition.format_options,
-            )
-            sgm_row.append(value_str)
-            _, value_str = self._format_value(
-                self._compute_median(config_values),
-                definition.format_options,
-            )
-            median_row.append(value_str)
-
-        rows.extend([mean_row, sgm_row, median_row])
-
-    def _trim_outliers(self, values: dict[str, list[float]]) -> dict[str, list[float]]:
-        trim_percentage = self.evaluator.mean_trim
-        n_instances = len(next(iter(values.values())))
-
-        if n_instances <= 1 or trim_percentage <= 0:
-            return values
-
-        keys = list(values.keys())
-        data = np.array([[values[key][i] for key in keys] for i in range(n_instances)])
-
-        # Standardize features for better performance
-        scaler = StandardScaler()
-        data_scaled = scaler.fit_transform(data)
-
-        # Isolation Forest: contamination = fraction of outliers to remove
-        iso_forest = IsolationForest(
-            contamination=min(trim_percentage, 0.5),
-            random_state=42,
-            n_estimators=100
-        )
-        predictions = iso_forest.fit_predict(data_scaled)
-
-        # 1 = inlier, -1 = outlier
-        inlier_indices = [i for i in range(n_instances) if predictions[i] == 1]
-
-        return {key: [values[key][i] for i in inlier_indices] for key in keys}
-
+        return rows
 
     def generate_instance_pivot_table(self, definition: TableDefinition) -> str:
         """Generate table with instances as rows and configs as columns.
@@ -512,11 +322,13 @@ class LatexTableGenerator:
         Returns:
             LaTeX table code.
         """
-        headers = self._build_pivot_headers(definition)
-        rows, all_values = self._build_pivot_rows(definition)
-        all_values = self._trim_outliers(all_values)
-
-        self._append_pivot_summary_rows(rows, all_values, definition)
+        rows = self._build_pivot_rows(definition)
+        header_configs = list(
+            self.evaluator.get_column_values_for_instance(
+                definition.column, lsf.mean_label()
+            ).keys()
+        )
+        headers = self._build_pivot_headers(header_configs)
 
         return self._build_latex_table(headers, rows, definition.metadata)
 
@@ -549,7 +361,6 @@ class LatexTableGenerator:
         return [
             TableDefinition(
                 column=lsf.stats_solving_time(),
-                filter_type=InstanceFilter.NONE,
                 metadata=TableMetadata(
                     filename="table_instance_solution_time.tex",
                     caption="Solving time per instance and configuration.",
@@ -559,7 +370,6 @@ class LatexTableGenerator:
             ),
             TableDefinition(
                 column=lsf.stats_nr_nodes(),
-                filter_type=InstanceFilter.BRANCH_AND_BOUND,
                 metadata=TableMetadata(
                     filename="table_instance_nr_nodes.tex",
                     caption="Number of nodes per instance and configuration. "
@@ -571,7 +381,6 @@ class LatexTableGenerator:
             ),
             TableDefinition(
                 column=lsf.stats_root_solution_value(),
-                filter_type=InstanceFilter.ALL_REACHED_ROOT,
                 metadata=TableMetadata(
                     filename="table_instance_root_solution.tex",
                     caption="Root relaxation solution per instance and configuration. "
@@ -579,11 +388,10 @@ class LatexTableGenerator:
                     "the root node.",
                     label="tab:instance_root_solution",
                 ),
-                format_options=TableFormatOptions(precision=0, bold="max"),
+                format_options=TableFormatOptions(precision=2, bold="max"),
             ),
             TableDefinition(
                 column=lsf.stats_mip_gap(),
-                filter_type=InstanceFilter.NONE,
                 metadata=TableMetadata(
                     filename="table_instance_mip_gap.tex",
                     caption="MIP gap per instance and configuration.",
@@ -606,9 +414,7 @@ class LatexTableGenerator:
                 format_options=TableFormatOptions(precision=0),
             ),
             TableDefinition(
-                config=self.evaluator.base_config,
-                filter_type=InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
-                column=lsf.stats_locatelli_domain_volume_polygon(),
+                column=lsf.stats_volume_reduction_polygon(),
                 metadata=TableMetadata(
                     filename="table_instance_domain_volume_polygon.tex",
                     caption="Domain volume reduction relative to McCormick"
@@ -617,13 +423,11 @@ class LatexTableGenerator:
                     label="tab:instance_domain_volume_polygon",
                 ),
                 format_options=TableFormatOptions(
-                    precision=2, bold="min", percentage=True
+                    precision=2, bold="max", percentage=True
                 ),
             ),
             TableDefinition(
-                config=self.evaluator.base_config,
-                filter_type=InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
-                column=lsf.stats_locatelli_domain_volume_polytope(),
+                column=lsf.stats_volume_reduction_polytope(),
                 metadata=TableMetadata(
                     filename="table_instance_domain_volume_polytope.tex",
                     caption="Domain volume reduction relative to McCormick"
@@ -632,7 +436,7 @@ class LatexTableGenerator:
                     label="tab:instance_domain_volume_polytope",
                 ),
                 format_options=TableFormatOptions(
-                    precision=2, bold="min", percentage=True
+                    precision=2, bold="max", percentage=True
                 ),
             ),
         ]
@@ -641,18 +445,3 @@ class LatexTableGenerator:
         """Generate all predefined tables."""
         definitions = self.get_predefined_table_definitions()
         return self.generate_tables(definitions)
-
-    def get_config_legend(self) -> str:
-        """Get LaTeX code for config name legend."""
-        lines = [lsf.begin_itemize()]
-        for config, short in self._config_shortnames.items():
-            escaped_config = lsf.escape_underscore(config)
-            escaped_short = lsf.escape_underscore(short)
-            lines.append(lsf.item(escaped_short, escaped_config))
-        lines.append(lsf.end_itemize())
-        return "\n".join(lines)
-
-    def save_config_legend(self, filename: str = "config_legend.tex") -> Path:
-        """Save config name legend to file."""
-        legend = self.get_config_legend()
-        return self.save_table(legend, filename)

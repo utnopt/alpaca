@@ -277,6 +277,18 @@ class Statistics:
         return "mpip_nr_cuts"
 
     @classmethod
+    def stats_volume_reduction_polytope(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return r"Vol. Red. PT"
+        return "volume_reduction_polytope"
+
+    @classmethod
+    def stats_volume_reduction_polygon(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return r"Vol. Red. PG"
+        return "volume_reduction_polygon"
+
+    @classmethod
     def stats_column_names(cls) -> str:
         return (
             f"{cls.stats_instance_name()},"

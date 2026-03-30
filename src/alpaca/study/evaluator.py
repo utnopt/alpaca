@@ -10,6 +10,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
 from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 from alpaca.utils.logger import logger
@@ -23,7 +25,10 @@ class InstanceFilter(Enum):
     """No filtering - use all complete instances."""
 
     ALL_REACHED_ROOT = auto()
-    """Only instances where all configs reached the root node (not by time limit)."""
+    """Only instances where all configs reached the root node before time limit."""
+
+    ALL_FOUND_SOLUTION = auto()
+    """Only instances that found a feasible solution before time limit"""
 
     NON_EMPTY_BILINEAR_DOMAIN = auto()
     """Only instances where all configs have non-empty bilinear domains."""
@@ -82,40 +87,44 @@ class StudyEvaluator:
     computes statistics per configuration, and provides data extraction utilities.
     """
 
-    NUMERIC_COLUMNS = {
-        lsf.stats_solving_time(),
-        lsf.stats_nr_nodes(),
-        lsf.stats_solution_value(),
-        lsf.stats_mip_gap(),
-        lsf.stats_final_nr_vars(),
-        lsf.stats_final_nr_constraints(),
-        lsf.stats_presolved_nr_vars(),
-        lsf.stats_presolved_nr_constraints(),
-        lsf.stats_presolved_nr_nonzeros(),
-        lsf.stats_root_solution_value(),
-        lsf.stats_root_solving_time(),
-        lsf.stats_build_time(),
-        lsf.stats_original_nr_variables(),
-        lsf.stats_original_nr_constraints(),
-        lsf.stats_original_nr_bilinear_expressions(),
-        lsf.stats_original_nr_bilinear_binary_expressions(),
-        lsf.stats_original_nr_mixed_binary_expressions(),
-        lsf.stats_original_nr_multilinear_expressions(),
-        lsf.stats_original_nr_one_dim_expressions(),
-        lsf.stats_pwl_nr_variables(),
-        lsf.stats_pwl_nr_constraints(),
-        lsf.stats_pwl_nr_bilinear_expressions(),
-        lsf.stats_pwl_nr_bilinear_binary_expressions(),
-        lsf.stats_pwl_nr_mixed_binary_expressions(),
-        lsf.stats_pwl_nr_multilinear_expressions(),
-        lsf.stats_pwl_nr_one_dim_expressions(),
-        lsf.stats_locatelli_domain_volume_polygon(),
-        lsf.stats_locatelli_domain_volume_polytope(),
-        lsf.stats_locatelli_nr_cuts(),
-        lsf.stats_mpip_nr_instances(),
-        lsf.stats_mpip_ratio(),
-        lsf.stats_mpip_nr_cuts(),
+    COLUMN_TO_FILTER = {
+        lsf.stats_solving_time(): InstanceFilter.NONE,
+        lsf.stats_nr_nodes(): InstanceFilter.BRANCH_AND_BOUND,
+        lsf.stats_solution_value(): InstanceFilter.NONE,
+        lsf.stats_mip_gap(): InstanceFilter.ALL_FOUND_SOLUTION,
+        lsf.stats_final_nr_vars(): InstanceFilter.NONE,
+        lsf.stats_final_nr_constraints(): InstanceFilter.NONE,
+        lsf.stats_presolved_nr_vars(): InstanceFilter.NONE,
+        lsf.stats_presolved_nr_constraints(): InstanceFilter.NONE,
+        lsf.stats_presolved_nr_nonzeros(): InstanceFilter.NONE,
+        lsf.stats_root_solution_value(): InstanceFilter.ALL_REACHED_ROOT,
+        lsf.stats_root_solving_time(): InstanceFilter.ALL_REACHED_ROOT,
+        lsf.stats_build_time(): InstanceFilter.NONE,
+        lsf.stats_original_nr_variables(): InstanceFilter.NONE,
+        lsf.stats_original_nr_constraints(): InstanceFilter.NONE,
+        lsf.stats_original_nr_bilinear_expressions(): InstanceFilter.NONE,
+        lsf.stats_original_nr_bilinear_binary_expressions(): InstanceFilter.NONE,
+        lsf.stats_original_nr_mixed_binary_expressions(): InstanceFilter.NONE,
+        lsf.stats_original_nr_multilinear_expressions(): InstanceFilter.NONE,
+        lsf.stats_original_nr_one_dim_expressions(): InstanceFilter.NONE,
+        lsf.stats_pwl_nr_variables(): InstanceFilter.NONE,
+        lsf.stats_pwl_nr_constraints(): InstanceFilter.NONE,
+        lsf.stats_pwl_nr_bilinear_expressions(): InstanceFilter.NONE,
+        lsf.stats_pwl_nr_bilinear_binary_expressions(): InstanceFilter.NONE,
+        lsf.stats_pwl_nr_mixed_binary_expressions(): InstanceFilter.NONE,
+        lsf.stats_pwl_nr_multilinear_expressions(): InstanceFilter.NONE,
+        lsf.stats_pwl_nr_one_dim_expressions(): InstanceFilter.NONE,
+        lsf.stats_locatelli_domain_volume_polygon(): InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
+        lsf.stats_locatelli_domain_volume_polytope(): InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
+        lsf.stats_locatelli_nr_cuts(): InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
+        lsf.stats_mpip_nr_instances(): InstanceFilter.NONE,
+        lsf.stats_mpip_ratio(): InstanceFilter.NONE,
+        lsf.stats_mpip_nr_cuts(): InstanceFilter.NONE,
+        lsf.stats_volume_reduction_polygon(): InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
+        lsf.stats_volume_reduction_polytope(): InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
     }
+
+    GEOMETRIC_MEAN_SHIFT = 10.0
 
     def __init__(
         self,
@@ -146,6 +155,8 @@ class StudyEvaluator:
         self._filter_converged_inconsistent_instances()
         self._filter_nones_in_solving_time()
         self._compute_filter_results()
+        self._add_volume_reduction_columns()
+        self._add_summary_rows()
 
     def _load_csv(self) -> None:
         """Loads and parses the CSV file into the data structure."""
@@ -192,8 +203,14 @@ class StudyEvaluator:
     def _cap_solving_time(self, row: dict[str, Any]) -> None:
         """Caps the solving time in the row to the specified time limit."""
         solving_time = row.get(lsf.stats_solving_time())
+        root_solving_time = row.get(lsf.stats_root_solving_time())
         if isinstance(solving_time, (int, float)) and solving_time > self.time_limit:
             row[lsf.stats_solving_time()] = self.time_limit
+        if (
+            isinstance(root_solving_time, (int, float))
+            and root_solving_time > self.time_limit
+        ):
+            row[lsf.stats_root_solving_time()] = self.time_limit
 
     def _filter_complete_instances(self) -> None:
         """Filters to keep only instances where all configurations have results."""
@@ -324,6 +341,10 @@ class StudyEvaluator:
         reached_root_result = self._compute_all_reached_root_filter()
         self._filter_cache[InstanceFilter.ALL_REACHED_ROOT] = reached_root_result
 
+        # ALL_FOUND_SOLUTION filter
+        found_solution_result = self._compute_all_found_solution_filter()
+        self._filter_cache[InstanceFilter.ALL_FOUND_SOLUTION] = found_solution_result
+
         # ALL_TERMINATED filter
         terminated_result = self._compute_all_terminated_filter()
         self._filter_cache[InstanceFilter.ALL_TERMINATED] = terminated_result
@@ -394,6 +415,8 @@ class StudyEvaluator:
                 if (
                     abs(polytope_domain) < s.StaticSettings.feasibility_tolerance
                     or abs(polygon_domain) < s.StaticSettings.feasibility_tolerance
+                    or abs(polytope_domain) > s.StaticSettings.infinity
+                    or abs(polygon_domain) > s.StaticSettings.infinity
                 ):
                     no_empty_domain = False
                     break
@@ -418,7 +441,11 @@ class StudyEvaluator:
             for config in self.data.configs:
                 row_data = self.data.data_matrix.get((instance, config), {})
                 root_solution = row_data.get(lsf.stats_root_solution_value())
-                if root_solution == -s.StaticSettings.infinity:
+                root_solving_time = row_data.get(lsf.stats_root_solving_time())
+                if (
+                    root_solution == -s.StaticSettings.infinity
+                    or root_solving_time is None
+                ):
                     all_reached_root = False
                     break
 
@@ -426,6 +453,30 @@ class StudyEvaluator:
                 reached_root_instances.append(instance)
 
         return FilterResult(instances=reached_root_instances, warnings=warnings)
+
+    def _compute_all_found_solution_filter(self) -> FilterResult:
+        """Computes instances where all configs found a feasible solution.
+
+        Returns:
+            FilterResult with instances that found a feasible solution for all configs.
+        """
+        found_solution_instances = []
+        warnings = []
+
+        for instance in self.data.instances:
+            all_found_solution = True
+
+            for config in self.data.configs:
+                row_data = self.data.data_matrix.get((instance, config), {})
+                mip_gap = row_data.get(lsf.stats_mip_gap())
+                if mip_gap is None:
+                    all_found_solution = False
+                    break
+
+            if all_found_solution:
+                found_solution_instances.append(instance)
+
+        return FilterResult(instances=found_solution_instances, warnings=warnings)
 
     def _compute_all_terminated_filter(self) -> FilterResult:
         """Computes instances where all configs terminated successfully.
@@ -607,7 +658,7 @@ class StudyEvaluator:
         """
         parsed = {}
         for key, value in row.items():
-            if key in self.NUMERIC_COLUMNS:
+            if key in self.COLUMN_TO_FILTER:
                 parsed[key] = self._parse_numeric(value)
             else:
                 parsed[key] = value
@@ -630,30 +681,6 @@ class StudyEvaluator:
         except ValueError:
             return None
 
-    def get_column_values_for_config(
-        self,
-        column: str,
-        config: str,
-        filter_type: InstanceFilter = InstanceFilter.NONE,
-    ) -> list[float]:
-        """Extracts numeric values for a column filtered by configuration.
-
-        Args:
-            column: Column name to extract.
-            config: Configuration name to filter by.
-            filter_type: Instance filter to apply.
-
-        Returns:
-            List of non-None numeric values.
-        """
-        instances = self.get_filtered_instances(filter_type)
-        values = []
-        for instance in instances:
-            val = self.data.data_matrix.get((instance, config), {}).get(column)
-            if val is not None:
-                values.append(val)
-        return values
-
     def get_column_values_for_instance(
         self, column: str, instance: str
     ) -> dict[str, float | None]:
@@ -668,135 +695,10 @@ class StudyEvaluator:
         """
         values = {}
         for config in self.data.configs:
-            val = self.data.data_matrix.get((instance, config), {}).get(column)
-            values[config] = val
+            val_per_config = self.data.data_matrix.get((instance, config), {})
+            if column in val_per_config:
+                values[config] = val_per_config[column]
         return values
-
-    def compute_statistics_for_config(
-        self,
-        column: str,
-        config: str,
-        filter_type: InstanceFilter = InstanceFilter.NONE,
-    ) -> dict[str, float | None]:
-        """Computes comprehensive statistics for a column and configuration.
-
-        Args:
-            column: Column name.
-            config: Configuration name.
-            filter_type: Instance filter to apply.
-
-        Returns:
-            Dictionary with mean, std, min, max, median, q25, q75 values.
-        """
-        values = self.get_column_values_for_config(column, config, filter_type)
-
-        if not values:
-            return {
-                "mean": None,
-                "std": None,
-                "min": None,
-                "max": None,
-                "median": None,
-                "q25": None,
-                "q75": None,
-            }
-
-        arr = np.array(values)
-        return {
-            "mean": float(np.mean(arr)),
-            "std": float(np.std(arr)),
-            "min": float(np.min(arr)),
-            "max": float(np.max(arr)),
-            "median": float(np.median(arr)),
-            "q25": float(np.percentile(arr, 25)),
-            "q75": float(np.percentile(arr, 75)),
-        }
-
-    def get_instances_solved_over_time(
-        self,
-        time_column: str = None,
-        filter_type: InstanceFilter = InstanceFilter.NONE,
-    ) -> dict[str, list[tuple[float, int]]]:
-        """Computes cumulative instances solved over time for each config.
-
-        Args:
-            time_column: Column containing solving times.
-            filter_type: Instance filter to apply.
-
-        Returns:
-            Dictionary mapping config to list of (time, cumulative_count) tuples.
-        """
-        if time_column is None:
-            time_column = lsf.stats_solving_time()
-
-        instances = self.get_filtered_instances(filter_type)
-        result = {}
-
-        for config in self.data.configs:
-            times = []
-            for instance in instances:
-                val = self.data.data_matrix.get((instance, config), {}).get(time_column)
-                if val is not None:
-                    times.append(val)
-
-            if not times:
-                result[config] = []
-                continue
-
-            sorted_times = sorted(times)
-            points = []
-            for i, time in enumerate(sorted_times):
-                points.append((time, i + 1))
-
-            result[config] = points
-
-        return result
-
-    def get_pivot_data(
-        self,
-        columns: list[str],
-        filter_type: InstanceFilter = InstanceFilter.NONE,
-    ) -> dict[str, dict[str, dict[str, float | None]]]:
-        """Creates pivot data for instances with multiple columns per config.
-
-        Args:
-            columns: List of column names to include.
-            filter_type: Instance filter to apply.
-
-        Returns:
-            Nested dict: {instance: {config: {column: value}}}.
-        """
-        instances = self.get_filtered_instances(filter_type)
-        pivot = {}
-        for instance in instances:
-            pivot[instance] = {}
-            for config in self.data.configs:
-                pivot[instance][config] = {}
-                row_data = self.data.data_matrix.get((instance, config), {})
-                for column in columns:
-                    pivot[instance][config][column] = row_data.get(column)
-        return pivot
-
-    def get_boxplot_data_for_config(
-        self,
-        column: str,
-        filter_type: InstanceFilter = InstanceFilter.NONE,
-    ) -> dict[str, dict[str, float | None]]:
-        """Gets boxplot statistics for a column across all configurations.
-
-        Args:
-            column: Column name.
-            filter_type: Instance filter to apply.
-
-        Returns:
-            Dictionary mapping config to boxplot statistics.
-        """
-        result = {}
-        for config in self.data.configs:
-            result[config] = self.compute_statistics_for_config(
-                column, config, filter_type
-            )
-        return result
 
     def get_instance_data(
         self,
@@ -842,6 +744,9 @@ class StudyEvaluator:
                 "all_reached_root": len(
                     self._filter_cache[InstanceFilter.ALL_REACHED_ROOT].instances
                 ),
+                "all_found_solution": len(
+                    self._filter_cache[InstanceFilter.ALL_FOUND_SOLUTION].instances
+                ),
                 "all_terminated": len(
                     self._filter_cache[InstanceFilter.ALL_TERMINATED].instances
                 ),
@@ -865,3 +770,158 @@ class StudyEvaluator:
                 ),
             },
         }
+
+    @staticmethod
+    def _compute_mean(values: list[float]) -> float | None:
+        """Compute arithmetic mean of values."""
+        return float(np.mean(values))
+
+    @staticmethod
+    def _compute_median(values: list[float]) -> float | None:
+        """Compute median of values."""
+        return float(np.median(values))
+
+    def _compute_shifted_geometric_mean(self, values: list[float]) -> float | None:
+        """Compute shifted geometric mean of values."""
+        shifted_values = [v + self.GEOMETRIC_MEAN_SHIFT for v in values]
+        if any(v <= 0 for v in shifted_values):
+            return None
+
+        log_mean = np.mean(np.log(shifted_values))
+        return float(np.exp(log_mean) - self.GEOMETRIC_MEAN_SHIFT)
+
+    def _add_volume_reduction_columns(self):
+        for instance in self.data.instances:
+            base_config_value_polygon = self.data.data_matrix[
+                (instance, self.base_config)
+            ][lsf.stats_locatelli_domain_volume_polygon()]
+            base_config_value_polytope = self.data.data_matrix[
+                (instance, self.base_config)
+            ][lsf.stats_locatelli_domain_volume_polytope()]
+            for config in self.data.configs:
+                if config == self.base_config:
+                    continue
+                config_value_polygon = self.data.data_matrix[(instance, config)][
+                    lsf.stats_locatelli_domain_volume_polygon()
+                ]
+                config_value_polytope = self.data.data_matrix[(instance, config)][
+                    lsf.stats_locatelli_domain_volume_polytope()
+                ]
+                self.data.data_matrix[(instance, config)][
+                    lsf.stats_volume_reduction_polygon()
+                ] = (
+                    0.0
+                    if base_config_value_polygon == 0
+                    else (base_config_value_polygon - config_value_polygon)
+                    / base_config_value_polygon
+                )
+                self.data.data_matrix[(instance, config)][
+                    lsf.stats_volume_reduction_polytope()
+                ] = (
+                    0.0
+                    if base_config_value_polytope == 0
+                    else (base_config_value_polytope - config_value_polytope)
+                    / base_config_value_polytope
+                )
+
+    def _add_summary_rows(self):
+        for config in self.data.configs:
+            self.data.data_matrix[(lsf.mean_label(), config)] = {}
+            self.data.data_matrix[(lsf.median_label(), config)] = {}
+            self.data.data_matrix[(lsf.shifted_geometric_mean_label(), config)] = {}
+        for column, instance_filter in self.COLUMN_TO_FILTER.items():
+            instances = self.get_filtered_instances(instance_filter)
+            values = {}
+            for config in self.data.configs:
+                try:
+                    values[config] = [
+                        self.data.data_matrix[(instance, config)][column]
+                        for instance in instances
+                    ]
+                except KeyError:
+                    continue
+            trimmed_values = self._trim_outliers(values)
+            for config, config_values in trimmed_values.items():
+                self.data.data_matrix[(lsf.mean_label(), config)][column] = (
+                    self._compute_mean(config_values)
+                )
+                self.data.data_matrix[(lsf.median_label(), config)][column] = (
+                    self._compute_median(config_values)
+                )
+                self.data.data_matrix[(lsf.shifted_geometric_mean_label(), config)][
+                    column
+                ] = self._compute_shifted_geometric_mean(config_values)
+
+    def _trim_outliers(self, values: dict[str, list[float]]) -> dict[str, list[float]]:
+        try:
+            trim_percentage = self.mean_trim
+            n_instances = len(next(iter(values.values())))
+
+            if n_instances <= 1 or trim_percentage <= 0:
+                return values
+
+            keys = list(values.keys())
+            data = np.array(
+                [[values[key][i] for key in keys] for i in range(n_instances)]
+            )
+
+            # Standardize features for better performance
+            scaler = StandardScaler()
+            data_scaled = scaler.fit_transform(data)
+
+            # Isolation Forest: contamination = fraction of outliers to remove
+            iso_forest = IsolationForest(
+                contamination=min(trim_percentage, 0.5),
+                random_state=42,
+                n_estimators=100,
+            )
+            predictions = iso_forest.fit_predict(data_scaled)
+
+            # 1 = inlier, -1 = outlier
+            inlier_indices = [i for i in range(n_instances) if predictions[i] == 1]
+
+            return {key: [values[key][i] for i in inlier_indices] for key in keys}
+        except ValueError:
+            return values
+
+    @property
+    def non_base_configs(self) -> list[str]:
+        """Get list of non-base configuration names."""
+        return [c for c in self.data.configs if c != self.base_config]
+
+    def build_config_shortnames(self) -> dict[str, str]:
+        """Build mapping of config names to short names."""
+        shortnames = {}
+        used_shortnames: set[str] = set()
+
+        for config in self.data.configs:
+            short = self.get_unique_shortname(config, used_shortnames)
+            shortnames[config] = short
+            used_shortnames.add(short)
+
+        return shortnames
+
+    def get_unique_shortname(self, config: str, used: set[str]) -> str:
+        """Get a unique short name for a config."""
+        short = self.config_shortener(config)
+        original_short = short
+        counter = 1
+        while short in used:
+            short = f"{original_short}{counter}"
+            counter += 1
+        return short
+
+    @staticmethod
+    def config_shortener(config_name: str) -> str:
+        """Default config name shortener."""
+        if "_" in config_name:
+            parts = config_name.split("_")
+            abbrev = "".join(p[0].upper() for p in parts if p)
+            if len(abbrev) >= 2:
+                return abbrev
+
+        capitals = [c for c in config_name if c.isupper()]
+        if len(capitals) >= 2:
+            return "".join(capitals)
+
+        return config_name[:4].upper()

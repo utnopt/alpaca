@@ -19,6 +19,7 @@ from alpaca.study.evaluator import StudyEvaluator
 from alpaca.study.latex_generator import LatexTableGenerator, GeneratorConfig
 from alpaca.utils.logger import logger
 from alpaca.utils import inout as ut_io
+from alpaca.study.tikz_generator import TikzPlotGenerator, PlotGeneratorConfig
 
 
 def get_default_paths() -> dict[str, str]:
@@ -210,29 +211,34 @@ def evaluate_command(args: argparse.Namespace) -> int:
 def evaluate_csv(
     csv_path: str, results_dir: str, time_limit: int, mean_trim: float, base_config: str
 ) -> None:
-    """Evaluates a CSV file and generates LaTeX outputs.
-
-    Args:
-        csv_path: Path to the CSV results file.
-        results_dir: Base directory for output.
-        time_limit: Time limit for runs (in seconds).
-        base_config: Base config name to identify in the CSV.
-    """
+    """Evaluates a CSV file and generates LaTeX outputs."""
     logger.info("Starting evaluation...")
 
     evaluator = StudyEvaluator(csv_path, time_limit, mean_trim, base_config)
 
+    # Generate tables
     latex_config = GeneratorConfig(
         evaluator,
         output_dir=str(Path(results_dir) / "tables"),
     )
-
     generator = LatexTableGenerator(latex_config)
-    outputs = generator.generate_all_predefined_tables()
+    table_outputs = generator.generate_all_predefined_tables()
 
-    logger.info("Generated %d tables:", len(outputs))
-    for table_path in outputs:
+    logger.info("Generated %d tables:", len(table_outputs))
+    for table_path in table_outputs:
         logger.info("  - %s", table_path)
+
+    # Generate plots
+    plot_config = PlotGeneratorConfig(
+        evaluator,
+        output_dir=str(Path(results_dir) / "plots"),
+    )
+    plot_generator = TikzPlotGenerator(plot_config)
+    plot_outputs = plot_generator.generate_all_predefined_plots()
+
+    logger.info("Generated %d plots:", len(plot_outputs))
+    for plot_path in plot_outputs:
+        logger.info("  - %s", plot_path)
 
 
 def main() -> int:
@@ -270,3 +276,21 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+    # csv_path = "../../../data/study/study_results_2026-03-21_20-00-01.csv"
+    # results_dir = "../../../data/study/"
+    # evaluator = StudyEvaluator(csv_path, 3600, 0.05, "b_a_s_e")
+    #
+    # latex_config = GeneratorConfig(
+    #     evaluator,
+    #     output_dir=str(Path(results_dir) / "tables"),
+    # )
+    #
+    # generator = LatexTableGenerator(latex_config)
+    # outputs = generator.generate_all_predefined_tables()
+    #
+    # plot_config = PlotGeneratorConfig(
+    #     evaluator,
+    #     output_dir=str(Path(results_dir) / "plots"),
+    # )
+    # plot_generator = TikzPlotGenerator(plot_config)
+    # plot_outputs = plot_generator.generate_all_predefined_plots()
