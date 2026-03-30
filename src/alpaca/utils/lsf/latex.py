@@ -321,8 +321,8 @@ class Latex:
         return f"    ({label}, {value:.{precision}f})"
 
     @classmethod
-    def definecolor_rgb(cls, name: str, r: int, g: int, b: int) -> str:
-        return f"\\definecolor{{{name}}}{{RGB}}{{{r}, {g}, {b}}}"
+    def definecolor_rgb(cls, name: str, color: str) -> str:
+        return f"\\definecolor{{{name}}}{{RGB}}{{{color}}}"
 
     @classmethod
     def summary_key_mean(cls) -> str:
@@ -355,3 +355,55 @@ class Latex:
     @classmethod
     def bar_suffix_tex(cls) -> str:
         return "_bar.tex"
+
+    @classmethod
+    def color_blue(cls) -> str:
+        return "25, 42, 86"
+
+    @classmethod
+    def color_red(cls) -> str:
+        return "156, 56, 72"
+
+    @classmethod
+    def color_teal(cls) -> str:
+        return "0, 119, 139"
+
+    @classmethod
+    def color_gold(cls) -> str:
+        return "205, 145, 50"
+
+    @classmethod
+    def color_name(cls, color_index: int) -> str:
+        return f"color{color_index}"
+
+    @classmethod
+    def marker_star(cls) -> str:
+        return "*"
+
+    @classmethod
+    def marker_square(cls) -> str:
+        return "square*"
+
+    @classmethod
+    def marker_triangle(cls) -> str:
+        return "triangle*"
+
+    @classmethod
+    def marker_diamond(cls) -> str:
+        return "diamond*"
+
+    @classmethod
+    def marker_pentagon(cls) -> str:
+        return "pentagon*"
+
+    @classmethod
+    def marker_x(cls) -> str:
+        return "x"
+
+    @classmethod
+    def marker_circle(cls) -> str:
+        return "o"
+
+    @classmethod
+    def marker_plus(cls) -> str:
+        return "+"

@@ -79,24 +79,22 @@ class TikzPlotGenerator:
     and grouped bar plots for summary statistics (mean, median, shifted geometric mean).
     """
 
-    COLORS: dict[str, tuple[int, int, int]] = {
-        "MidnightNavy": (25, 42, 86),
-        "BrickRose": (156, 56, 72),
-        "OceanTeal": (0, 119, 139),
-        "AmberGold": (205, 145, 50),
-    }
-
-    COLOR_LIST: list[str] = ["MidnightNavy", "BrickRose", "OceanTeal", "AmberGold"]
+    COLOR_LIST: list[str] = [
+        lsf.color_blue(),
+        lsf.color_red(),
+        lsf.color_teal(),
+        lsf.color_gold(),
+    ]
 
     MARKERS: list[str] = [
-        "*",
-        "square*",
-        "triangle*",
-        "diamond*",
-        "pentagon*",
-        "x",
-        "o",
-        "+",
+        lsf.marker_star(),
+        lsf.marker_square(),
+        lsf.marker_triangle(),
+        lsf.marker_diamond(),
+        lsf.marker_pentagon(),
+        lsf.marker_x(),
+        lsf.marker_circle(),
+        lsf.marker_plus(),
     ]
 
     def __init__(self, config: PlotGeneratorConfig) -> None:
@@ -113,8 +111,8 @@ class TikzPlotGenerator:
     def _get_color_definitions(self) -> list[str]:
         """Generate LaTeX color definition lines."""
         lines = []
-        for name, (r, g, b) in self.COLORS.items():
-            lines.append(lsf.definecolor_rgb(name, r, g, b))
+        for color_index, color in enumerate(self.COLOR_LIST):
+            lines.append(lsf.definecolor_rgb(lsf.color_name(color_index), color))
         return lines
 
     @property
@@ -131,7 +129,7 @@ class TikzPlotGenerator:
         Returns:
             Tuple of (color_name, marker_style).
         """
-        color = self.COLOR_LIST[config_index % len(self.COLOR_LIST)]
+        color = lsf.color_name(config_index % len(self.COLOR_LIST))
         marker = self.MARKERS[config_index % len(self.MARKERS)]
         return color, marker
 
