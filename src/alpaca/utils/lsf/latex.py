@@ -287,7 +287,7 @@ class Latex:
 
     @classmethod
     def tikz_diagonal_reference_line(cls, min_val: float, max_val: float) -> str:
-        return f"\\addplot[black, dashed, thick, domain={min_val}:{max_val}] {{x}};"
+        return f"\\addplot[black, dashed, thick, domain={min_val}:{max_val}, forget plot] {{x}};"
 
     @classmethod
     def tikz_y_equals_x_label(cls) -> str:

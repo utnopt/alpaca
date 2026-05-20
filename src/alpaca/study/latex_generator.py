@@ -88,6 +88,7 @@ class LatexTableGenerator:
         lsf.stats_presolved_nr_constraints,
         lsf.stats_presolved_nr_nonzeros,
         lsf.stats_root_solution_value,
+        lsf.stats_root_gap_reduction,
         lsf.stats_root_solving_time,
         lsf.stats_build_time,
         lsf.stats_original_nr_variables,
@@ -361,6 +362,9 @@ class LatexTableGenerator:
         return [
             TableDefinition(
                 column=lsf.stats_solving_time(),
+                instance_filter=self.evaluator.COLUMN_TO_FILTER[
+                    lsf.stats_solving_time()
+                ],
                 metadata=TableMetadata(
                     filename="table_instance_solution_time.tex",
                     caption="Solving time per instance and configuration.",
@@ -370,6 +374,7 @@ class LatexTableGenerator:
             ),
             TableDefinition(
                 column=lsf.stats_nr_nodes(),
+                instance_filter=self.evaluator.COLUMN_TO_FILTER[lsf.stats_nr_nodes()],
                 metadata=TableMetadata(
                     filename="table_instance_nr_nodes.tex",
                     caption="Number of nodes per instance and configuration. "
@@ -380,18 +385,22 @@ class LatexTableGenerator:
                 format_options=TableFormatOptions(precision=0, bold="min"),
             ),
             TableDefinition(
-                column=lsf.stats_root_solution_value(),
+                column=lsf.stats_root_gap_reduction(),
+                instance_filter=self.evaluator.COLUMN_TO_FILTER[
+                    lsf.stats_root_gap_reduction()
+                ],
                 metadata=TableMetadata(
-                    filename="table_instance_root_solution.tex",
-                    caption="Root relaxation solution per instance and configuration. "
-                    "Filtered to instances that reached "
-                    "the root node.",
+                    filename="table_instance_root_gap_reduction.tex",
+                    caption="Root relaxation gap "
+                    "reduction per instance and configuration. "
+                    "Filtered to instances that used branch and bound.",
                     label="tab:instance_root_solution",
                 ),
                 format_options=TableFormatOptions(precision=2, bold="max"),
             ),
             TableDefinition(
                 column=lsf.stats_mip_gap(),
+                instance_filter=self.evaluator.COLUMN_TO_FILTER[lsf.stats_mip_gap()],
                 metadata=TableMetadata(
                     filename="table_instance_mip_gap.tex",
                     caption="MIP gap per instance and configuration.",
@@ -415,6 +424,9 @@ class LatexTableGenerator:
             ),
             TableDefinition(
                 column=lsf.stats_volume_reduction_polygon(),
+                instance_filter=self.evaluator.COLUMN_TO_FILTER[
+                    lsf.stats_volume_reduction_polygon()
+                ],
                 metadata=TableMetadata(
                     filename="table_instance_domain_volume_polygon.tex",
                     caption="Domain volume reduction relative to McCormick"
@@ -428,6 +440,9 @@ class LatexTableGenerator:
             ),
             TableDefinition(
                 column=lsf.stats_volume_reduction_polytope(),
+                instance_filter=self.evaluator.COLUMN_TO_FILTER[
+                    lsf.stats_volume_reduction_polytope()
+                ],
                 metadata=TableMetadata(
                     filename="table_instance_domain_volume_polytope.tex",
                     caption="Domain volume reduction relative to McCormick"

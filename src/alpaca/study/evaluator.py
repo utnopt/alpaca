@@ -42,6 +42,9 @@ class InstanceFilter(Enum):
     BRANCH_AND_BOUND = auto()
     """Instances where all configs have more than one branch and bound node."""
 
+    ROOT_SUBOPTIMAL = auto()
+    """Instances where one config has a suboptimal root solution."""
+
 
 @dataclass
 class FilterResult:
@@ -98,6 +101,7 @@ class StudyEvaluator:
         lsf.stats_presolved_nr_constraints(): InstanceFilter.NONE,
         lsf.stats_presolved_nr_nonzeros(): InstanceFilter.NONE,
         lsf.stats_root_solution_value(): InstanceFilter.ALL_REACHED_ROOT,
+        lsf.stats_root_gap_reduction(): InstanceFilter.ROOT_SUBOPTIMAL,
         lsf.stats_root_solving_time(): InstanceFilter.ALL_REACHED_ROOT,
         lsf.stats_build_time(): InstanceFilter.NONE,
         lsf.stats_original_nr_variables(): InstanceFilter.NONE,
@@ -156,6 +160,7 @@ class StudyEvaluator:
         self._filter_nones_in_solving_time()
         self._compute_filter_results()
         self._add_volume_reduction_columns()
+        self._add_root_gap_reduction_column()
         self._add_summary_rows()
 
     def _load_csv(self) -> None:
@@ -360,6 +365,12 @@ class StudyEvaluator:
             consistent_result.instances
         )
         self._filter_cache[InstanceFilter.BRANCH_AND_BOUND] = branch_and_bound_result
+
+        # ROOT_SUBOPTIMAL filter
+        root_suboptimal_result = self._compute_root_suboptimal_filter(
+            consistent_result.instances
+        )
+        self._filter_cache[InstanceFilter.ROOT_SUBOPTIMAL] = root_suboptimal_result
 
         # Log filter statistics
         logger.info(
@@ -583,9 +594,12 @@ class StudyEvaluator:
             for config in self.data.configs:
                 row_data = self.data.data_matrix.get((instance, config), {})
                 nr_nodes = row_data.get(lsf.stats_nr_nodes())
+                root_solution_value = row_data.get(lsf.stats_root_solution_value())
+                if root_solution_value is None:
+                    has_multiple_nodes = False
+                    break
                 if nr_nodes is not None and nr_nodes > 1:
                     has_multiple_nodes = True
-                    break
 
             if has_multiple_nodes:
                 valid_instances.append(instance)
@@ -593,6 +607,47 @@ class StudyEvaluator:
                 warnings.append(
                     f"Instance '{instance}': "
                     f"Not all configs have more than one branch and bound node, "
+                    "discarding from comparison."
+                )
+
+        return FilterResult(instances=valid_instances, warnings=warnings)
+
+    def _compute_root_suboptimal_filter(
+        self,
+        base_instances: list[str],
+    ) -> FilterResult:
+        """Filters for instances where root solution is suboptimal.
+
+        Args:
+            base_instances: Pre-filtered list of instances to check.
+
+        Returns:
+            FilterResult with instances where root solution is suboptimal.
+        """
+        valid_instances = []
+        warnings = []
+
+        for instance in base_instances:
+            root_suboptimal = False
+            for config in self.data.configs:
+                row_data = self.data.data_matrix.get((instance, config), {})
+                root_solution_value = row_data.get(lsf.stats_root_solution_value())
+                solution_value = row_data.get(lsf.stats_solution_value())
+                if root_solution_value is None or solution_value is None:
+                    root_suboptimal = False
+                    break
+                if (
+                    solution_value
+                    > root_solution_value + s.StaticSettings.feasibility_tolerance
+                ):
+                    root_suboptimal = True
+
+            if root_suboptimal:
+                valid_instances.append(instance)
+            else:
+                warnings.append(
+                    f"Instance '{instance}': "
+                    f"No config with suboptimal root solution, "
                     "discarding from comparison."
                 )
 
@@ -758,6 +813,9 @@ class StudyEvaluator:
                 "branch_and_bound": len(
                     self._filter_cache[InstanceFilter.BRANCH_AND_BOUND].instances
                 ),
+                "root_suboptimal": len(
+                    self._filter_cache[InstanceFilter.ROOT_SUBOPTIMAL].instances
+                ),
             },
             "warning_counts": {
                 "all_terminated": len(
@@ -798,9 +856,7 @@ class StudyEvaluator:
             base_config_value_polytope = self.data.data_matrix[
                 (instance, self.base_config)
             ][lsf.stats_locatelli_domain_volume_polytope()]
-            for config in self.data.configs:
-                if config == self.base_config:
-                    continue
+            for config in self.non_base_configs():
                 config_value_polygon = self.data.data_matrix[(instance, config)][
                     lsf.stats_locatelli_domain_volume_polygon()
                 ]
@@ -823,6 +879,29 @@ class StudyEvaluator:
                     else (base_config_value_polytope - config_value_polytope)
                     / base_config_value_polytope
                 )
+
+    def _add_root_gap_reduction_column(self):
+        for instance in self.data.instances:
+            base_config_value = self.data.data_matrix[(instance, self.base_config)][
+                lsf.stats_root_solution_value()
+            ]
+            if base_config_value is None:
+                continue
+            gap = (
+                base_config_value
+                - self.data.data_matrix[(instance, self.base_config)][
+                    lsf.stats_solution_value()
+                ]
+            )
+            for config in self.non_base_configs():
+                config_value = self.data.data_matrix[(instance, config)][
+                    lsf.stats_root_solution_value()
+                ]
+                if config_value is None:
+                    continue
+                self.data.data_matrix[(instance, config)][
+                    lsf.stats_root_gap_reduction()
+                ] = (0.0 if gap == 0 else (base_config_value - config_value) / gap)
 
     def _add_summary_rows(self):
         for config in self.data.configs:
@@ -884,44 +963,26 @@ class StudyEvaluator:
         except ValueError:
             return values
 
-    @property
-    def non_base_configs(self) -> list[str]:
+    def non_base_configs(self, base_config=None) -> list[str]:
         """Get list of non-base configuration names."""
-        return [c for c in self.data.configs if c != self.base_config]
+        base_config = base_config if base_config is not None else self.base_config
+        return [c for c in self.data.configs if c != base_config]
 
     def build_config_shortnames(self) -> dict[str, str]:
         """Build mapping of config names to short names."""
         shortnames = {}
-        used_shortnames: set[str] = set()
 
         for config in self.data.configs:
-            short = self.get_unique_shortname(config, used_shortnames)
-            shortnames[config] = short
-            used_shortnames.add(short)
+            if "_" in config:
+                parts = config.split("_")
+                abbrev = "".join(p[0].upper() for p in parts if p)
+                if len(abbrev) >= 2:
+                    shortnames[config] = abbrev
+            else:
+                capitals = [c for c in config if c.isupper()]
+                if len(capitals) >= 2:
+                    shortnames[config] = "".join(capitals)
+                else:
+                    shortnames[config] = config[:1].upper()
 
         return shortnames
-
-    def get_unique_shortname(self, config: str, used: set[str]) -> str:
-        """Get a unique short name for a config."""
-        short = self.config_shortener(config)
-        original_short = short
-        counter = 1
-        while short in used:
-            short = f"{original_short}{counter}"
-            counter += 1
-        return short
-
-    @staticmethod
-    def config_shortener(config_name: str) -> str:
-        """Default config name shortener."""
-        if "_" in config_name:
-            parts = config_name.split("_")
-            abbrev = "".join(p[0].upper() for p in parts if p)
-            if len(abbrev) >= 2:
-                return abbrev
-
-        capitals = [c for c in config_name if c.isupper()]
-        if len(capitals) >= 2:
-            return "".join(capitals)
-
-        return config_name[:4].upper()

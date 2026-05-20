@@ -129,6 +129,14 @@ class Statistics:
         return "root_solution_value"
 
     @classmethod
+    def stats_root_gap_reduction(cls, f="") -> str:
+        if f == cls.stats_format_gurobi():
+            return "RelaxGapRed"
+        if f == cls.stats_format_latex():
+            return "Root Gap Reduction"
+        return "root_gap_reduction"
+
+    @classmethod
     def stats_root_solving_time(cls, f="") -> str:
         if f == cls.stats_format_gurobi():
             return "RelaxTime"
