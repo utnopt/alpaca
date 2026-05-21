@@ -131,12 +131,12 @@ class Messages:
         return f"[{cls._get_timestamp()}] Solve MIP ..."
 
     @classmethod
-    def info_init_stair_locatelli(cls) -> str:
-        return f"[{cls._get_timestamp()}] Initialize stair Locatelli cuts..."
+    def info_init_ortho_locatelli(cls) -> str:
+        return f"[{cls._get_timestamp()}] Initialize ortho Locatelli cuts..."
 
     @classmethod
-    def info_total_stair_locatelli_cuts_added(cls, count: int) -> str:
-        return f"[{cls._get_timestamp()}] Total stair Locatelli cuts added: {count}"
+    def info_total_ortho_locatelli_cuts_added(cls, count: int) -> str:
+        return f"[{cls._get_timestamp()}] Total ortho Locatelli cuts added: {count}"
 
     @classmethod
     def info_optimization_finished(cls, runtime: float) -> str:

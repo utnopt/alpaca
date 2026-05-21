@@ -64,7 +64,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         )
         self.feature_mpip_mccormick = int(config_dict.get("feature/mpip/mccormick", 0))
         self.feature_mpip_corner = int(config_dict.get("feature/mpip/corner", 0))
-        self.feature_mpip_stair = int(config_dict.get("feature/mpip/stair", 0))
+        self.feature_mpip_ortho = int(config_dict.get("feature/mpip/ortho", 0))
         self.feature_mpip_stripe = int(config_dict.get("feature/mpip/stripe", 0))
         self.feature_mpip_bar = int(config_dict.get("feature/mpip/bar", 0))
         self.feature_mpip_useless_threshold = float(
@@ -77,7 +77,7 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.feature_mpip = (
             self.feature_mpip_separation
             or self.feature_mpip_mccormick
-            or self.feature_mpip_stair
+            or self.feature_mpip_ortho
             or self.feature_mpip_stripe
             or self.feature_mpip_corner
             or self.feature_mpip_bar
@@ -100,20 +100,20 @@ class UserSettings:  # pylint: disable=too-few-public-methods, too-many-instance
         self.feature_nnbp_convergence_tol = float(
             config_dict.get("feature/nnbp/convergence_tol", 1e-2)
         )
-        self.feature_stair_locatelli = int(
-            config_dict.get("feature/stair_locatelli", 0)
-        )  # 0: disabled, 1: locatelli, 2: stair locatelli, 3: indicator locatelli
-        self.feature_stair_locatelli_grid_size = int(
-            config_dict.get("feature/stair_locatelli/grid_size", 10)
-        )  # grid size for stair locatelli
-        self.feature_stair_locatelli_mu = float(
-            config_dict.get("feature/stair_locatelli/mu", 1e-3)
-        )  # distance from lb for stair locatelli
-        self.feature_stair_locatelli_obbt_time_limit = int(
-            config_dict.get("feature/stair_locatelli/obbt_time_limit", 1800)
+        self.feature_ortho_locatelli = int(
+            config_dict.get("feature/ortho_locatelli", 0)
+        )  # 0: disabled, 1: locatelli, 2: ortho locatelli, 3: indicator locatelli
+        self.feature_ortho_locatelli_grid_size = int(
+            config_dict.get("feature/ortho_locatelli/grid_size", 10)
+        )  # grid size for ortho locatelli
+        self.feature_ortho_locatelli_mu = float(
+            config_dict.get("feature/ortho_locatelli/mu", 1e-3)
+        )  # distance from lb for ortho locatelli
+        self.feature_ortho_locatelli_obbt_time_limit = int(
+            config_dict.get("feature/ortho_locatelli/obbt_time_limit", 1800)
         )
-        self.feature_stair_locatelli_evaluation_grid_size = int(
-            config_dict.get("feature/stair_locatelli/evaluation_grid_size", 100)
+        self.feature_ortho_locatelli_evaluation_grid_size = int(
+            config_dict.get("feature/ortho_locatelli/evaluation_grid_size", 100)
         )
         self.filter_no_bilinear_expressions = int(
             config_dict.get("filter/no_bilinear_expressions", 0)

@@ -20,7 +20,7 @@ Alpaca is a Python-based optimization framework for solving nonlinear programmin
 - [Configuration](#configuration)
 - [Architecture](#architecture)
 - [Supported Expressions](#supported-expressions)
-- [Stair-Locatelli Cuts](#stair-locatelli-cuts)
+- [Ortho-Locatelli Cuts](#ortho-locatelli-cuts)
 - [MPIP](#mpip)
 - [External Solvers](#external-solvers)
 - [References](#references)
@@ -37,7 +37,7 @@ Alpaca transforms nonlinear optimization problems into mixed-integer linear prog
 - Multiple PWL formulation methods
 - Bound propagation and tightening
 - Cutting plane generation via Multipartite Implication Polytopes (MPIP)
-- Stair-Locatelli cuts for tighter bilinear relaxations
+- Ortho-Locatelli cuts for tighter bilinear relaxations
 - Automated computational study pipeline with parallel execution
 - LaTeX table and TikZ plot generation for result evaluation
 
@@ -53,7 +53,7 @@ Alpaca transforms nonlinear optimization problems into mixed-integer linear prog
 | **Bilinear Handling** | McCormick envelopes, sum-of-squares reformulation, piecewise constant relaxation, or nonlinear |
 | **Bound Propagation** | Manual propagation and Optimization-Based Bound Tightening (OBBT) |
 | **Breakpoint Generation** | Uniform, adaptive (error-based), and neural network-based strategies |
-| **Stair-Locatelli Cuts** | Domain projection and cutting planes for tighter bilinear relaxations |
+| **Ortho-Locatelli Cuts** | Domain projection and cutting planes for tighter bilinear relaxations |
 | **MPIP Separation** | Advanced cutting planes based on multipartite implication polytopes |
 | **Computational Studies** | Parallel execution pipeline with subprocess-based job scheduling |
 | **Result Evaluation** | CSV-based evaluation with filtering, statistics, and outlier detection |
@@ -318,15 +318,15 @@ Settings can be provided via a JSON file or a Python dictionary.
 | `feature/nnbp/queue_size` | int | 5 | Queue size for convergence |
 | `feature/nnbp/convergence_tol` | float | 1e-2 | Convergence tolerance |
 
-### Stair-Locatelli
+### Ortho-Locatelli
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `feature/stair_locatelli` | int | 0 | `0`: Disabled, `1`: Locatelli, `2`: Stair-Locatelli, `3`: Indicator Locatelli |
-| `feature/stair_locatelli/grid_size` | int | 10 | Grid size for domain projection |
-| `feature/stair_locatelli/mu` | float | 1e-3 | Distance from lower bound |
-| `feature/stair_locatelli/obbt_time_limit` | int | 1800 | OBBT time limit for projection |
-| `feature/stair_locatelli/evaluation_grid_size` | int | 100 | Grid size for volume evaluation |
+| `feature/ortho_locatelli` | int | 0 | `0`: Disabled, `1`: Locatelli, `2`: Ortho-Locatelli, `3`: Indicator Locatelli |
+| `feature/ortho_locatelli/grid_size` | int | 10 | Grid size for domain projection |
+| `feature/ortho_locatelli/mu` | float | 1e-3 | Distance from lower bound |
+| `feature/ortho_locatelli/obbt_time_limit` | int | 1800 | OBBT time limit for projection |
+| `feature/ortho_locatelli/evaluation_grid_size` | int | 100 | Grid size for volume evaluation |
 
 ### MPIP Features
 
@@ -335,7 +335,7 @@ Settings can be provided via a JSON file or a Python dictionary.
 | `feature/mpip/separation` | int | 0 | Enable separation cuts |
 | `feature/mpip/mccormick` | int | 0 | Add MPIP-based McCormick constraints |
 | `feature/mpip/corner` | int | 0 | Add corner constraints |
-| `feature/mpip/stair` | int | 0 | Add stair constraints |
+| `feature/mpip/ortho` | int | 0 | Add ortho constraints |
 | `feature/mpip/stripe` | int | 0 | Add stripe constraints |
 | `feature/mpip/bar` | int | 0 | Add bar constraints |
 | `feature/mpip/frequency` | int | 10 | Separation callback frequency |
@@ -364,8 +364,8 @@ Settings can be provided via a JSON file or a Python dictionary.
     "bilinear_handling": 0,
     "bound_propagation": 1,
     "bound_propagation_rounds": 3,
-    "feature/stair_locatelli": 2,
-    "feature/stair_locatelli/grid_size": 10,
+    "feature/ortho_locatelli": 2,
+    "feature/ortho_locatelli/grid_size": 10,
     "feature/mpip/separation": 1,
     "feature/mpip/mccormick": 1,
     "feature/mpip/frequency": 10
@@ -417,7 +417,7 @@ alpaca/
 │   │   ├── mip_model.py         # MIP model construction
 │   │   └── solver_wrapper.py    # Gurobi/SCIP abstraction
 │   ├── locatelli/
-│   │   ├── stair_locatelli.py       # Stair-Locatelli orchestration
+│   │   ├── ortho_locatelli.py       # Ortho-Locatelli orchestration
 │   │   ├── domain_projector.py      # Feasible domain polygon computation
 │   │   └── locatelli_cut_generator.py # Cutting plane generation
 │   ├── mpip/
@@ -475,18 +475,18 @@ alpaca/
 
 ---
 
-## Stair-Locatelli Cuts
+## Ortho-Locatelli Cuts
 
-The Stair-Locatelli module strengthens bilinear relaxations by:
+The Ortho-Locatelli module strengthens bilinear relaxations by:
 
 1. **Domain Projection**: For each bilinear term $z = x \cdot y$, the feasible region is projected onto the $(x, y)$-plane by solving a series of optimization subproblems over a grid. This produces an orthogonal polygon that tightly contains the feasible domain.
 
 2. **Cut Generation**: Valid cutting planes are derived from all combinations of three vertices of the projected polygon. Each cut is verified against boundary checkpoints to ensure validity as either an underestimator or overestimator of the bilinear term.
 
 3. **Modes**:
-   - **Locatelli** (`feature/stair_locatelli = 1`): Uses the convex hull of the projected polygon for cut generation.
-   - **Stair-Locatelli** (`feature/stair_locatelli = 2`): Uses the full (non-convex) staircase polygon for tighter cuts.
-   - **Indicator Locatelli** (`feature/stair_locatelli = 3`): Simplified projection for indicator-type bilinear constraints.
+   - **Locatelli** (`feature/ortho_locatelli = 1`): Uses the convex hull of the projected polygon for cut generation.
+   - **Ortho-Locatelli** (`feature/ortho_locatelli = 2`): Uses the full (non-convex) orthocase polygon for tighter cuts.
+   - **Indicator Locatelli** (`feature/ortho_locatelli = 3`): Simplified projection for indicator-type bilinear constraints.
 
 4. **Volume Evaluation**: The module computes the 3D volume of the McCormick relaxation over the projected domain to quantify the tightening effect of the cuts.
 
@@ -497,7 +497,7 @@ The Locatelli cut generation approach is based on:
 > Locatelli and Schoen (2014). *On convex envelopes for bivariate functions over polytopes*.
 > [https://optimization-online.org/?p=26208](https://optimization-online.org/?p=26208)
 
-The Stair-Locatelli extension to non-convex polygonal domains is described in:
+The Ortho-Locatelli extension to non-convex polygonal domains is described in:
 
 > Göß, Krause, Kuchlbauer and Kuen (2026). *On convex envelopes of bivariate functions over polygons*.
 
@@ -517,7 +517,7 @@ The MPIP module:
    - **McCormick constraints**: Basic implication constraints linking input and output binaries.
    - **Stripe constraints**: Aggregated constraints along single input dimensions.
    - **Bar constraints**: Row- and column-based aggregated constraints (bipartite case).
-   - **Corner constraints**: Staircase-shaped constraints exploiting monotonicity (bipartite case).
+   - **Corner constraints**: Orthocase-shaped constraints exploiting monotonicity (bipartite case).
 
 4. **Separation**: A callback-based separation routine that dynamically generates violated MPIP cuts during branch-and-bound by solving a separation LP for each fractional solution.
 

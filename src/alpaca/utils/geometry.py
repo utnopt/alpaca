@@ -208,7 +208,7 @@ def calculate_feasible_height_convexified(
 def straighten_vertices(
     vertices: list[tuple[float, float]],
 ) -> list[tuple[float, float]]:
-    """Straighten edges of the stair polygon."""
+    """Straighten edges of the ortho polygon."""
     if not vertices:
         return []
     for i, v1 in enumerate(vertices):
