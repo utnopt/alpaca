@@ -67,9 +67,6 @@ Alpaca transforms nonlinear optimization problems into mixed-integer linear prog
 ### Prerequisites
 
 - Python 3.11 or 3.12
-- One of the following MIP solvers:
-  - [Gurobi](https://www.gurobi.com/) (commercial, free academic license)
-  - [SCIP](https://www.scipopt.org/) (open source via `pyscipopt`)
 
 ### Install from Source
 

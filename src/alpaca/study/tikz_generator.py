@@ -54,7 +54,7 @@ class PlotDefinition:
     column: str
     metadata: PlotMetadata
     x_axis: str = lsf.empty_string()
-    instance_filter: InstanceFilter = InstanceFilter.NONE
+    instance_filter: InstanceFilter | list[InstanceFilter] = InstanceFilter.NONE
     log_scale: bool = False
     format_options: PlotFormatOptions = field(default_factory=PlotFormatOptions)
 
@@ -163,14 +163,14 @@ class TikzPlotGenerator:
             values = self.evaluator.get_column_values_for_instance(column, instance)
             base_val = values.get(x_axis_config)
 
-            if base_val is None or base_val <= 0:
+            if base_val is None:
                 continue
 
             base_values[instance] = base_val
 
             for config in self.evaluator.non_base_configs(base_config=x_axis_config):
                 val = values.get(config)
-                if val is not None and val > 0:
+                if val is not None:
                     config_values[config][instance] = val
 
         return base_values, config_values
@@ -337,6 +337,11 @@ class TikzPlotGenerator:
 
         lines.append(lsf.end_axis())
         lines.append(lsf.end_tikzpicture())
+        lines.append(
+            f"% Nr of instances: {len(
+            config_values[self.evaluator.non_base_configs(
+                base_config=x_axis_config)[-1]])}"
+        )
 
         return lsf.newline().join(lines)
 
@@ -562,43 +567,43 @@ class TikzPlotGenerator:
             List of predefined PlotDefinition objects.
         """
         return [
-            # PlotDefinition(
-            #     column=lsf.stats_solving_time(),
-            #     metadata=PlotMetadata(
-            #         filename="plot_solving_time.tex",
-            #         caption="Solving time comparison across configurations.",
-            #         label="plot:solving_time",
-            #     ),
-            #     instance_filter=InstanceFilter.NONE,
-            #     log_scale=True,
-            #     format_options=PlotFormatOptions(precision=2, title="Solving Time"),
-            # ),
-            # PlotDefinition(
-            #     column=lsf.stats_nr_nodes(),
-            #     metadata=PlotMetadata(
-            #         filename="plot_nr_nodes.tex",
-            #         caption="Number of branch-and-bound nodes comparison.",
-            #         label="plot:nr_nodes",
-            #     ),
-            #     instance_filter=InstanceFilter.BRANCH_AND_BOUND,
-            #     log_scale=True,
-            #     format_options=PlotFormatOptions(
-            #         precision=0, title="Branch-and-Bound Nodes"
-            #     ),
-            # ),
-            # PlotDefinition(
-            #     column=lsf.stats_root_solving_time(),
-            #     metadata=PlotMetadata(
-            #         filename="plot_root_solving_time.tex",
-            #         caption="Root node solving time comparison.",
-            #         label="plot:root_solving_time",
-            #     ),
-            #     instance_filter=InstanceFilter.ALL_REACHED_ROOT,
-            #     log_scale=True,
-            #     format_options=PlotFormatOptions(
-            #         precision=2, title="Root Node Solving Time"
-            #     ),
-            # ),
+            PlotDefinition(
+                column=lsf.stats_solving_time(),
+                metadata=PlotMetadata(
+                    filename="plot_solving_time.tex",
+                    caption="Solving time comparison across configurations.",
+                    label="plot:solving_time",
+                ),
+                instance_filter=InstanceFilter.NONE,
+                log_scale=True,
+                format_options=PlotFormatOptions(precision=2, title="Solving Time"),
+            ),
+            PlotDefinition(
+                column=lsf.stats_nr_nodes(),
+                metadata=PlotMetadata(
+                    filename="plot_nr_nodes.tex",
+                    caption="Number of branch-and-bound nodes comparison.",
+                    label="plot:nr_nodes",
+                ),
+                instance_filter=InstanceFilter.BRANCH_AND_BOUND,
+                log_scale=True,
+                format_options=PlotFormatOptions(
+                    precision=0, title="Branch-and-Bound Nodes"
+                ),
+            ),
+            PlotDefinition(
+                column=lsf.stats_root_solving_time(),
+                metadata=PlotMetadata(
+                    filename="plot_root_solving_time.tex",
+                    caption="Root node solving time comparison.",
+                    label="plot:root_solving_time",
+                ),
+                instance_filter=InstanceFilter.ALL_REACHED_ROOT,
+                log_scale=True,
+                format_options=PlotFormatOptions(
+                    precision=2, title="Root Node Solving Time"
+                ),
+            ),
             PlotDefinition(
                 column=lsf.stats_root_gap_reduction(),
                 x_axis="locatelli",
@@ -607,51 +612,54 @@ class TikzPlotGenerator:
                     caption="Root gap reduction comparison.",
                     label="plot:root_gap_reduction",
                 ),
-                instance_filter=InstanceFilter.ROOT_SUBOPTIMAL,
+                instance_filter=[
+                    InstanceFilter.ROOT_SUBOPTIMAL,
+                    InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
+                ],
                 log_scale=False,
                 format_options=PlotFormatOptions(
                     precision=2, title="Root Gap Reduction"
                 ),
             ),
-            # PlotDefinition(
-            #     column=lsf.stats_mip_gap(),
-            #     metadata=PlotMetadata(
-            #         filename="plot_mip_gap.tex",
-            #         caption="MIP gap comparison across configurations.",
-            #         label="plot:mip_gap",
-            #     ),
-            #     instance_filter=InstanceFilter.ALL_FOUND_SOLUTION,
-            #     log_scale=False,
-            #     format_options=PlotFormatOptions(precision=4, title="MIP Gap"),
-            # ),
-            # PlotDefinition(
-            #     column=lsf.stats_volume_reduction_polygon(),
-            #     x_axis="locatelli",
-            #     metadata=PlotMetadata(
-            #         filename="plot_volume_reduction_polygon.tex",
-            #         caption="Volume reduction over polygon.",
-            #         label="plot:volume_reduction_polygon",
-            #     ),
-            #     instance_filter=InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
-            #     log_scale=False,
-            #     format_options=PlotFormatOptions(
-            #         precision=2, title="Volume Reduction over Polygon"
-            #     ),
-            # ),
-            # PlotDefinition(
-            #     column=lsf.stats_volume_reduction_polytope(),
-            #     x_axis="locatelli",
-            #     metadata=PlotMetadata(
-            #         filename="plot_volume_reduction_polytope.tex",
-            #         caption="Volume reduction over polytope.",
-            #         label="plot:volume_reduction_polytope",
-            #     ),
-            #     instance_filter=InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
-            #     log_scale=False,
-            #     format_options=PlotFormatOptions(
-            #         precision=2, title="Volume Reduction over Polytope"
-            #     ),
-            # ),
+            PlotDefinition(
+                column=lsf.stats_mip_gap(),
+                metadata=PlotMetadata(
+                    filename="plot_mip_gap.tex",
+                    caption="MIP gap comparison across configurations.",
+                    label="plot:mip_gap",
+                ),
+                instance_filter=InstanceFilter.ALL_FOUND_SOLUTION,
+                log_scale=False,
+                format_options=PlotFormatOptions(precision=4, title="MIP Gap"),
+            ),
+            PlotDefinition(
+                column=lsf.stats_volume_reduction_polygon(),
+                x_axis="locatelli",
+                metadata=PlotMetadata(
+                    filename="plot_volume_reduction_polygon.tex",
+                    caption="Volume reduction over polygon.",
+                    label="plot:volume_reduction_polygon",
+                ),
+                instance_filter=InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
+                log_scale=False,
+                format_options=PlotFormatOptions(
+                    precision=2, title="Volume Reduction over Polygon"
+                ),
+            ),
+            PlotDefinition(
+                column=lsf.stats_volume_reduction_polytope(),
+                x_axis="locatelli",
+                metadata=PlotMetadata(
+                    filename="plot_volume_reduction_polytope.tex",
+                    caption="Volume reduction over polytope.",
+                    label="plot:volume_reduction_polytope",
+                ),
+                instance_filter=InstanceFilter.NON_EMPTY_BILINEAR_DOMAIN,
+                log_scale=False,
+                format_options=PlotFormatOptions(
+                    precision=2, title="Volume Reduction over Polytope"
+                ),
+            ),
         ]
 
     def generate_all_predefined_plots(self) -> list[Path]:

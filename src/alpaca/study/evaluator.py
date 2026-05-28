@@ -423,6 +423,9 @@ class StudyEvaluator:
                 polytope_domain = row_data.get(
                     lsf.stats_locatelli_domain_volume_polytope()
                 )
+                if polytope_domain is None or polygon_domain is None:
+                    no_empty_domain = False
+                    break
                 if (
                     abs(polytope_domain) < s.StaticSettings.feasibility_tolerance
                     or abs(polygon_domain) < s.StaticSettings.feasibility_tolerance
@@ -676,7 +679,7 @@ class StudyEvaluator:
 
     def get_filtered_instances(
         self,
-        filter_type: InstanceFilter = InstanceFilter.NONE,
+        filter_type: InstanceFilter | list[InstanceFilter] = InstanceFilter.NONE,
     ) -> list[str]:
         """Gets instances that pass the specified filter.
 
@@ -686,7 +689,10 @@ class StudyEvaluator:
         Returns:
             List of instance names that pass the filter.
         """
-        return self._filter_cache[filter_type].instances
+        if not isinstance(filter_type, list):
+            return self._filter_cache[filter_type].instances
+        instance_sets = [set(self._filter_cache[ft].instances) for ft in filter_type]
+        return sorted(set.intersection(*instance_sets))
 
     def get_filter_warnings(
         self,
@@ -863,6 +869,8 @@ class StudyEvaluator:
                 config_value_polytope = self.data.data_matrix[(instance, config)][
                     lsf.stats_locatelli_domain_volume_polytope()
                 ]
+                if config_value_polygon is None or config_value_polytope is None:
+                    continue
                 self.data.data_matrix[(instance, config)][
                     lsf.stats_volume_reduction_polygon()
                 ] = (
@@ -916,6 +924,7 @@ class StudyEvaluator:
                     values[config] = [
                         self.data.data_matrix[(instance, config)][column]
                         for instance in instances
+                        if self.data.data_matrix[(instance, config)][column] is not None
                     ]
                 except KeyError:
                     continue
@@ -934,6 +943,8 @@ class StudyEvaluator:
     def _trim_outliers(self, values: dict[str, list[float]]) -> dict[str, list[float]]:
         try:
             trim_percentage = self.mean_trim
+            if not values:
+                return values
             n_instances = len(next(iter(values.values())))
 
             if n_instances <= 1 or trim_percentage <= 0:

@@ -66,12 +66,10 @@ class GeneratorConfig:
     Attributes:
         evaluator: StudyEvaluator instance with loaded data.
         output_dir: Directory to save generated LaTeX files.
-        config_shortener: Optional function to shorten config names.
     """
 
     evaluator: StudyEvaluator
     output_dir: str
-    config_shortener: Callable[[str], str] | None = None
 
 
 class LatexTableGenerator:
