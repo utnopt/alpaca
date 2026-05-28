@@ -17,11 +17,11 @@ import alpaca.model_buildup.multilinear_handler as mlh
 import alpaca.settings as s
 
 
-class StairLocatelli:
-    """Adds stair locatelli cuts to model data."""
+class OrthoLocatelli:
+    """Adds ortho locatelli cuts to model data."""
 
     def __init__(self, model_data: md.ModelData, locatelli_vertices=None):
-        logger.info(lsf.info_init_stair_locatelli())
+        logger.info(lsf.info_init_ortho_locatelli())
         self.model_data = model_data
         self.settings = model_data.settings
         self.locatelli_vertices = (
@@ -49,14 +49,14 @@ class StairLocatelli:
             # 1. Project Domain (Solver)
             vertices = (
                 self.projector.get_projected_vertices(expr)
-                if self.settings.feature_stair_locatelli <= 2
+                if self.settings.feature_ortho_locatelli <= 2
                 else self.projector.get_projected_vertices_indicator(expr)
             )
             vertices = uge.straighten_vertices(vertices)
-            if self.settings.feature_stair_locatelli <= 2:
+            if self.settings.feature_ortho_locatelli <= 2:
                 self.locatelli_vertices[expr.name] = vertices
             self.bilinear_projected_domains_polygon.append((expr, vertices))
-            if self.settings.feature_stair_locatelli == 1:
+            if self.settings.feature_ortho_locatelli == 1:
                 vertices = uge.calculate_convex_hull_2d(vertices)
 
             # 2. Generate Cuts (Constraint creation)
@@ -64,7 +64,7 @@ class StairLocatelli:
             total_cuts += cuts_added
 
         self.nr_cuts = total_cuts
-        logger.info(lsf.info_total_stair_locatelli_cuts_added(total_cuts))
+        logger.info(lsf.info_total_ortho_locatelli_cuts_added(total_cuts))
 
     def calculate_mean_bilinear_domain_volume(self, is_polytope=True):
         """Calculate 3d volume over polytope or polygon domain."""
@@ -155,7 +155,7 @@ class StairLocatelli:
         """Creates the evaluation grid for volume calculation."""
         x = bilinear_expression.variables[0]
         y = bilinear_expression.variables[1]
-        grid_size = settings.feature_stair_locatelli_evaluation_grid_size
+        grid_size = settings.feature_ortho_locatelli_evaluation_grid_size
         x_range = np.linspace(x.lb, x.ub, grid_size)
         y_range = np.linspace(y.lb, y.ub, grid_size)
 
@@ -185,12 +185,12 @@ class StairLocatelli:
             else uge.calculate_x_y_domain_polygon(x_range, y_range, domain_vertices)
         )
         convexified_area = None
-        if self.settings.feature_stair_locatelli == 1:
+        if self.settings.feature_ortho_locatelli == 1:
             convexified_area = uge.calculate_convexified_area(
                 x_range, y_range, domain_vertices
             )
         for x_grid_point, y_grid_point in poly_grid:
-            if self.settings.feature_stair_locatelli == 1:
+            if self.settings.feature_ortho_locatelli == 1:
                 # Standard locatelli, calculate height based on convex hull over the polytope.
                 poly_height = uge.calculate_feasible_height_convexified(
                     (x_grid_point, y_grid_point), convexified_area

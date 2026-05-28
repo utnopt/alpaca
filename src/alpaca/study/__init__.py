@@ -31,6 +31,11 @@ from alpaca.study.evaluator import (
     StudyEvaluator,
     StudyData,
 )
+from alpaca.study.tikz_generator import (
+    TikzPlotGenerator,
+    PlotDefinition,
+    PlotGeneratorConfig,
+)
 from alpaca.study.latex_generator import LatexTableGenerator
 
 __all__ = [
@@ -42,4 +47,7 @@ __all__ = [
     "StudyEvaluator",
     "StudyData",
     "LatexTableGenerator",
+    "TikzPlotGenerator",
+    "PlotDefinition",
+    "PlotGeneratorConfig",
 ]

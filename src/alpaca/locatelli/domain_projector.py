@@ -31,11 +31,11 @@ class DomainProjector:
         if bilinear_count == 0:
             return
         limit = (
-            self.settings.feature_stair_locatelli_obbt_time_limit
-            / (bilinear_count * 2 * self.settings.feature_stair_locatelli_grid_size)
-            if self.settings.feature_stair_locatelli <= 2
+            self.settings.feature_ortho_locatelli_obbt_time_limit
+            / (bilinear_count * 2 * self.settings.feature_ortho_locatelli_grid_size)
+            if self.settings.feature_ortho_locatelli <= 2
             else (
-                self.settings.feature_stair_locatelli_obbt_time_limit
+                self.settings.feature_ortho_locatelli_obbt_time_limit
                 * 0.5
                 / bilinear_count
             )
@@ -52,7 +52,7 @@ class DomainProjector:
         x, y = tuple(bilinear_expression.variables)
 
         self.external_solver.opt_model.set_variable_lb(
-            x.solver_variable, x.lb + self.settings.feature_stair_locatelli_mu
+            x.solver_variable, x.lb + self.settings.feature_ortho_locatelli_mu
         )
         self.external_solver.opt_model.set_objective(
             y.solver_variable, sense=lsf.objective_sense_maximize()
@@ -68,7 +68,7 @@ class DomainProjector:
             return [(x.lb, y.lb), (x.lb, y.ub)]
 
         self.external_solver.opt_model.set_variable_lb(
-            y.solver_variable, y.lb + self.settings.feature_stair_locatelli_mu
+            y.solver_variable, y.lb + self.settings.feature_ortho_locatelli_mu
         )
         self.external_solver.opt_model.set_objective(
             x.solver_variable, sense=lsf.objective_sense_maximize()
@@ -91,7 +91,7 @@ class DomainProjector:
                 (x_ub, y.lb),
                 (x.ub, y.lb),
             ],
-            atol=2 * self.settings.feature_stair_locatelli_mu,
+            atol=2 * self.settings.feature_ortho_locatelli_mu,
         )
 
     def get_projected_vertices(  # pylint: disable=too-many-locals, too-many-statements, too-many-branches
@@ -99,7 +99,7 @@ class DomainProjector:
     ) -> list[tuple[float, float]]:
         """
         Main entry point to find the feasible polygon for a bilinear expression.
-        Executes the exact scanning and tracing logic from the original StairLocatelli.
+        Executes the exact scanning and tracing logic from the original OrthoLocatelli.
         """
         if bilinear_expression.name in self.locatelli_vertices:
             return self.locatelli_vertices[bilinear_expression.name]
@@ -150,10 +150,10 @@ class DomainProjector:
 
         # Setup domains
         x_domain = np.linspace(
-            x.lb, x.ub, self.settings.feature_stair_locatelli_grid_size
+            x.lb, x.ub, self.settings.feature_ortho_locatelli_grid_size
         ).tolist()
         y_domain = np.linspace(
-            y.lb, y.ub, self.settings.feature_stair_locatelli_grid_size
+            y.lb, y.ub, self.settings.feature_ortho_locatelli_grid_size
         ).tolist()
 
         y_grid_addition = []

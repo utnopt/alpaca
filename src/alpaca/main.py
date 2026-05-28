@@ -7,7 +7,7 @@ from alpaca.external_solvers import mip_model as mm
 import alpaca.solver.solver as slv
 import alpaca.mpip.mpip_handler as mph
 import alpaca.mpip.separation.mpip_separationhandler as msh
-import alpaca.locatelli.stair_locatelli as slo
+import alpaca.locatelli.ortho_locatelli as slo
 import alpaca.settings as s
 import alpaca.stats.statistics as ass
 from alpaca.utils import inout as ut_io
@@ -25,7 +25,7 @@ class Alpaca:
     Attributes:
         user_settings (s.UserSettings): Configuration object for the solver behavior.
         model_data (mda.ModelData): Data structure holding the optimization model.
-        stair_locatelli (slo.StairLocatelli | None): Handler for Stair-Locatelli features.
+        ortho_locatelli (slo.OrthoLocatelli | None): Handler for Ortho-Locatelli features.
         solver (slv.Solver | None): The initialized solver instance.
     """
 
@@ -43,7 +43,7 @@ class Alpaca:
         self.statistics = ass.Statistics(self)
         self.user_settings = s.UserSettings(config_dict)
         self.model_data = mda.ModelData(self.user_settings)
-        self.stair_locatelli: slo.StairLocatelli | None = None
+        self.ortho_locatelli: slo.OrthoLocatelli | None = None
         self.solver: slv.Solver | None = None
         self.obbt_variable_bounds: dict[str, tuple[float, float]] = {}
         self.locatelli_vertices: dict[str, list[tuple[float, float]]] = {}
@@ -77,7 +77,7 @@ class Alpaca:
     def build_pwl_relaxation_solver(self) -> None:
         """Constructs the solver using a Piecewise Linear (PWL) relaxation model.
 
-        This method initializes the internal model data, configures Stair-Locatelli
+        This method initializes the internal model data, configures Ortho-Locatelli
         heuristics if enabled, sets up the external MIP solver, and handles
         MPIP (Mixed-Integer Programming Partitioning) separation logic based
         on the user settings.
@@ -92,14 +92,14 @@ class Alpaca:
         )
         self.statistics.track_statistics_pwl_model()
 
-        if self.user_settings.feature_stair_locatelli:
+        if self.user_settings.feature_ortho_locatelli:
             locatelli_vertices = (
                 self.locatelli_vertices if self.locatelli_vertices else None
             )
-            self.stair_locatelli = slo.StairLocatelli(
+            self.ortho_locatelli = slo.OrthoLocatelli(
                 self.model_data, locatelli_vertices=locatelli_vertices
             )
-            self.locatelli_vertices = self.stair_locatelli.locatelli_vertices
+            self.locatelli_vertices = self.ortho_locatelli.locatelli_vertices
 
         external_solver = mm.MIPModel(
             self.model_data,
@@ -131,7 +131,7 @@ class Alpaca:
         runtime = self.solver.solve_instance()
         logger.info(lsf.info_optimization_finished(runtime))
         self.statistics.get_solver_information_from_external_solver_log()
-        self.statistics.track_statistics_stair_locatelli()
+        self.statistics.track_statistics_ortho_locatelli()
         if (
             self.user_settings.feature_mpip
             and self.user_settings.pwl_method != lsf.pwl_method_none()

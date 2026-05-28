@@ -21,6 +21,10 @@ dependencies = [
   "lxml>=5.4,<5.5",
   "matplotlib>=3.10,<3.11",
   "scipy>=1.16,<1.17",
+  "scikit-learn>=1.8,<1.9",
+  "gurobipy>=12.0,<12.1",
+  "grblogtools>=2.2,<2.3",
+  "pyscipopt>=5.1,<5.2"
 ]
 
 [tool.setuptools]

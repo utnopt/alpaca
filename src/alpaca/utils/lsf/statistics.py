@@ -129,6 +129,14 @@ class Statistics:
         return "root_solution_value"
 
     @classmethod
+    def stats_root_gap_reduction(cls, f="") -> str:
+        if f == cls.stats_format_gurobi():
+            return "RelaxGapRed"
+        if f == cls.stats_format_latex():
+            return "Root Gap Reduction"
+        return "root_gap_reduction"
+
+    @classmethod
     def stats_root_solving_time(cls, f="") -> str:
         if f == cls.stats_format_gurobi():
             return "RelaxTime"
@@ -275,6 +283,18 @@ class Statistics:
         if f == cls.stats_format_latex():
             return r"\# Cuts MPIP"
         return "mpip_nr_cuts"
+
+    @classmethod
+    def stats_volume_reduction_polytope(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return r"Vol. Red. PT"
+        return "volume_reduction_polytope"
+
+    @classmethod
+    def stats_volume_reduction_polygon(cls, f="") -> str:
+        if f == cls.stats_format_latex():
+            return r"Vol. Red. PG"
+        return "volume_reduction_polygon"
 
     @classmethod
     def stats_column_names(cls) -> str:

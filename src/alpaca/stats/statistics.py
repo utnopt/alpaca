@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 import time
 
-import alpaca.locatelli.stair_locatelli as slo
+import alpaca.locatelli.ortho_locatelli as slo
 from alpaca.utils.lsf.localized_string_factory import LocalizedStringFactory as lsf
 
 if TYPE_CHECKING:
@@ -101,18 +101,18 @@ class Statistics:  # pylint: disable=too-many-instance-attributes
         ):
             raise ValueError(lsf.error_filter_no_bilinear_expressions())
 
-    def track_statistics_stair_locatelli(self):
-        """Tracks statistics related to the Stair-Locatelli handler."""
+    def track_statistics_ortho_locatelli(self):
+        """Tracks statistics related to the Ortho-Locatelli handler."""
         self.locatelli_domain_volume_polytope = (
-            self._stair_locatelli_domain_volume_polytope()
+            self._ortho_locatelli_domain_volume_polytope()
         )
         self.locatelli_domain_volume_polygon = (
-            self._stair_locatelli_domain_volume_polygon()
+            self._ortho_locatelli_domain_volume_polygon()
         )
         self.locatelli_nr_cuts = (
             0
-            if self.alp_instance.stair_locatelli is None
-            else self.alp_instance.stair_locatelli.nr_cuts
+            if self.alp_instance.ortho_locatelli is None
+            else self.alp_instance.ortho_locatelli.nr_cuts
         )
 
     def track_statistics_mpip(self):
@@ -232,29 +232,29 @@ class Statistics:  # pylint: disable=too-many-instance-attributes
             return None
         return self.solver_stats.get(lsf.stats_root_solution_value(), None)
 
-    def _stair_locatelli_domain_volume_polytope(self) -> float | None:
-        """Returns bilinear domain volume over polytope from the Stair-Locatelli handler."""
-        if self.alp_instance.stair_locatelli is not None:
+    def _ortho_locatelli_domain_volume_polytope(self) -> float | None:
+        """Returns bilinear domain volume over polytope from the Ortho-Locatelli handler."""
+        if self.alp_instance.ortho_locatelli is not None:
             return (
-                self.alp_instance.stair_locatelli.calculate_mean_bilinear_domain_volume(
+                self.alp_instance.ortho_locatelli.calculate_mean_bilinear_domain_volume(
                     is_polytope=True
                 )
             )
-        volume = slo.StairLocatelli.calculate_mean_bilinear_domain_volume_box(
+        volume = slo.OrthoLocatelli.calculate_mean_bilinear_domain_volume_box(
             self.alp_instance.model_data, self._added_mccormick_envelopes
         )
         self._added_mccormick_envelopes = True
         return volume
 
-    def _stair_locatelli_domain_volume_polygon(self) -> float | None:
-        """Returns bilinear domain volume over polygon from the Stair-Locatelli handler."""
-        if self.alp_instance.stair_locatelli is not None:
+    def _ortho_locatelli_domain_volume_polygon(self) -> float | None:
+        """Returns bilinear domain volume over polygon from the Ortho-Locatelli handler."""
+        if self.alp_instance.ortho_locatelli is not None:
             return (
-                self.alp_instance.stair_locatelli.calculate_mean_bilinear_domain_volume(
+                self.alp_instance.ortho_locatelli.calculate_mean_bilinear_domain_volume(
                     is_polytope=False
                 )
             )
-        volume = slo.StairLocatelli.calculate_mean_bilinear_domain_volume_box(
+        volume = slo.OrthoLocatelli.calculate_mean_bilinear_domain_volume_box(
             self.alp_instance.model_data, self._added_mccormick_envelopes
         )
         self._added_mccormick_envelopes = True

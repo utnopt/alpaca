@@ -19,6 +19,7 @@ from alpaca.study.evaluator import StudyEvaluator
 from alpaca.study.latex_generator import LatexTableGenerator, GeneratorConfig
 from alpaca.utils.logger import logger
 from alpaca.utils import inout as ut_io
+from alpaca.study.tikz_generator import TikzPlotGenerator, PlotGeneratorConfig
 
 
 def get_default_paths() -> dict[str, str]:
@@ -216,6 +217,7 @@ def evaluate_csv(
         csv_path: Path to the CSV results file.
         results_dir: Base directory for output.
         time_limit: Time limit for runs (in seconds).
+        mean_trim: Proportion of outliers to trim for mean calculation.
         base_config: Base config name to identify in the CSV.
     """
     logger.info("Starting evaluation...")
@@ -226,13 +228,24 @@ def evaluate_csv(
         evaluator,
         output_dir=str(Path(results_dir) / "tables"),
     )
-
     generator = LatexTableGenerator(latex_config)
-    outputs = generator.generate_all_predefined_tables()
+    table_outputs = generator.generate_all_predefined_tables()
 
-    logger.info("Generated %d tables:", len(outputs))
-    for table_path in outputs:
+    logger.info("Generated %d tables:", len(table_outputs))
+    for table_path in table_outputs:
         logger.info("  - %s", table_path)
+
+    # Generate plots
+    plot_config = PlotGeneratorConfig(
+        evaluator,
+        output_dir=str(Path(results_dir) / "plots"),
+    )
+    plot_generator = TikzPlotGenerator(plot_config)
+    plot_outputs = plot_generator.generate_all_predefined_plots()
+
+    logger.info("Generated %d plots:", len(plot_outputs))
+    for plot_path in plot_outputs:
+        logger.info("  - %s", plot_path)
 
 
 def main() -> int:

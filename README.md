@@ -2,7 +2,7 @@
 
 **A**daptive **L**inear **P**iecewise **A**pproximation with **C**ombinatorial **A**ugmentation
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/utnopt/alpaca/releases/tag/v0.1.0)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://github.com/utnopt/alpaca/releases/tag/v0.2.0)
 [![Python](https://img.shields.io/badge/python-3.11%20|%203.12-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -16,9 +16,12 @@ Alpaca is a Python-based optimization framework for solving nonlinear programmin
 - [Features](#features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Computational Studies](#computational-studies)
 - [Configuration](#configuration)
 - [Architecture](#architecture)
 - [Supported Expressions](#supported-expressions)
+- [Ortho-Locatelli Cuts](#ortho-locatelli-cuts)
+- [MPIP](#mpip)
 - [External Solvers](#external-solvers)
 - [References](#references)
 - [License](#license)
@@ -34,21 +37,28 @@ Alpaca transforms nonlinear optimization problems into mixed-integer linear prog
 - Multiple PWL formulation methods
 - Bound propagation and tightening
 - Cutting plane generation via Multipartite Implication Polytopes (MPIP)
+- Ortho-Locatelli cuts for tighter bilinear relaxations
+- Automated computational study pipeline with parallel execution
+- LaTeX table and TikZ plot generation for result evaluation
 
 ---
 
 ## Features
 
-| Feature | Description                                                                                              |
-|---------|----------------------------------------------------------------------------------------------------------|
-| **OSiL Model Import** | Parse optimization models from `.osil` XML files                                                         |
+| Feature | Description |
+|---------|-------------|
+| **OSiL Model Import** | Parse optimization models from `.osil` XML files |
 | **Expression Decomposition** | Automatically decompose nonlinear expressions into bilinear, multilinear, and one-dimensional components |
-| **PWL Methods** | Multiple Choice Method and Delta Method for domain discretization                                        |
-| **Bilinear Handling** | McCormick envelopes, sum-of-squares reformulation, or piecewise constant relaxation                      |
-| **Bound Propagation** | Manual propagation and Optimization-Based Bound Tightening (OBBT)                                        |
-| **Breakpoint Generation** | Uniform, adaptive (error-based), and neural network-based strategies                                     |
-| **MPIP Separation** | Advanced cutting planes based on multipartite implication polytopes                                      |
-| **Solver Support** | Gurobi and SCIP backends                                                                                 |
+| **PWL Methods** | Multiple Choice Method and Delta Method for domain discretization |
+| **Bilinear Handling** | McCormick envelopes, sum-of-squares reformulation, piecewise constant relaxation, or nonlinear |
+| **Bound Propagation** | Manual propagation and Optimization-Based Bound Tightening (OBBT) |
+| **Breakpoint Generation** | Uniform, adaptive (error-based), and neural network-based strategies |
+| **Ortho-Locatelli Cuts** | Domain projection and cutting planes for tighter bilinear relaxations |
+| **MPIP Separation** | Advanced cutting planes based on multipartite implication polytopes |
+| **Computational Studies** | Parallel execution pipeline with subprocess-based job scheduling |
+| **Result Evaluation** | CSV-based evaluation with filtering, statistics, and outlier detection |
+| **LaTeX Output** | Automated generation of LaTeX tables and TikZ scatter/bar plots |
+| **Solver Support** | Gurobi and SCIP backends |
 
 ---
 
@@ -57,22 +67,16 @@ Alpaca transforms nonlinear optimization problems into mixed-integer linear prog
 ### Prerequisites
 
 - Python 3.11 or 3.12
-- One of the following MIP solvers:
-  - [Gurobi](https://www.gurobi.com/) (commercial, free academic license)
-  - [SCIP](https://www.scipopt.org/) (open source via `pyscipopt`)
 
-### Install from PyPI
+### Install from Source
 
 ```bash
-
-# Install the latest release (v0.1.0)
-pip install git+https://github.com/utnopt/alpaca.git@v0.1.0
 # Clone the repository
 git clone https://github.com/utnopt/alpaca.git
 cd alpaca
 
 # Checkout the release tag
-git checkout v0.1.0
+git checkout v0.2.0
 
 # Install in development mode
 pip install -e .
@@ -93,19 +97,13 @@ pip install pyscipopt
 pip install gurobipy
 ```
 
----
+### Additional Dependencies for Studies
 
-## Quick Start
+The computational study module requires additional packages for evaluation:
 
-### Basic Usage
-
-```python
-import alpaca as alp
-
-# Load model from OSiL file
-alpaca = alp.read_model_from_osil("path/to/model.osil")
-
-
+```bash
+pip install numpy pandas scikit-learn
+```
 
 ---
 
@@ -129,8 +127,7 @@ alpaca.customize_settings({"number_of_breakpoints": 10, "external_solver": "guro
 alpaca.build_pwl_relaxation_solver()
 
 # Solve
-runtime = alpaca.solve()
-print(f"Optimization completed in {runtime:.2f} seconds")
+alpaca.solve()
 ```
 
 ### Using a Configuration File
@@ -143,6 +140,135 @@ alpaca.customize_settings("config/settings.json")
 alpaca.build_pwl_relaxation_solver()
 alpaca.solve()
 ```
+
+### Accessing Statistics
+
+```python
+import alpaca as alp
+
+alpaca = alp.read_model_from_osil("instances/pooling_adhya1pq.osil")
+alpaca.customize_settings({"external_solver": "gurobi"})
+alpaca.configure_logging("logs/run.log")
+alpaca.build_pwl_relaxation_solver()
+alpaca.solve()
+
+# Access collected statistics
+print(f"Solving time: {alpaca.statistics.solving_time}")
+print(f"Solution value: {alpaca.statistics.solution_value}")
+print(f"MIP gap: {alpaca.statistics.mip_gap}")
+print(f"Build time: {alpaca.statistics.build_time}")
+print(f"Locatelli cuts: {alpaca.statistics.locatelli_nr_cuts}")
+```
+
+---
+
+## Computational Studies
+
+Alpaca includes a full-featured computational study module for benchmarking configurations across multiple instances.
+
+### Command-Line Interface
+
+```bash
+# Run a study with default paths
+python -m alpaca.study run
+
+# Run with custom paths
+python -m alpaca.study run \
+    -i ./instances \
+    -c ./configs \
+    -r ./results \
+    -l ./results/logs \
+    -w 4 \
+    -t 4
+
+# Run in background (survives shell close)
+nohup python -m alpaca.study run -i ./instances -c ./configs -r ./results > study.log 2>&1 &
+
+# Evaluate existing results
+python -m alpaca.study evaluate --csv results/raw/study_results_2024-01-01_12-00-00.csv
+
+# Evaluate with custom options
+python -m alpaca.study evaluate \
+    --csv results/raw/study_results.csv \
+    -r ./results \
+    --timelimit 3600 \
+    --meantrim 0.05 \
+    --base b_a_s_e
+```
+
+### CLI Options
+
+| Command | Option | Default | Description |
+|---------|--------|---------|-------------|
+| `run` | `-i, --instances` | `./instances` | Directory containing `.osil` files |
+| `run` | `-c, --configs` | `./configs` | Directory containing `.json` config files |
+| `run` | `-r, --results` | `./results` | Output directory for CSV, tables, plots |
+| `run` | `-l, --logs` | `./results/logs` | Log directory (`none` to disable) |
+| `run` | `-w, --workers` | auto | Max parallel workers |
+| `run` | `-t, --threads-per-job` | 4 | Threads per solver job |
+| `run` | `--no-evaluate` | — | Skip evaluation after run |
+| `evaluate` | `--csv` | (required) | Path to CSV results file |
+| `evaluate` | `--timelimit` | 3600 | Time limit for timeout detection |
+| `evaluate` | `--meantrim` | 0.05 | Outlier trimming fraction |
+| `evaluate` | `--base` | `b_a_s_e` | Base config name for comparisons |
+
+### Study Pipeline Architecture
+
+The study pipeline uses **subprocess-based parallelism**:
+
+1. **Discovery**: Finds all `.osil` instances and `.json` configs
+2. **Scheduling**: Spawns separate Python processes per instance (visible in `ps aux`)
+3. **Execution**: Each subprocess runs all configs sequentially for one instance, reusing OBBT bounds and Locatelli vertices across configs
+4. **Collection**: Results are written immediately to CSV as each job completes
+5. **Evaluation**: Generates LaTeX tables and TikZ plots from the CSV
+
+```bash
+# Monitor running jobs
+ps aux | grep alpaca.study.run_job
+
+# Watch results in real-time
+tail -f results/raw/study_results_*.csv
+```
+
+### Generated Outputs
+
+After a study completes, the following outputs are produced:
+
+```
+results/
+├── raw/
+│   ├── study_results_2024-01-01_12-00-00.csv
+│   └── errors_2024-01-01_12-00-00.log
+├── tables/
+│   ├── table_instance_solution_time.tex
+│   ├── table_instance_nr_nodes.tex
+│   ├── table_instance_root_gap_reduction.tex
+│   ├── table_instance_mip_gap.tex
+│   ├── table_instance_model_size.tex
+│   ├── table_instance_domain_volume_polygon.tex
+│   └── table_instance_domain_volume_polytope.tex
+├── plots/
+│   ├── plot_root_gap_reduction.tex
+│   └── plot_root_gap_reduction_bar.tex
+└── logs/
+    ├── instance1_config1.log
+    └── instance1_config2.log
+```
+
+### Instance Filters
+
+The evaluator applies intelligent filters to ensure meaningful comparisons:
+
+| Filter | Description |
+|--------|-------------|
+| `NONE` | All complete instances (every config has a result) |
+| `ALL_REACHED_ROOT` | All configs reached the root node before time limit |
+| `ALL_FOUND_SOLUTION` | All configs found a feasible solution |
+| `NON_EMPTY_BILINEAR_DOMAIN` | All configs have non-empty bilinear domains |
+| `ALL_TERMINATED` | No config hit the time limit |
+| `ALL_TERMINATED_CONSISTENT` | All terminated with consistent solution values |
+| `BRANCH_AND_BOUND` | At least one config used branch-and-bound (>1 node) |
+| `ROOT_SUBOPTIMAL` | At least one config has a suboptimal root solution |
 
 ---
 
@@ -161,6 +287,7 @@ Settings can be provided via a JSON file or a Python dictionary.
 | `number_of_breakpoints` | int | 5 | Number of PWL breakpoints per variable |
 | `relaxation_tolerance` | float | 1e-4 | Tolerance for adaptive breakpoint generation |
 | `pwl_method` | str | `"multiple_choice"` | `"multiple_choice"`, `"delta"`, or `"none"` |
+| `approximation` | int | 0 | Approximation mode |
 
 ### Bilinear Handling
 
@@ -173,7 +300,7 @@ Settings can be provided via a JSON file or a Python dictionary.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `bound_propagation` | int | 0 | `0`: Manual, `1`: OBBT |
+| `bound_propagation` | int | 0 | `0`: Manual, `1`: OBBT, `2`: OBBT on bilinear |
 | `bound_propagation_rounds` | int | 3 | Number of propagation iterations |
 | `bound_propagation_obbt_time_limit` | int | 300 | OBBT time budget in seconds |
 
@@ -183,7 +310,20 @@ Settings can be provided via a JSON file or a Python dictionary.
 |-----------|------|---------|-------------|
 | `breakpoint_generation` | int | 0 | `0`: Uniform, `1`: Neural network, `2`: Adaptive |
 | `feature/nnbp/learning_rate` | float | 1e-7 | Learning rate for NN-based generation |
+| `feature/nnbp/nr_of_samples` | int | 1000 | Number of training samples |
 | `feature/nnbp/time_limit` | int | 100 | Training time limit |
+| `feature/nnbp/queue_size` | int | 5 | Queue size for convergence |
+| `feature/nnbp/convergence_tol` | float | 1e-2 | Convergence tolerance |
+
+### Ortho-Locatelli
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `feature/ortho_locatelli` | int | 0 | `0`: Disabled, `1`: Locatelli, `2`: Ortho-Locatelli, `3`: Indicator Locatelli |
+| `feature/ortho_locatelli/grid_size` | int | 10 | Grid size for domain projection |
+| `feature/ortho_locatelli/mu` | float | 1e-3 | Distance from lower bound |
+| `feature/ortho_locatelli/obbt_time_limit` | int | 1800 | OBBT time limit for projection |
+| `feature/ortho_locatelli/evaluation_grid_size` | int | 100 | Grid size for volume evaluation |
 
 ### MPIP Features
 
@@ -192,9 +332,42 @@ Settings can be provided via a JSON file or a Python dictionary.
 | `feature/mpip/separation` | int | 0 | Enable separation cuts |
 | `feature/mpip/mccormick` | int | 0 | Add MPIP-based McCormick constraints |
 | `feature/mpip/corner` | int | 0 | Add corner constraints |
+| `feature/mpip/ortho` | int | 0 | Add ortho constraints |
 | `feature/mpip/stripe` | int | 0 | Add stripe constraints |
 | `feature/mpip/bar` | int | 0 | Add bar constraints |
 | `feature/mpip/frequency` | int | 10 | Separation callback frequency |
+| `feature/mpip/useless_threshold` | float | 0.1 | Threshold for useless cuts |
+| `feature/mpip/reset_interval` | int | 300 | Interval for cut pool reset |
+
+### Instance Filters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `filter/no_bilinear_expressions` | int | 0 | Skip instances with no bilinear expressions |
+| `filter/no_mpip_instances` | int | 0 | Skip instances with no MPIP structures |
+| `filter/unbounded_variables` | int | 1 | Filter unbounded variables |
+| `filter/max_nr_variables` | int | 1e6 | Maximum number of variables |
+
+### Example Configuration File
+
+```json
+{
+    "seed": 42,
+    "solver_time_limit": 3600,
+    "solver_thread_limit": 4,
+    "external_solver": "gurobi",
+    "number_of_breakpoints": 10,
+    "pwl_method": "multiple_choice",
+    "bilinear_handling": 0,
+    "bound_propagation": 1,
+    "bound_propagation_rounds": 3,
+    "feature/ortho_locatelli": 2,
+    "feature/ortho_locatelli/grid_size": 10,
+    "feature/mpip/separation": 1,
+    "feature/mpip/mccormick": 1,
+    "feature/mpip/frequency": 10
+}
+```
 
 ---
 
@@ -203,6 +376,7 @@ Settings can be provided via a JSON file or a Python dictionary.
 ```
 alpaca/
 ├── src/alpaca/
+│   ├── __init__.py              # Package init, exports Alpaca and read_model_from_osil
 │   ├── main.py                  # Main Alpaca class and entry point
 │   ├── settings.py              # Static and user-configurable settings
 │   ├── run.py                   # Example usage and script execution
@@ -222,7 +396,7 @@ alpaca/
 │   ├── expressions/
 │   │   ├── expression.py
 │   │   ├── expression_container.py
-│   │   ├── one_dim_expression.py    # Square, Exp, Ln, Sin, Cos, etc.
+│   │   ├── one_dim_expression.py
 │   │   ├── bilinear_expression.py
 │   │   ├── bilinear_binary_expression.py
 │   │   ├── bilinear_mixed_binary_expression.py
@@ -239,13 +413,31 @@ alpaca/
 │   ├── external_solvers/
 │   │   ├── mip_model.py         # MIP model construction
 │   │   └── solver_wrapper.py    # Gurobi/SCIP abstraction
+│   ├── locatelli/
+│   │   ├── ortho_locatelli.py       # Ortho-Locatelli orchestration
+│   │   ├── domain_projector.py      # Feasible domain polygon computation
+│   │   └── locatelli_cut_generator.py # Cutting plane generation
 │   ├── mpip/
 │   │   ├── mpip.py              # MPIP data structure
 │   │   ├── mpip_handler.py      # MPIP extraction
 │   │   └── separation/
 │   │       ├── mpip_separationhandler.py
 │   │       └── mpip_separator.py
+│   ├── stats/
+│   │   └── statistics.py        # Statistics collection and reporting
+│   ├── study/
+│   │   ├── __main__.py          # CLI entry point (python -m alpaca.study)
+│   │   ├── pipeline.py          # Parallel study execution pipeline
+│   │   ├── run_job.py           # Single-instance subprocess worker
+│   │   ├── evaluator.py         # CSV-based result evaluation and filtering
+│   │   ├── latex_generator.py   # LaTeX table generation
+│   │   └── tikz_generator.py    # TikZ plot generation
 │   └── utils/
+│       ├── inout.py             # File I/O and logger configuration
+│       ├── logger.py            # Logging utilities
+│       ├── geometry.py          # Geometric utility functions
+│       └── lsf/
+│           └── localized_string_factory.py  # Centralized string constants
 ├── test/                        # Test suite
 ├── pyproject.toml
 └── README.md
@@ -280,6 +472,66 @@ alpaca/
 
 ---
 
+## Ortho-Locatelli Cuts
+
+The Ortho-Locatelli module strengthens bilinear relaxations by:
+
+1. **Domain Projection**: For each bilinear term $z = x \cdot y$, the feasible region is projected onto the $(x, y)$-plane by solving a series of optimization subproblems over a grid. This produces an orthogonal polygon that tightly contains the feasible domain.
+
+2. **Cut Generation**: Valid cutting planes are derived from all combinations of three vertices of the projected polygon. Each cut is verified against boundary checkpoints to ensure validity as either an underestimator or overestimator of the bilinear term.
+
+3. **Modes**:
+   - **Locatelli** (`feature/ortho_locatelli = 1`): Uses the convex hull of the projected polygon for cut generation.
+   - **Ortho-Locatelli** (`feature/ortho_locatelli = 2`): Uses the full (non-convex) orthocase polygon for tighter cuts.
+   - **Indicator Locatelli** (`feature/ortho_locatelli = 3`): Simplified projection for indicator-type bilinear constraints.
+
+4. **Volume Evaluation**: The module computes the 3D volume of the McCormick relaxation over the projected domain to quantify the tightening effect of the cuts.
+
+### References
+
+The Locatelli cut generation approach is based on:
+
+> Locatelli and Schoen (2014). *On convex envelopes for bivariate functions over polytopes*.
+> [https://optimization-online.org/?p=26208](https://optimization-online.org/?p=26208)
+
+The Ortho-Locatelli extension to non-convex polygonal domains is described in:
+
+> Göß, Krause, Kuchlbauer and Kuen (2026). *On convex envelopes of bivariate functions over polygons*.
+
+---
+
+## MPIP
+
+The **Multipartite Implication Polytope (MPIP)** module exploits conditional relationships between sets of binary variables that arise in piecewise-linear relaxations. When continuous variables are discretized, each variable's domain is partitioned into intervals represented by binary indicator variables (subject to SOS1 constraints). The functional relationship between variables induces logical implications: if a certain combination of intervals is active for the input variables, only a subset of intervals can be active for the output variable.
+
+The MPIP module:
+
+1. **Extraction**: Automatically detects MPIP structures in the PWL relaxation by analyzing nonlinear expression trees, bilinear terms, and multilinear terms.
+
+2. **Relation Computation**: For each MPIP instance, computes the implication relation by solving interval bounding problems — determining which output intervals are reachable for each combination of input intervals.
+
+3. **Constraint Generation**: Adds various families of valid inequalities derived from the MPIP structure:
+   - **McCormick constraints**: Basic implication constraints linking input and output binaries.
+   - **Stripe constraints**: Aggregated constraints along single input dimensions.
+   - **Bar constraints**: Row- and column-based aggregated constraints (bipartite case).
+   - **Corner constraints**: Orthocase-shaped constraints exploiting monotonicity (bipartite case).
+
+4. **Separation**: A callback-based separation routine that dynamically generates violated MPIP cuts during branch-and-bound by solving a separation LP for each fractional solution.
+
+### References
+
+The theoretical foundation of implication polytopes over multiple sets of binary variables is described in:
+
+> Burlacu, Gemander and Kuen (2024). *The Bipartite Implication Polytope: Conditional Relations over Multiple Sets of Binary Variables*.
+> [https://optimization-online.org/?p=26208](https://optimization-online.org/?p=26208)
+
+The identification and application of MPIP instances within piecewise-linear relaxations is presented in:
+
+> Braun, Burlacu, Kuen and Rolsing (2026). *The Bipartite Implication Polytope: Modeling Binary Relations in Piecewise-Linear Approximations*.
+> [https://optimization-online.org/?p=33773](https://optimization-online.org/?p=33773)
+
+---
+
 ## External Solvers
 
 Alpaca provides a unified interface for both Gurobi and SCIP:
@@ -292,7 +544,7 @@ alpaca.customize_settings({"external_solver": "gurobi"})
 alpaca.customize_settings({"external_solver": "scip"})
 ```
 
-Solver-specific features (e.g., callbacks, separation handlers) are automatically configured based on the selected backend.
+Solver-specific features (e.g., callbacks, separation handlers, log parsing) are automatically configured based on the selected backend.
 
 ---
 
@@ -300,11 +552,10 @@ Solver-specific features (e.g., callbacks, separation handlers) are automaticall
 
 If you use Alpaca in your research, please cite the following:
 
-### MPIP Theory
+> Braun, Burlacu, Kuen and Rolsing (2026). *The Bipartite Implication Polytope: Modeling Binary Relations in Piecewise-Linear Approximations*.
+> [https://optimization-online.org/?p=33773](https://optimization-online.org/?p=33773)
 
-> Burlacu, Gemander, and Kuen (2024). *The Bipartite Implication Polytope: Conditional Relations over Multiple Sets of Binary Variables*.  
-> [https://optimization-online.org/?p=26208](https://optimization-online.org/?p=26208)
-
+---
 
 ## License
 
@@ -317,5 +568,3 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 - **Tobias Kuen**
 - **Robert Burlacu**
 - **Dennis Cost**
-
----
