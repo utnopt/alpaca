@@ -337,10 +337,10 @@ class TikzPlotGenerator:
 
         lines.append(lsf.end_axis())
         lines.append(lsf.end_tikzpicture())
+
         lines.append(
-            f"% Nr of instances: {len(
-            config_values[self.evaluator.non_base_configs(
-                base_config=x_axis_config)[-1]])}"
+            f"% Nr of instances:"
+            f" {len(config_values[self.evaluator.non_base_configs(base_config=x_axis_config)[-1]])}"
         )
 
         return lsf.newline().join(lines)
