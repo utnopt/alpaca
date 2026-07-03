@@ -1,8 +1,27 @@
 from dataclasses import dataclass, field
 import math
 from itertools import combinations
-from sympy import symbols, Eq, linsolve
+
+
+from sympy import S, symbols, Eq, linsolve, solveset
 import numpy as np
+from scipy.spatial import ConvexHull
+
+def get_active_point_from_generator(generator, a, b):
+    if isinstance(generator, Vertex):
+        x_r = generator.x
+        y_r = generator.y
+    else:
+        x_r = (a + generator.m * b - generator.q) / (2 * generator.m)
+        if x_r < generator.v1.x:
+            x_r = generator.v1.x
+        if x_r > generator.v2.x:
+            x_r = generator.v2.x
+        y_r = generator.m * x_r + generator.q
+
+    return x_r, y_r
+
+
 
 @dataclass(frozen=True)
 class Vertex:
@@ -17,6 +36,10 @@ class Edge:
     q: float = field(init=False)
 
     def __post_init__(self):
+        if self.v1.x > self.v2.x:
+            object.__setattr__(self, "v1", self.v2)
+            object.__setattr__(self, "v2", self.v1)
+
         if self.v1.x == self.v2.x:
             m = math.nan
             q = math.nan
@@ -74,8 +97,9 @@ class EnvelopePolygonalDomain:
         pairs = list(combinations(self.generators, 2))
         #todo implement
 
-    def _solve_three_vertices(self, triple):
+    def _solve_three_vertices(self, triple, generators_without_triple):
         v1, v2, v3 = triple
+        # todo triple mit konvexen kanten ausschließen
 
         A = np.array([
             [v1.x, v1.y, 1],
@@ -95,22 +119,58 @@ class EnvelopePolygonalDomain:
         ]
 
         a, b, c = list(linsolve(eqs, (a, b, c)))[0]
-        return a, b, c
+        for generator_outside_J in generators_without_triple:
+            x_r, y_r = get_active_point_from_generator(generator_outside_J, a, b)
 
-    def _solve_two_vertices_one_edge(self, triple):
+            if v1.x * v1.y - a * v1.x - b * v1.y > x_r * y_r - a * x_r - b * y_r:
+                return None
+
+        cell = ConvexHull([(v1.x, v1.y), (v2.x, v2.y), (v3.x, v3.y)]).equations
+
+        x, y = symbols("x, y")
+        functional = a * x + b * y + c
+        solution = [(cell, functional)]
+
+        return solution
+
+    def _solve_two_vertices_one_edge(self, triple, generators_without_triple):
         v1, v2 = (el for el in triple if isinstance(el, Vertex))
         e = tuple(el for el in triple if isinstance(el, Edge))[0]
 
+        C = 4 * e.m * (e.q + e.m * v2.x - v2.y)
+        if C == 0:
+            return None
+        else:
+            beta2 = -1/C
+            beta1 = (2 * e.q + 4 * e.m * v2.x) / C
+            beta0 = (4 * e.m * v2.x * v2.y + e.q * e.q) / (-C)
+
+            z = symbols("z")
+            b = beta2 * z**2 + beta1 * z + beta0
+            a = z - e.m * b
+
+            sol = list(solveset(v1.x * v1.y - a * v1.x - b * v1.y - v2.x * v2.y + a * v2.x + b * v2.y, z, domain=S.Reals))
+
+            for z in sol:
+                if e.v1.x < (z - e.q) / (2 * e.m) < e.v2.x:
+                    b = beta2 * z ** 2 + beta1 * z + beta0
+                    a = z - e.m * b
+                    c = v1.x * v1.y - a * v1.x - b * v1.y
 
 
-    def _solve_one_vertex_two_edges(self, triple):
+
+
+        #todo implement hier weiter
+
+
+    def _solve_one_vertex_two_edges(self, triple, generators_without_triple):
         v = tuple(el for el in triple if isinstance(el, Vertex))[0]
         e1, e2 = (el for el in triple if isinstance(el, Edge))
 
         #todo implement
         pass
 
-    def _solve_three_edges(self, triple):
+    def _solve_three_edges(self, triple, generators_without_triple):
         e1, e2, e3 = triple
 
         #todo implement
@@ -118,24 +178,26 @@ class EnvelopePolygonalDomain:
 
     def _three_elements_J(self):
         triples = list(combinations(self.generators, 3))
-
+        all_solutions = []
         for triple in triples:
             number_of_vertices = sum(isinstance(el, Vertex) for el in triple)
             generators_without_triple = [el for el in self.generators if el not in triple]
 
             if number_of_vertices == 3:
-                result = self._solve_three_vertices(triple)
+                solutions = self._solve_three_vertices(triple, generators_without_triple)
+                print(triple)
+                print('3er solutions ', solutions)
             elif number_of_vertices == 2:
-                result = self._solve_two_vertices_one_edge(triple)
+                solutions = self._solve_two_vertices_one_edge(triple, generators_without_triple)
             elif number_of_vertices == 1:
-                result = self._solve_one_vertex_two_edges(triple)
+                solutions = self._solve_one_vertex_two_edges(triple, generators_without_triple)
             else:
-                result = self._solve_three_edges(triple)
+                solutions = self._solve_three_edges(triple, generators_without_triple)
 
-            if result is None:
+            if solutions is None:
                 continue
             else:
-                a, b, c = result
+                all_solutions += solutions
 
 
             # TODO generators_without_triple inequalities pruefen
