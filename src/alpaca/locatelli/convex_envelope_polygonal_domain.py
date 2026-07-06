@@ -22,6 +22,18 @@ def get_active_point_from_generator(generator, a, b):
     return x_r, y_r
 
 
+def feasibility_outside_J_generators(generator_in_J, generators_outside_J, a, b):
+    x_k, y_k = get_active_point_from_generator(generator_in_J, a, b)
+
+    for generator_outside_J in generators_outside_J:
+        x_r, y_r = get_active_point_from_generator(generator_outside_J, a, b)
+
+        if x_k * y_k - a * x_k - b * y_k > x_r * y_r - a * x_r - b * y_r:
+            return False
+
+    return True
+
+
 
 @dataclass(frozen=True)
 class Vertex:
@@ -37,8 +49,9 @@ class Edge:
 
     def __post_init__(self):
         if self.v1.x > self.v2.x:
+            tmp = self.v1
             object.__setattr__(self, "v1", self.v2)
-            object.__setattr__(self, "v2", self.v1)
+            object.__setattr__(self, "v2", tmp)
 
         if self.v1.x == self.v2.x:
             m = math.nan
@@ -99,7 +112,7 @@ class EnvelopePolygonalDomain:
 
     def _solve_three_vertices(self, triple, generators_without_triple):
         v1, v2, v3 = triple
-        # todo triple mit konvexen kanten ausschließen
+        # todo triple mit konvexen kanten ausschließen (later)
 
         A = np.array([
             [v1.x, v1.y, 1],
@@ -108,7 +121,7 @@ class EnvelopePolygonalDomain:
             ])
 
         if np.linalg.det(A) == 0:
-            return None
+            return []
 
         a, b, c = symbols("a, b, c")
 
@@ -119,11 +132,9 @@ class EnvelopePolygonalDomain:
         ]
 
         a, b, c = list(linsolve(eqs, (a, b, c)))[0]
-        for generator_outside_J in generators_without_triple:
-            x_r, y_r = get_active_point_from_generator(generator_outside_J, a, b)
 
-            if v1.x * v1.y - a * v1.x - b * v1.y > x_r * y_r - a * x_r - b * y_r:
-                return None
+        if not feasibility_outside_J_generators(v1, generators_without_triple, a, b):
+            return []
 
         cell = ConvexHull([(v1.x, v1.y), (v2.x, v2.y), (v3.x, v3.y)]).equations
 
@@ -139,7 +150,7 @@ class EnvelopePolygonalDomain:
 
         C = 4 * e.m * (e.q + e.m * v2.x - v2.y)
         if C == 0:
-            return None
+            return []
         else:
             beta2 = -1/C
             beta1 = (2 * e.q + 4 * e.m * v2.x) / C
@@ -151,30 +162,175 @@ class EnvelopePolygonalDomain:
 
             sol = list(solveset(v1.x * v1.y - a * v1.x - b * v1.y - v2.x * v2.y + a * v2.x + b * v2.y, z, domain=S.Reals))
 
+            solutions = []
             for z in sol:
-                if e.v1.x < (z - e.q) / (2 * e.m) < e.v2.x:
-                    b = beta2 * z ** 2 + beta1 * z + beta0
-                    a = z - e.m * b
-                    c = v1.x * v1.y - a * v1.x - b * v1.y
+                b = beta2 * z ** 2 + beta1 * z + beta0
+                a = z - e.m * b
+                c = v1.x * v1.y - a * v1.x - b * v1.y
 
+                if not e.v1.x < (a + e.m * b - e.q) / (2 * e.m) < e.v2.x:
+                    continue
 
+                if not feasibility_outside_J_generators(v1, generators_without_triple, a, b):
+                    continue
 
+                cell = ConvexHull([(v1.x, v1.y), (v2.x, v2.y), (get_active_point_from_generator(e, a, b))]).equations
 
-        #todo implement hier weiter
+                x, y = symbols("x, y")
+                functional = a * x + b * y + c
+                solutions.append((cell, functional))
+
+            return solutions
+
 
 
     def _solve_one_vertex_two_edges(self, triple, generators_without_triple):
         v = tuple(el for el in triple if isinstance(el, Vertex))[0]
         e1, e2 = (el for el in triple if isinstance(el, Edge))
 
-        #todo implement
-        pass
+        C = 4 * e1.m * (e1.q + e1.m * v.x - v.y)
+        if C == 0:
+            return []
+        else:
+            beta2 = -1 / C
+            beta1 = (2 * e1.q + 4 * e1.m * v.x) / C
+            beta0 = (4 * e1.m * v.x * v.y + e1.q * e1.q) / (-C)
+
+            z = symbols("z")
+            b = beta2 * z ** 2 + beta1 * z + beta0
+            a = z - e1.m * b
+
+            sol = list(solveset(v.x * v.y - a * v.x - b * v.y + (a + e2.m * b - e2.q)**2 / (4 * e2.m) + b * e2.q, z, domain=S.Reals))
+
+            solutions = []
+            for z in sol:
+                b = beta2 * z ** 2 + beta1 * z + beta0
+                a = z - e1.m * b
+                c = v.x * v.y - a * v.x - b * v.y
+
+                if not e1.v1.x < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x:
+                    continue
+
+                if not e2.v1.x < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x:
+                    continue
+
+                if not feasibility_outside_J_generators(v, generators_without_triple, a, b):
+                    continue
+
+                cell = ConvexHull([(v.x, v.y), (get_active_point_from_generator(e1, a, b)), (get_active_point_from_generator(e2, a, b))]).equations
+
+                x, y = symbols("x, y")
+                functional = a * x + b * y + c
+                solutions.append((cell, functional))
+
+            return solutions
+
+
 
     def _solve_three_edges(self, triple, generators_without_triple):
         e1, e2, e3 = triple
 
-        #todo implement
-        pass
+        if e1.m == e2.m:
+            b = symbols("b")
+            a = e1.m * b + (e1.q + e2.q) / 2
+
+            sol = list(solveset((a + e3.m * b - e3.q)**2 / (4 * e3.m) + b * e3.q - (a + e2.m * b - e2.q)**2 / (4 * e2.m) - b * e2.q, b, domain=S.Reals))
+
+            solutions = []
+            for b in sol:
+                a = e1.m * b + (e1.q + e2.q) / 2
+                x_r, y_r = get_active_point_from_generator(e1, a, b)
+                c = x_r * y_r - a * x_r - b * y_r
+
+                if not e1.v1.x < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x:
+                    continue
+
+                if not e2.v1.x < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x:
+                    continue
+
+                if not e3.v1.x < (a + e3.m * b - e3.q) / (2 * e3.m) < e3.v2.x:
+                    continue
+
+                if not feasibility_outside_J_generators(e1, generators_without_triple, a, b):
+                    continue
+
+                cell = ConvexHull([(get_active_point_from_generator(e1, a, b)), (get_active_point_from_generator(e2, a, b)), (get_active_point_from_generator(e3, a, b))]).equations
+
+                x, y = symbols("x, y")
+                functional = a * x + b * y + c
+                solutions.append((cell, functional))
+
+        else:
+            b = symbols("b")
+            a = (e2.q * e1.m - e1.q * e2.m + math.sqrt(e1.m * e2.m) * ((e1.m - e2.m) * b + e1.q - e2.q)) / (e1.m - e2.m)
+
+            sol = list(solveset(
+                (a + e3.m * b - e3.q) ** 2 / (4 * e3.m) + b * e3.q - (a + e2.m * b - e2.q) ** 2 / (4 * e2.m) - b * e2.q,
+                b, domain=S.Reals))
+
+            solutions = []
+            for b in sol:
+                a = (e2.q * e1.m - e1.q * e2.m + math.sqrt(e1.m * e2.m) * ((e1.m - e2.m) * b + e1.q - e2.q)) / (e1.m - e2.m)
+                x_r, y_r = get_active_point_from_generator(e1, a, b)
+                c = x_r * y_r - a * x_r - b * y_r
+
+                if not e1.v1.x < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x:
+                    continue
+
+                if not e2.v1.x < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x:
+                    continue
+
+                if not e3.v1.x < (a + e3.m * b - e3.q) / (2 * e3.m) < e3.v2.x:
+                    continue
+
+                if not feasibility_outside_J_generators(e1, generators_without_triple, a, b):
+                    continue
+
+                cell = ConvexHull(
+                    [(get_active_point_from_generator(e1, a, b)), (get_active_point_from_generator(e2, a, b)),
+                     (get_active_point_from_generator(e3, a, b))]).equations
+
+                x, y = symbols("x, y")
+                functional = a * x + b * y + c
+                solutions.append((cell, functional))
+
+            b = symbols("b")
+            a = (e2.q * e1.m - e1.q * e2.m - math.sqrt(e1.m * e2.m) * ((e1.m - e2.m) * b + e1.q - e2.q)) / (e1.m - e2.m)
+
+            sol = list(solveset(
+                (a + e3.m * b - e3.q) ** 2 / (4 * e3.m) + b * e3.q - (a + e2.m * b - e2.q) ** 2 / (4 * e2.m) - b * e2.q,
+                b, domain=S.Reals))
+
+            for b in sol:
+                a = (e2.q * e1.m - e1.q * e2.m - math.sqrt(e1.m * e2.m) * ((e1.m - e2.m) * b + e1.q - e2.q)) / (
+                            e1.m - e2.m)
+                x_r, y_r = get_active_point_from_generator(e1, a, b)
+                c = x_r * y_r - a * x_r - b * y_r
+
+                if not e1.v1.x < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x:
+                    continue
+
+                if not e2.v1.x < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x:
+                    continue
+
+                if not e3.v1.x < (a + e3.m * b - e3.q) / (2 * e3.m) < e3.v2.x:
+                    continue
+
+                if not feasibility_outside_J_generators(e1, generators_without_triple, a, b):
+                    continue
+
+                cell = ConvexHull(
+                    [(get_active_point_from_generator(e1, a, b)), (get_active_point_from_generator(e2, a, b)),
+                     (get_active_point_from_generator(e3, a, b))]).equations
+
+                x, y = symbols("x, y")
+                functional = a * x + b * y + c
+                solutions.append((cell, functional))
+
+        return solutions
+
+
+
 
     def _three_elements_J(self):
         triples = list(combinations(self.generators, 3))
@@ -185,8 +341,6 @@ class EnvelopePolygonalDomain:
 
             if number_of_vertices == 3:
                 solutions = self._solve_three_vertices(triple, generators_without_triple)
-                print(triple)
-                print('3er solutions ', solutions)
             elif number_of_vertices == 2:
                 solutions = self._solve_two_vertices_one_edge(triple, generators_without_triple)
             elif number_of_vertices == 1:
@@ -194,13 +348,10 @@ class EnvelopePolygonalDomain:
             else:
                 solutions = self._solve_three_edges(triple, generators_without_triple)
 
-            if solutions is None:
-                continue
-            else:
-                all_solutions += solutions
+            all_solutions += solutions
 
 
-            # TODO generators_without_triple inequalities pruefen
+
 
 
 
