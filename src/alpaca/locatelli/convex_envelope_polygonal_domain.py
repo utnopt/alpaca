@@ -7,6 +7,10 @@ from sympy import S, symbols, Eq, linsolve, solveset
 import numpy as np
 from scipy.spatial import ConvexHull
 
+FEAS_TOL = 1e-6
+
+
+
 def get_active_point_from_generator(generator, a, b):
     if isinstance(generator, Vertex):
         x_r = generator.x
@@ -28,7 +32,7 @@ def feasibility_outside_J_generators(generator_in_J, generators_outside_J, a, b)
     for generator_outside_J in generators_outside_J:
         x_r, y_r = get_active_point_from_generator(generator_outside_J, a, b)
 
-        if x_k * y_k - a * x_k - b * y_k > x_r * y_r - a * x_r - b * y_r:
+        if x_k * y_k - a * x_k - b * y_k > x_r * y_r - a * x_r - b * y_r + FEAS_TOL:
             return False
 
     return True
@@ -108,7 +112,43 @@ class EnvelopePolygonalDomain:
 
     def _two_elements_J(self):
         pairs = list(combinations(self.generators, 2))
-        #todo implement
+
+        all_solutions_two_elements_J = []
+        for pair in pairs:
+            number_of_vertices = sum(isinstance(el, Vertex) for el in pair)
+            generators_without_pair = [el for el in self.generators if el not in pair]
+
+            if number_of_vertices == 1:
+                solutions = self._solve_one_vertex_one_edge(pair, generators_without_pair)
+            if number_of_vertices == 0:
+                solutions = self._solve_two_edges(pair, generators_without_pair)
+
+            all_solutions_two_elements_J += solutions
+
+        print('all solutions stemming from Js with two elements:')
+        for sol in all_solutions_two_elements_J:
+            print(sol)
+
+    def _solve_one_vertex_one_edge(self, pair, generators_without_pair):
+        v = tuple(el for el in pair if isinstance(el, Vertex))[0]
+        e = tuple(el for el in pair if isinstance(el, Edge))[0]
+
+        x, y = symbols("x y")
+        x_j = (x * (v.y - e.q) - v.x * (y - e.q)) / (e.m * (x - v.x) + v.y - y)
+        lambda_ = (e.m * (x - v.x) + v.y - y) / (v.y - e.q - e.m * v.x)
+        b = (e.m * x_j * x_j - 2 * e.m * v.x * x_j - e.q * v.x + v.x * v.y) / (v.y - e.m * v.x - e.q)
+        a = 2 * e.m * x_j + e.q - e.m * b
+
+        functional = v.x * v.y + a * (x - v.x) + b * (y - v.y)
+
+        cell = []
+        for generator_outside_J in generators_without_pair:
+            pass
+
+
+    def _solve_two_edges(self, pair, generators_without_pair):
+        pass
+        # todo implement
 
     def _solve_three_vertices(self, triple, generators_without_triple):
         v1, v2, v3 = triple
@@ -140,7 +180,7 @@ class EnvelopePolygonalDomain:
 
         x, y = symbols("x, y")
         functional = a * x + b * y + c
-        solution = [(cell, functional)]
+        solution = [(triple, cell, functional)]
 
         return solution
 
@@ -168,7 +208,7 @@ class EnvelopePolygonalDomain:
                 a = z - e.m * b
                 c = v1.x * v1.y - a * v1.x - b * v1.y
 
-                if not e.v1.x < (a + e.m * b - e.q) / (2 * e.m) < e.v2.x:
+                if not e.v1.x + FEAS_TOL < (a + e.m * b - e.q) / (2 * e.m) < e.v2.x - FEAS_TOL:
                     continue
 
                 if not feasibility_outside_J_generators(v1, generators_without_triple, a, b):
@@ -178,7 +218,7 @@ class EnvelopePolygonalDomain:
 
                 x, y = symbols("x, y")
                 functional = a * x + b * y + c
-                solutions.append((cell, functional))
+                solutions.append((triple, cell, functional))
 
             return solutions
 
@@ -208,10 +248,10 @@ class EnvelopePolygonalDomain:
                 a = z - e1.m * b
                 c = v.x * v.y - a * v.x - b * v.y
 
-                if not e1.v1.x < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x:
+                if not e1.v1.x + FEAS_TOL < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x - FEAS_TOL:
                     continue
 
-                if not e2.v1.x < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x:
+                if not e2.v1.x + FEAS_TOL < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x - FEAS_TOL:
                     continue
 
                 if not feasibility_outside_J_generators(v, generators_without_triple, a, b):
@@ -221,7 +261,7 @@ class EnvelopePolygonalDomain:
 
                 x, y = symbols("x, y")
                 functional = a * x + b * y + c
-                solutions.append((cell, functional))
+                solutions.append((triple, cell, functional))
 
             return solutions
 
@@ -242,13 +282,13 @@ class EnvelopePolygonalDomain:
                 x_r, y_r = get_active_point_from_generator(e1, a, b)
                 c = x_r * y_r - a * x_r - b * y_r
 
-                if not e1.v1.x < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x:
+                if not e1.v1.x + FEAS_TOL < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x - FEAS_TOL:
                     continue
 
-                if not e2.v1.x < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x:
+                if not e2.v1.x + FEAS_TOL < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x - FEAS_TOL:
                     continue
 
-                if not e3.v1.x < (a + e3.m * b - e3.q) / (2 * e3.m) < e3.v2.x:
+                if not e3.v1.x + FEAS_TOL < (a + e3.m * b - e3.q) / (2 * e3.m) < e3.v2.x - FEAS_TOL:
                     continue
 
                 if not feasibility_outside_J_generators(e1, generators_without_triple, a, b):
@@ -258,7 +298,7 @@ class EnvelopePolygonalDomain:
 
                 x, y = symbols("x, y")
                 functional = a * x + b * y + c
-                solutions.append((cell, functional))
+                solutions.append((triple, cell, functional))
 
         else:
             b = symbols("b")
@@ -274,13 +314,13 @@ class EnvelopePolygonalDomain:
                 x_r, y_r = get_active_point_from_generator(e1, a, b)
                 c = x_r * y_r - a * x_r - b * y_r
 
-                if not e1.v1.x < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x:
+                if not e1.v1.x + FEAS_TOL < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x - FEAS_TOL:
                     continue
 
-                if not e2.v1.x < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x:
+                if not e2.v1.x + FEAS_TOL < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x - FEAS_TOL:
                     continue
 
-                if not e3.v1.x < (a + e3.m * b - e3.q) / (2 * e3.m) < e3.v2.x:
+                if not e3.v1.x + FEAS_TOL < (a + e3.m * b - e3.q) / (2 * e3.m) < e3.v2.x - FEAS_TOL:
                     continue
 
                 if not feasibility_outside_J_generators(e1, generators_without_triple, a, b):
@@ -292,7 +332,7 @@ class EnvelopePolygonalDomain:
 
                 x, y = symbols("x, y")
                 functional = a * x + b * y + c
-                solutions.append((cell, functional))
+                solutions.append((triple, cell, functional))
 
             b = symbols("b")
             a = (e2.q * e1.m - e1.q * e2.m - math.sqrt(e1.m * e2.m) * ((e1.m - e2.m) * b + e1.q - e2.q)) / (e1.m - e2.m)
@@ -307,13 +347,13 @@ class EnvelopePolygonalDomain:
                 x_r, y_r = get_active_point_from_generator(e1, a, b)
                 c = x_r * y_r - a * x_r - b * y_r
 
-                if not e1.v1.x < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x:
+                if not e1.v1.x + FEAS_TOL < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x - FEAS_TOL:
                     continue
 
-                if not e2.v1.x < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x:
+                if not e2.v1.x + FEAS_TOL < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x - FEAS_TOL:
                     continue
 
-                if not e3.v1.x < (a + e3.m * b - e3.q) / (2 * e3.m) < e3.v2.x:
+                if not e3.v1.x + FEAS_TOL < (a + e3.m * b - e3.q) / (2 * e3.m) < e3.v2.x - FEAS_TOL:
                     continue
 
                 if not feasibility_outside_J_generators(e1, generators_without_triple, a, b):
@@ -325,16 +365,14 @@ class EnvelopePolygonalDomain:
 
                 x, y = symbols("x, y")
                 functional = a * x + b * y + c
-                solutions.append((cell, functional))
+                solutions.append((triple, cell, functional))
 
         return solutions
 
 
-
-
     def _three_elements_J(self):
         triples = list(combinations(self.generators, 3))
-        all_solutions = []
+        all_solutions_three_elements_J = []
         for triple in triples:
             number_of_vertices = sum(isinstance(el, Vertex) for el in triple)
             generators_without_triple = [el for el in self.generators if el not in triple]
@@ -348,7 +386,11 @@ class EnvelopePolygonalDomain:
             else:
                 solutions = self._solve_three_edges(triple, generators_without_triple)
 
-            all_solutions += solutions
+            all_solutions_three_elements_J += solutions
+
+        print('all solutions stemming from Js with three elements:')
+        for sol in all_solutions_three_elements_J:
+            print(sol)
 
 
 
