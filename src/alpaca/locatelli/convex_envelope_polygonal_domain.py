@@ -3,13 +3,196 @@ import math
 from itertools import combinations
 
 
-from sympy import S, symbols, Eq, linsolve, solveset
+from sympy import S, symbols, Eq, linsolve, solveset, simplify, expand, Poly, PolynomialError, together, fraction
+from sympy.core.relational import Relational
 import numpy as np
 from scipy.spatial import ConvexHull
 
 FEAS_TOL = 1e-6
 
 
+#todo plot function bauen #############################
+import sympy as sp
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.path import Path
+from matplotlib.patches import Polygon as PolygonPatch
+
+# ------------------------------------------------------------
+# 1. SymPy-Variablen
+# ------------------------------------------------------------
+
+x, y = sp.symbols("x y", real=True)
+
+# Beispiel:
+# C = {(x,y): x*y <= 1, x**2 + y**2 >= 0.5}
+inequalities = [
+    x * y <= 1,
+    x**2 + y**2 >= 0.5,
+]
+
+# ------------------------------------------------------------
+# 2. Nicht-konvexes Polygon P
+#    Eckpunkte müssen entlang des Randes sortiert sein
+# ------------------------------------------------------------
+
+polygon_vertices = np.array([
+    [-2.0, -1.5],
+    [ 2.0, -1.5],
+    [ 2.0,  1.5],
+    [ 0.5,  0.3],
+    [-0.5,  1.5],
+    [-2.0,  1.5],
+])
+
+# ------------------------------------------------------------
+# 3. Plotbereich aus Bounding Box des Polygons
+# ------------------------------------------------------------
+
+padding = 0.2
+
+x_min = polygon_vertices[:, 0].min() - padding
+x_max = polygon_vertices[:, 0].max() + padding
+y_min = polygon_vertices[:, 1].min() - padding
+y_max = polygon_vertices[:, 1].max() + padding
+
+resolution = 800
+
+x_values = np.linspace(x_min, x_max, resolution)
+y_values = np.linspace(y_min, y_max, resolution)
+
+X, Y = np.meshgrid(x_values, y_values)
+
+# ------------------------------------------------------------
+# 4. Maske des Polygons P
+# ------------------------------------------------------------
+
+points = np.column_stack((X.ravel(), Y.ravel()))
+
+polygon_path = Path(polygon_vertices)
+
+mask_P = polygon_path.contains_points(
+    points,
+    radius=1e-10
+).reshape(X.shape)
+
+# ------------------------------------------------------------
+# 5. Maske der Zelle C
+# ------------------------------------------------------------
+
+mask_C = np.ones(X.shape, dtype=bool)
+
+for inequality in inequalities:
+    # SymPy-Ungleichung direkt als boolesche NumPy-Funktion
+    inequality_function = sp.lambdify(
+        (x, y),
+        inequality,
+        modules="numpy"
+    )
+
+    current_mask = inequality_function(X, Y)
+
+    # Falls SymPy bei konstanten Ausdrücken nur einen booleschen
+    # Einzelwert zurückgibt
+    current_mask = np.broadcast_to(
+        np.asarray(current_mask, dtype=bool),
+        X.shape
+    )
+
+    mask_C &= current_mask
+
+# ------------------------------------------------------------
+# 6. Schnitt C ∩ P
+# ------------------------------------------------------------
+
+mask_intersection = mask_C & mask_P
+
+# ------------------------------------------------------------
+# 7. Plot
+# ------------------------------------------------------------
+
+fig, ax = plt.subplots(figsize=(7, 6))
+
+# Zulässige Schnittmenge einfärben
+ax.contourf(
+    X,
+    Y,
+    mask_intersection.astype(float),
+    levels=[0.5, 1.5],
+    alpha=0.5
+)
+
+# Rand des Polygons einzeichnen
+polygon_patch = PolygonPatch(
+    polygon_vertices,
+    closed=True,
+    fill=False,
+    edgecolor="black",
+    linewidth=2,
+    label=r"$P$"
+)
+ax.add_patch(polygon_patch)
+
+# Grenzen der polynomialen Zelle einzeichnen
+for inequality in inequalities:
+    boundary_expression = inequality.lhs - inequality.rhs
+    boundary_function = sp.lambdify(
+        (x, y),
+        boundary_expression,
+        modules="numpy"
+    )
+
+    Z = np.asarray(boundary_function(X, Y), dtype=float)
+    Z = np.broadcast_to(Z, X.shape)
+
+    ax.contour(
+        X,
+        Y,
+        Z,
+        levels=[0],
+        linewidths=1.5,
+        linestyles="--"
+    )
+
+ax.set_xlim(x_min, x_max)
+ax.set_ylim(y_min, y_max)
+ax.set_aspect("equal")
+ax.set_xlabel(r"$x$")
+ax.set_ylabel(r"$y$")
+ax.set_title(r"$C \cap P$")
+ax.grid(alpha=0.2)
+
+plt.show()
+
+
+def extract_bivariate_quadratic(ineq, x, y):
+    print("ineq ", ineq)
+
+    if not isinstance(ineq, Relational):
+        raise TypeError("ineq must be a sympy relational.")
+    expr = expand(ineq.lhs - ineq.rhs)
+    print("expr ", expr)
+    try:
+        poly = Poly(expr, x, y)
+
+    except PolynomialError as exc:
+        raise ValueError("The expression is no polynomial in x, y.") from exc
+
+    if poly.total_degree() > 2:
+        raise ValueError("The degree is bigger than 2.")
+
+    return {
+        "x2": poly.coeff_monomial(x**2),
+        "xy": poly.coeff_monomial(x*y),
+        "y2": poly.coeff_monomial(y**2),
+        "x": poly.coeff_monomial(x),
+        "y": poly.coeff_monomial(y),
+        "constant": poly.coeff_monomial(1),
+        "relation": ineq.rel_op,
+    }
+
+
+#############################################################################################
 
 def get_active_point_from_generator(generator, a, b):
     if isinstance(generator, Vertex):
@@ -106,8 +289,9 @@ class EnvelopePolygonalDomain:
         print(self.polygon.is_ortho)
         self.generators = self._determine_generators()
 
-        self._two_elements_J()
         self._three_elements_J()
+        self._two_elements_J()
+
 
 
     def _two_elements_J(self):
@@ -118,6 +302,7 @@ class EnvelopePolygonalDomain:
             number_of_vertices = sum(isinstance(el, Vertex) for el in pair)
             generators_without_pair = [el for el in self.generators if el not in pair]
 
+            solutions = []
             if number_of_vertices == 1:
                 solutions = self._solve_one_vertex_one_edge(pair, generators_without_pair)
             if number_of_vertices == 0:
@@ -133,6 +318,12 @@ class EnvelopePolygonalDomain:
         v = tuple(el for el in pair if isinstance(el, Vertex))[0]
         e = tuple(el for el in pair if isinstance(el, Edge))[0]
 
+
+
+        print('vertex, edge ', v, e)
+        if v == e.v1 or v == e.v2:
+            return []
+
         x, y = symbols("x y")
         x_j = (x * (v.y - e.q) - v.x * (y - e.q)) / (e.m * (x - v.x) + v.y - y)
         lambda_ = (e.m * (x - v.x) + v.y - y) / (v.y - e.q - e.m * v.x)
@@ -140,10 +331,46 @@ class EnvelopePolygonalDomain:
         a = 2 * e.m * x_j + e.q - e.m * b
 
         functional = v.x * v.y + a * (x - v.x) + b * (y - v.y)
+        functional = simplify(functional)
+        print('functional ', functional)
+
 
         cell = []
-        for generator_outside_J in generators_without_pair:
-            pass
+        eta_v = v.x * v.y - a * v.x - b * v.y
+
+        s_e = (a + e.m * b - e.q) / (2 * e.m)
+        eta_e = -e.m * (s_e) ** 2 - b * e.q
+        for r in generators_without_pair:
+            if isinstance(r, Vertex):
+                eta_r = r.x * r.y - a * r.x - b * r.y
+            else:
+                s_r = (a + r.m * b - r.q) / (2 * r.m )
+                eta_r = -r.m * (s_r)**2 - b * r.q
+
+
+            ineq1 = eta_v <= eta_r
+            expr = together(ineq1.lhs - ineq1.rhs)
+            num, den = fraction(expr)
+            poly_ineq1 = expand(num * den) <= 0
+
+            ineq2 = eta_e <= eta_r
+            expr = together(ineq2.lhs - ineq2.rhs)
+            num, den = fraction(expr)
+            poly_ineq2 = expand(num * den) <= 0
+
+            coeffs_ineq1 = extract_bivariate_quadratic(poly_ineq1, x, y)
+            coeffs_ineq2 = extract_bivariate_quadratic(poly_ineq2, x, y)
+
+            cell.append([coeffs_ineq1["x2"], coeffs_ineq1["xy"], coeffs_ineq1["y2"], coeffs_ineq1["x"], coeffs_ineq1["y"], coeffs_ineq1["constant"]])
+            cell.append(
+                [coeffs_ineq2["x2"], coeffs_ineq2["xy"], coeffs_ineq2["y2"], coeffs_ineq2["x"], coeffs_ineq2["y"],
+                 coeffs_ineq2["constant"]])
+
+
+
+
+
+        exit()
 
 
     def _solve_two_edges(self, pair, generators_without_pair):
