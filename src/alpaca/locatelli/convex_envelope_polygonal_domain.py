@@ -3,196 +3,143 @@ import math
 from itertools import combinations
 
 
-from sympy import S, symbols, Eq, linsolve, solveset, simplify, expand, Poly, PolynomialError, together, fraction
+from sympy import S, symbols, Eq, Le, Ge, Lt, Gt, linsolve, solveset, simplify, expand, Poly, PolynomialError, together, fraction
 from sympy.core.relational import Relational
 import numpy as np
 from scipy.spatial import ConvexHull
 
-FEAS_TOL = 1e-6
-
-
-#todo plot function bauen #############################
 import sympy as sp
-import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
 from matplotlib.patches import Polygon as PolygonPatch
 
-# ------------------------------------------------------------
-# 1. SymPy-Variablen
-# ------------------------------------------------------------
+FEAS_TOL = 1e-6
 
-x, y = sp.symbols("x y", real=True)
 
-# Beispiel:
-# C = {(x,y): x*y <= 1, x**2 + y**2 >= 0.5}
-inequalities = [
-    x * y <= 1,
-    x**2 + y**2 >= 0.5,
-]
+def plot_cell(cell_inequalities, polygon):
+    x, y = sp.symbols('x y', real=True)
 
-# ------------------------------------------------------------
-# 2. Nicht-konvexes Polygon P
-#    Eckpunkte müssen entlang des Randes sortiert sein
-# ------------------------------------------------------------
+    polygon_vertices = np.array([[v.x, v.y] for v in polygon.vertex_sequence] + [[polygon.vertex_sequence[0].x, polygon.vertex_sequence[0].y]])
 
-polygon_vertices = np.array([
-    [-2.0, -1.5],
-    [ 2.0, -1.5],
-    [ 2.0,  1.5],
-    [ 0.5,  0.3],
-    [-0.5,  1.5],
-    [-2.0,  1.5],
-])
+    # ------------------------------------------------------------
+    # 3. Plotbereich aus Bounding Box des Polygons
+    # ------------------------------------------------------------
 
-# ------------------------------------------------------------
-# 3. Plotbereich aus Bounding Box des Polygons
-# ------------------------------------------------------------
+    padding = 0.2
 
-padding = 0.2
+    x_min = polygon_vertices[:, 0].min() - padding
+    x_max = polygon_vertices[:, 0].max() + padding
+    y_min = polygon_vertices[:, 1].min() - padding
+    y_max = polygon_vertices[:, 1].max() + padding
 
-x_min = polygon_vertices[:, 0].min() - padding
-x_max = polygon_vertices[:, 0].max() + padding
-y_min = polygon_vertices[:, 1].min() - padding
-y_max = polygon_vertices[:, 1].max() + padding
+    resolution = 800
 
-resolution = 800
+    x_values = np.linspace(x_min, x_max, resolution)
+    y_values = np.linspace(y_min, y_max, resolution)
 
-x_values = np.linspace(x_min, x_max, resolution)
-y_values = np.linspace(y_min, y_max, resolution)
+    X, Y = np.meshgrid(x_values, y_values)
 
-X, Y = np.meshgrid(x_values, y_values)
+    # ------------------------------------------------------------
+    # 4. Maske des Polygons P
+    # ------------------------------------------------------------
 
-# ------------------------------------------------------------
-# 4. Maske des Polygons P
-# ------------------------------------------------------------
+    points = np.column_stack((X.ravel(), Y.ravel()))
 
-points = np.column_stack((X.ravel(), Y.ravel()))
+    polygon_path = Path(polygon_vertices)
 
-polygon_path = Path(polygon_vertices)
+    mask_P = polygon_path.contains_points(
+        points,
+        radius=1e-10
+    ).reshape(X.shape)
 
-mask_P = polygon_path.contains_points(
-    points,
-    radius=1e-10
-).reshape(X.shape)
+    # ------------------------------------------------------------
+    # 5. Maske der Zelle C
+    # ------------------------------------------------------------
 
-# ------------------------------------------------------------
-# 5. Maske der Zelle C
-# ------------------------------------------------------------
+    mask_C = np.ones(X.shape, dtype=bool)
 
-mask_C = np.ones(X.shape, dtype=bool)
+    for inequality in cell_inequalities:
+        # SymPy-Ungleichung direkt als boolesche NumPy-Funktion
+        inequality_function = sp.lambdify(
+            (x, y),
+            inequality,
+            modules="numpy"
+        )
 
-for inequality in inequalities:
-    # SymPy-Ungleichung direkt als boolesche NumPy-Funktion
-    inequality_function = sp.lambdify(
-        (x, y),
-        inequality,
-        modules="numpy"
-    )
+        current_mask = inequality_function(X, Y)
 
-    current_mask = inequality_function(X, Y)
+        # Falls SymPy bei konstanten Ausdrücken nur einen booleschen
+        # Einzelwert zurückgibt
+        current_mask = np.broadcast_to(
+            np.asarray(current_mask, dtype=bool),
+            X.shape
+        )
 
-    # Falls SymPy bei konstanten Ausdrücken nur einen booleschen
-    # Einzelwert zurückgibt
-    current_mask = np.broadcast_to(
-        np.asarray(current_mask, dtype=bool),
-        X.shape
-    )
+        mask_C &= current_mask
 
-    mask_C &= current_mask
+    # ------------------------------------------------------------
+    # 6. Schnitt C ∩ P
+    # ------------------------------------------------------------
 
-# ------------------------------------------------------------
-# 6. Schnitt C ∩ P
-# ------------------------------------------------------------
+    mask_intersection = mask_C & mask_P
 
-mask_intersection = mask_C & mask_P
+    # ------------------------------------------------------------
+    # 7. Plot
+    # ------------------------------------------------------------
 
-# ------------------------------------------------------------
-# 7. Plot
-# ------------------------------------------------------------
+    fig, ax = plt.subplots(figsize=(7, 6))
 
-fig, ax = plt.subplots(figsize=(7, 6))
-
-# Zulässige Schnittmenge einfärben
-ax.contourf(
-    X,
-    Y,
-    mask_intersection.astype(float),
-    levels=[0.5, 1.5],
-    alpha=0.5
-)
-
-# Rand des Polygons einzeichnen
-polygon_patch = PolygonPatch(
-    polygon_vertices,
-    closed=True,
-    fill=False,
-    edgecolor="black",
-    linewidth=2,
-    label=r"$P$"
-)
-ax.add_patch(polygon_patch)
-
-# Grenzen der polynomialen Zelle einzeichnen
-for inequality in inequalities:
-    boundary_expression = inequality.lhs - inequality.rhs
-    boundary_function = sp.lambdify(
-        (x, y),
-        boundary_expression,
-        modules="numpy"
-    )
-
-    Z = np.asarray(boundary_function(X, Y), dtype=float)
-    Z = np.broadcast_to(Z, X.shape)
-
-    ax.contour(
+    # Zulässige Schnittmenge einfärben
+    ax.contourf(
         X,
         Y,
-        Z,
-        levels=[0],
-        linewidths=1.5,
-        linestyles="--"
+        mask_intersection.astype(float),
+        levels=[0.5, 1.5],
+        alpha=0.5
     )
 
-ax.set_xlim(x_min, x_max)
-ax.set_ylim(y_min, y_max)
-ax.set_aspect("equal")
-ax.set_xlabel(r"$x$")
-ax.set_ylabel(r"$y$")
-ax.set_title(r"$C \cap P$")
-ax.grid(alpha=0.2)
+    # Rand des Polygons einzeichnen
+    polygon_patch = PolygonPatch(
+        polygon_vertices,
+        closed=True,
+        fill=False,
+        edgecolor="black",
+        linewidth=2,
+        label=r"$P$"
+    )
+    ax.add_patch(polygon_patch)
 
-plt.show()
+    # Grenzen der polynomialen Zelle einzeichnen
+    for inequality in cell_inequalities:
+        boundary_expression = inequality.lhs - inequality.rhs
+        boundary_function = sp.lambdify(
+            (x, y),
+            boundary_expression,
+            modules="numpy"
+        )
 
+        Z = np.asarray(boundary_function(X, Y), dtype=float)
+        Z = np.broadcast_to(Z, X.shape)
 
-def extract_bivariate_quadratic(ineq, x, y):
-    print("ineq ", ineq)
+        ax.contour(
+            X,
+            Y,
+            Z,
+            levels=[0],
+            linewidths=1.5,
+            linestyles="--"
+        )
 
-    if not isinstance(ineq, Relational):
-        raise TypeError("ineq must be a sympy relational.")
-    expr = expand(ineq.lhs - ineq.rhs)
-    print("expr ", expr)
-    try:
-        poly = Poly(expr, x, y)
+    ax.set_xlim(x_min, x_max)
+    ax.set_ylim(y_min, y_max)
+    ax.set_aspect("equal")
+    ax.set_xlabel(r"$x$")
+    ax.set_ylabel(r"$y$")
+    ax.set_title(r"$C \cap P$")
+    ax.grid(alpha=0.2)
 
-    except PolynomialError as exc:
-        raise ValueError("The expression is no polynomial in x, y.") from exc
+    plt.show()
 
-    if poly.total_degree() > 2:
-        raise ValueError("The degree is bigger than 2.")
-
-    return {
-        "x2": poly.coeff_monomial(x**2),
-        "xy": poly.coeff_monomial(x*y),
-        "y2": poly.coeff_monomial(y**2),
-        "x": poly.coeff_monomial(x),
-        "y": poly.coeff_monomial(y),
-        "constant": poly.coeff_monomial(1),
-        "relation": ineq.rel_op,
-    }
-
-
-#############################################################################################
 
 def get_active_point_from_generator(generator, a, b):
     if isinstance(generator, Vertex):
@@ -278,9 +225,6 @@ class Polygon:
         object.__setattr__(self, "is_ortho", is_ortho)
 
 
-
-
-
 class EnvelopePolygonalDomain:
     def __init__(self, polygon: Polygon):
         self.polygon = polygon
@@ -318,9 +262,6 @@ class EnvelopePolygonalDomain:
         v = tuple(el for el in pair if isinstance(el, Vertex))[0]
         e = tuple(el for el in pair if isinstance(el, Edge))[0]
 
-
-
-        print('vertex, edge ', v, e)
         if v == e.v1 or v == e.v2:
             return []
 
@@ -332,12 +273,10 @@ class EnvelopePolygonalDomain:
 
         functional = v.x * v.y + a * (x - v.x) + b * (y - v.y)
         functional = simplify(functional)
-        print('functional ', functional)
 
 
-        cell = []
+        cell_inequalities = []
         eta_v = v.x * v.y - a * v.x - b * v.y
-
         s_e = (a + e.m * b - e.q) / (2 * e.m)
         eta_e = -e.m * (s_e) ** 2 - b * e.q
         for r in generators_without_pair:
@@ -347,35 +286,85 @@ class EnvelopePolygonalDomain:
                 s_r = (a + r.m * b - r.q) / (2 * r.m )
                 eta_r = -r.m * (s_r)**2 - b * r.q
 
+                cell_inequalities.append(Gt(simplify(s_r), r.v1.x))
+                cell_inequalities.append(Lt(simplify(s_r), r.v2.x))
+
 
             ineq1 = eta_v <= eta_r
-            expr = together(ineq1.lhs - ineq1.rhs)
-            num, den = fraction(expr)
-            poly_ineq1 = expand(num * den) <= 0
+            cell_inequalities.append(Le(simplify(ineq1.lhs), simplify(ineq1.rhs)))
 
             ineq2 = eta_e <= eta_r
-            expr = together(ineq2.lhs - ineq2.rhs)
-            num, den = fraction(expr)
-            poly_ineq2 = expand(num * den) <= 0
+            cell_inequalities.append(Le(simplify(ineq2.lhs), simplify(ineq2.rhs)))
 
-            coeffs_ineq1 = extract_bivariate_quadratic(poly_ineq1, x, y)
-            coeffs_ineq2 = extract_bivariate_quadratic(poly_ineq2, x, y)
+        cell_inequalities.append(Ge(simplify(lambda_), 0))
+        cell_inequalities.append(Le(simplify(lambda_), 1))
 
-            cell.append([coeffs_ineq1["x2"], coeffs_ineq1["xy"], coeffs_ineq1["y2"], coeffs_ineq1["x"], coeffs_ineq1["y"], coeffs_ineq1["constant"]])
-            cell.append(
-                [coeffs_ineq2["x2"], coeffs_ineq2["xy"], coeffs_ineq2["y2"], coeffs_ineq2["x"], coeffs_ineq2["y"],
-                 coeffs_ineq2["constant"]])
+        cell_inequalities.append(Gt(simplify(x_j), e.v1.x))
+        cell_inequalities.append(Lt(simplify(x_j), e.v2.x))
+
+        solution = [(pair, cell_inequalities, functional)]
 
 
-
-
-
-        exit()
+        return solution
 
 
     def _solve_two_edges(self, pair, generators_without_pair):
-        pass
-        # todo implement
+        e1= pair[0]
+        e2 = pair[1]
+
+        x, y = symbols("x y", real=True)
+        if e1.m == e2.m:
+            x_i = (y + e1.m * x - e1.q) / (2 * e1.m)
+            x_j = x_i + (e1.q - e2.q) / (2 * e1.m)
+            lambda_ = (2 * e1.m * (x - x_i)) / (e1.q - e2.q)
+            b = x_i + (e1.q - e2.q) / 4
+            a = 2 * e1.m * x_i - e1.m * b + e1.q
+        else:
+            x_i = (y + math.sqrt(e1.m * e2.m) * x - e1.q) / (math.sqrt(e1.m) * (math.sqrt(e1.m) + math.sqrt(e2.m)))
+            x_j = (y + math.sqrt(e1.m * e2.m) * x - e1.q) / (math.sqrt(e2.m) * (math.sqrt(e1.m) + math.sqrt(e2.m)))
+            lambda_ = (x - x_i) / (x_j - x_i)
+            b = (2 * e2.m * x_j + e2.q - 2 * e1.m * x_i - e1.q) / (e2.m - e1.m)
+            a = 2 * e2.m * x_j + e2.q - e2.m * b
+
+        functional = -e1.m * x_i**2 - b * e1.q + a * x + b * y
+        functional = simplify(functional)
+
+        cell_inequalities = []
+
+        s_e1 = (a + e1.m * b - e1.q) / (2 * e1.m)
+        eta_e1 = -e1.m * (s_e1) ** 2 - b * e1.q
+        s_e2 = (a + e2.m * b - e2.q) / (2 * e2.m)
+        eta_e2 = -e2.m * (s_e2) ** 2 - b * e2.q
+        for r in generators_without_pair:
+            if isinstance(r, Vertex):
+                eta_r = r.x * r.y - a * r.x - b * r.y
+            else:
+                s_r = (a + r.m * b - r.q) / (2 * r.m)
+                eta_r = -r.m * (s_r) ** 2 - b * r.q
+
+                cell_inequalities.append(Gt(simplify(s_r), r.v1.x))
+                cell_inequalities.append(Lt(simplify(s_r), r.v2.x))
+
+            ineq1 = eta_e1 <= eta_r
+            cell_inequalities.append(Le(simplify(ineq1.lhs), simplify(ineq1.rhs)))
+
+            ineq2 = eta_e2 <= eta_r
+            cell_inequalities.append(Le(simplify(ineq2.lhs), simplify(ineq2.rhs)))
+
+        cell_inequalities.append(Ge(simplify(lambda_), 0))
+        cell_inequalities.append(Le(simplify(lambda_), 1))
+
+        cell_inequalities.append(Gt(simplify(x_i), e1.v1.x))
+        cell_inequalities.append(Lt(simplify(x_i), e1.v2.x))
+        cell_inequalities.append(Gt(simplify(x_j), e2.v1.x))
+        cell_inequalities.append(Lt(simplify(x_j), e2.v2.x))
+
+        solution = [(pair, cell_inequalities, functional)]
+
+        return solution
+
+
+
 
     def _solve_three_vertices(self, triple, generators_without_triple):
         v1, v2, v3 = triple
@@ -403,13 +392,16 @@ class EnvelopePolygonalDomain:
         if not feasibility_outside_J_generators(v1, generators_without_triple, a, b):
             return []
 
-        cell = ConvexHull([(v1.x, v1.y), (v2.x, v2.y), (v3.x, v3.y)]).equations
 
+        cell_ineq_coeffs = ConvexHull([(v1.x, v1.y), (v2.x, v2.y), (v3.x, v3.y)]).equations
         x, y = symbols("x, y")
+        cell_inequalities = [row[0]*x + row[1]*y + row[2] <= 0 for row in cell_ineq_coeffs]
+
         functional = a * x + b * y + c
-        solution = [(triple, cell, functional)]
+        solution = [(triple, cell_inequalities, functional)]
 
         return solution
+
 
     def _solve_two_vertices_one_edge(self, triple, generators_without_triple):
         v1, v2 = (el for el in triple if isinstance(el, Vertex))
@@ -441,14 +433,15 @@ class EnvelopePolygonalDomain:
                 if not feasibility_outside_J_generators(v1, generators_without_triple, a, b):
                     continue
 
-                cell = ConvexHull([(v1.x, v1.y), (v2.x, v2.y), (get_active_point_from_generator(e, a, b))]).equations
-
+                cell_ineq_coeffs = ConvexHull([(v1.x, v1.y), (v2.x, v2.y), (get_active_point_from_generator(e, a, b))]).equations
                 x, y = symbols("x, y")
+                cell_inequalities = [row[0] * x + row[1] * y + row[2] <= 0 for row in cell_ineq_coeffs]
+
+
                 functional = a * x + b * y + c
-                solutions.append((triple, cell, functional))
+                solutions.append((triple, cell_inequalities, functional))
 
             return solutions
-
 
 
     def _solve_one_vertex_two_edges(self, triple, generators_without_triple):
@@ -484,14 +477,15 @@ class EnvelopePolygonalDomain:
                 if not feasibility_outside_J_generators(v, generators_without_triple, a, b):
                     continue
 
-                cell = ConvexHull([(v.x, v.y), (get_active_point_from_generator(e1, a, b)), (get_active_point_from_generator(e2, a, b))]).equations
-
+                cell_ineq_coeffs = ConvexHull([(v.x, v.y), (get_active_point_from_generator(e1, a, b)), (get_active_point_from_generator(e2, a, b))]).equations
                 x, y = symbols("x, y")
+                cell_inequalities = [row[0] * x + row[1] * y + row[2] <= 0 for row in cell_ineq_coeffs]
+
+
                 functional = a * x + b * y + c
-                solutions.append((triple, cell, functional))
+                solutions.append((triple, cell_inequalities, functional))
 
             return solutions
-
 
 
     def _solve_three_edges(self, triple, generators_without_triple):
@@ -521,11 +515,12 @@ class EnvelopePolygonalDomain:
                 if not feasibility_outside_J_generators(e1, generators_without_triple, a, b):
                     continue
 
-                cell = ConvexHull([(get_active_point_from_generator(e1, a, b)), (get_active_point_from_generator(e2, a, b)), (get_active_point_from_generator(e3, a, b))]).equations
-
+                cell_ineq_coeffs = ConvexHull([(get_active_point_from_generator(e1, a, b)), (get_active_point_from_generator(e2, a, b)), (get_active_point_from_generator(e3, a, b))]).equations
                 x, y = symbols("x, y")
+                cell_inequalities = [row[0] * x + row[1] * y + row[2] <= 0 for row in cell_ineq_coeffs]
+
                 functional = a * x + b * y + c
-                solutions.append((triple, cell, functional))
+                solutions.append((triple, cell_inequalities, functional))
 
         else:
             b = symbols("b")
@@ -553,13 +548,14 @@ class EnvelopePolygonalDomain:
                 if not feasibility_outside_J_generators(e1, generators_without_triple, a, b):
                     continue
 
-                cell = ConvexHull(
+                cell_ineq_coeffs = ConvexHull(
                     [(get_active_point_from_generator(e1, a, b)), (get_active_point_from_generator(e2, a, b)),
                      (get_active_point_from_generator(e3, a, b))]).equations
-
                 x, y = symbols("x, y")
+                cell_inequalities = [row[0] * x + row[1] * y + row[2] <= 0 for row in cell_ineq_coeffs]
+
                 functional = a * x + b * y + c
-                solutions.append((triple, cell, functional))
+                solutions.append((triple, cell_inequalities, functional))
 
             b = symbols("b")
             a = (e2.q * e1.m - e1.q * e2.m - math.sqrt(e1.m * e2.m) * ((e1.m - e2.m) * b + e1.q - e2.q)) / (e1.m - e2.m)
@@ -618,11 +614,6 @@ class EnvelopePolygonalDomain:
         print('all solutions stemming from Js with three elements:')
         for sol in all_solutions_three_elements_J:
             print(sol)
-
-
-
-
-
 
 
     def _determine_generators(self):
