@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 import math
-from itertools import combinations
+from itertools import combinations, product
 import shapely.geometry as sg
 
 from sympy import S, symbols, Eq, Le, Ge, Lt, Gt, linsolve, solveset, simplify, expand, Poly, PolynomialError, together, fraction
@@ -8,6 +8,9 @@ import gurobipy as gp
 from tqdm import tqdm
 import numpy as np
 from scipy.spatial import ConvexHull
+
+
+
 
 import sympy as sp
 import matplotlib.pyplot as plt
@@ -169,6 +172,14 @@ def feasibility_outside_J_generators(generator_in_J, generators_outside_J, a, b)
 
     return True
 
+def chop_floats(expr, tol=1e-10):
+    replacements = {}
+    for f in expr.atoms(sp.Float):
+        if abs(float(f)) < tol:
+            replacements[f] = sp.Integer(0)
+
+    return expr.xreplace(replacements)
+
 def satisfies_all(point, inequalities):
     symbols = set().union(
         *(ineq.free_symbols for ineq in inequalities)
@@ -185,18 +196,29 @@ def satisfies_all(point, inequalities):
     }
 
     for ineq in inequalities:
+        ineq = ineq.func(
+            chop_floats(ineq.lhs),
+            chop_floats(ineq.rhs)
+        )
         expressions = (ineq.lhs, ineq.rhs)
 
         for expr in expressions:
             denominator = sp.denom(sp.together(expr))
 
             if abs(float(denominator.subs(substitutions))) <= FEAS_TOL:
-                return False
+                return False, 'undefined'
 
-        if not ineq.subs(substitutions):
-            return False
+        ineq_numeric = ineq.func(ineq.lhs, ineq.rhs + FEAS_TOL)
+        if not ineq_numeric.subs(substitutions):
+            #print('infeasible ineq ', ineq)
+            return False, 'violation'
+        #lhs = float(sp.N(ineq.lhs.subs(substitutions)))
+        #rhs = float(sp.N(ineq.rhs.subs(substitutions)))
 
-    return True
+        #if not lhs <= rhs + FEAS_TOL:
+        #    return False
+
+    return True, None
 
 
 @dataclass(frozen=True)
@@ -265,6 +287,9 @@ class EnvelopePolygonalDomain:
 
         self.all_solutions = solutions_two_elements_J + solutions_three_elements_J
 
+        #for _, cell_inequalities, _ in self.all_solutions:
+        #    plot_cell(cell_inequalities, self.polygon)
+
         self._validation()
 
     def _validation(self):
@@ -295,6 +320,8 @@ class EnvelopePolygonalDomain:
         # compare to computed analytical result
         hull_ineqs = hull.equations  # consider hull facets
         error = 0
+        undefined_points = 0
+        infeasible_points = 0
         for x0, y0, _ in tqdm(points):
             # use env to completely suppress output
             env = gp.Env(empty=True)
@@ -335,9 +362,12 @@ class EnvelopePolygonalDomain:
             # compute analytical z from computed cells
             feasible_cell_counter = 0
             z_list = []
+
             for _, cell_inequalities, functional in self.all_solutions:
+                feasible, msg = satisfies_all((x0, y0), cell_inequalities)
+
                 # if fixed point is within considered cell region then we can compute analytical z accordingly
-                if satisfies_all((x0, y0), cell_inequalities):
+                if feasible:
                     feasible_cell_counter += 1
                     symbols = set().union(
                         *(ineq.free_symbols for ineq in cell_inequalities)
@@ -363,18 +393,31 @@ class EnvelopePolygonalDomain:
                         )
                         z_analytical = z_manual  # add no error in this case
 
+                else:
+                    if msg == 'undefined':
+                        undefined_points += 1
+                        break
+
+            if msg == 'undefined':
+                continue
+
             if feasible_cell_counter > 1:
                 print()
                 print('more than one feasible cell was found, analytical z-values are ', z_list)
+            if feasible_cell_counter == 0:
+                infeasible_points += 1
+                continue
+
 
             # sum up absolute differences to error
             error += abs(z_manual - z_analytical)
             if z_manual + 1e-08 <= z_analytical:
                 print(z_manual, z_analytical)
 
-        print("Number of grid points is: ", len(points))
+        print('undefined vs infeasible: ', undefined_points, infeasible_points)
+        print("Number of grid points is: ", len(points)- undefined_points - infeasible_points)
         print("Total sum of absolute errors is ", error)
-        print("Average absolute error for each grid point is ", error / len(points))
+        print("Average absolute error for each grid point is ", error / (len(points) - undefined_points - infeasible_points))
         # print("Maximum absolute error: is ", max()) # todo maximum printen
 
 
@@ -418,39 +461,56 @@ class EnvelopePolygonalDomain:
         functional = v.x * v.y + a * (x - v.x) + b * (y - v.y)
         functional = simplify(functional)
 
+        solutions = []
 
-        cell_inequalities = []
         eta_v = v.x * v.y - a * v.x - b * v.y
         s_e = (a + e.m * b - e.q) / (2 * e.m)
         eta_e = -e.m * (s_e) ** 2 - b * e.q
-        for r in generators_without_pair:
-            if isinstance(r, Vertex):
+
+        edges_without_pair = [el for el in generators_without_pair if isinstance(el, Edge)]
+        vertices_without_pair = [el for el in generators_without_pair if isinstance(el, Vertex)]
+
+        domain_combinations = list(product([-1, 0, 1], repeat=len(edges_without_pair)))
+        for combination in domain_combinations:
+            cell_inequalities = []
+            for r in vertices_without_pair:
                 eta_r = r.x * r.y - a * r.x - b * r.y
-            else:
-                s_r = (a + r.m * b - r.q) / (2 * r.m )
-                eta_r = -r.m * (s_r)**2 - b * r.q
 
-                cell_inequalities.append(Gt(simplify(s_r), r.v1.x))
-                cell_inequalities.append(Lt(simplify(s_r), r.v2.x))
+                ineq1 = eta_v <= eta_r
+                cell_inequalities.append(Le(simplify(ineq1.lhs), simplify(ineq1.rhs)))
+
+                ineq2 = eta_e <= eta_r
+                cell_inequalities.append(Le(simplify(ineq2.lhs), simplify(ineq2.rhs)))
+
+            for (ind, r) in enumerate(edges_without_pair):
+                s_r = (a + r.m * b - r.q) / (2 * r.m)
+                if combination[ind] == 0:
+                    eta_r = -r.m * (s_r) ** 2 - b * r.q
+
+                    cell_inequalities.append(Gt(simplify(s_r), r.v1.x))
+                    cell_inequalities.append(Lt(simplify(s_r), r.v2.x))
+
+                    ineq1 = eta_v <= eta_r
+                    cell_inequalities.append(Le(simplify(ineq1.lhs), simplify(ineq1.rhs)))
+
+                    ineq2 = eta_e <= eta_r
+                    cell_inequalities.append(Le(simplify(ineq2.lhs), simplify(ineq2.rhs)))
+                elif combination[ind] == -1:
+                    cell_inequalities.append(Le(simplify(s_r), r.v1.x))
+                else:
+                    cell_inequalities.append(Ge(simplify(s_r), r.v2.x))
 
 
+            cell_inequalities.append(Ge(simplify(lambda_), 0))
+            cell_inequalities.append(Le(simplify(lambda_), 1))
 
-            ineq1 = eta_v <= eta_r
-            cell_inequalities.append(Le(simplify(ineq1.lhs), simplify(ineq1.rhs)))
+            cell_inequalities.append(Gt(simplify(x_j), e.v1.x))
+            cell_inequalities.append(Lt(simplify(x_j), e.v2.x))
 
-            ineq2 = eta_e <= eta_r
-            cell_inequalities.append(Le(simplify(ineq2.lhs), simplify(ineq2.rhs)))
-
-        cell_inequalities.append(Ge(simplify(lambda_), 0))
-        cell_inequalities.append(Le(simplify(lambda_), 1))
-
-        cell_inequalities.append(Gt(simplify(x_j), e.v1.x))
-        cell_inequalities.append(Lt(simplify(x_j), e.v2.x))
-
-        solution = [(pair, cell_inequalities, functional)]
+            solutions.append((pair, cell_inequalities, functional))
 
 
-        return solution
+        return solutions
 
 
     def _solve_two_edges(self, pair, generators_without_pair):
@@ -477,41 +537,62 @@ class EnvelopePolygonalDomain:
         functional = -e1.m * x_i**2 - b * e1.q + a * x + b * y
         functional = simplify(functional)
 
-        cell_inequalities = []
 
+        solutions = []
         s_e1 = (a + e1.m * b - e1.q) / (2 * e1.m)
         eta_e1 = -e1.m * (s_e1) ** 2 - b * e1.q
         s_e2 = (a + e2.m * b - e2.q) / (2 * e2.m)
         eta_e2 = -e2.m * (s_e2) ** 2 - b * e2.q
-        for r in generators_without_pair:
-            if isinstance(r, Vertex):
+
+        edges_without_pair = [el for el in generators_without_pair if isinstance(el, Edge)]
+        vertices_without_pair = [el for el in generators_without_pair if isinstance(el, Vertex)]
+
+        domain_combinations = list(product([-1, 0, 1], repeat=len(edges_without_pair)))
+        for combination in domain_combinations:
+            cell_inequalities = []
+            for r in vertices_without_pair:
                 eta_r = r.x * r.y - a * r.x - b * r.y
-            else:
+
+                ineq1 = eta_e1 <= eta_r
+                if not ineq1 == True:
+                    cell_inequalities.append(Le(simplify(ineq1.lhs), simplify(ineq1.rhs)))
+
+                ineq2 = eta_e2 <= eta_r
+                if not ineq2 == True:
+                    cell_inequalities.append(Le(simplify(ineq2.lhs), simplify(ineq2.rhs)))
+            for (ind, r) in enumerate(edges_without_pair):
                 s_r = (a + r.m * b - r.q) / (2 * r.m)
-                eta_r = -r.m * (s_r) ** 2 - b * r.q
+                if combination[ind] == 0:
+                    eta_r = -r.m * (s_r) ** 2 - b * r.q
 
-                cell_inequalities.append(Gt(simplify(s_r), r.v1.x))
-                cell_inequalities.append(Lt(simplify(s_r), r.v2.x))
+                    cell_inequalities.append(Gt(simplify(s_r), r.v1.x))
+                    cell_inequalities.append(Lt(simplify(s_r), r.v2.x))
 
-            ineq1 = eta_e1 <= eta_r
-            if not ineq1 == True:
-                cell_inequalities.append(Le(simplify(ineq1.lhs), simplify(ineq1.rhs)))
+                    ineq1 = eta_e1 <= eta_r
+                    if not ineq1 == True:
+                        cell_inequalities.append(Le(simplify(ineq1.lhs), simplify(ineq1.rhs)))
 
-            ineq2 = eta_e2 <= eta_r
-            if not ineq2 == True:
-                cell_inequalities.append(Le(simplify(ineq2.lhs), simplify(ineq2.rhs)))
+                    ineq2 = eta_e2 <= eta_r
+                    if not ineq2 == True:
+                        cell_inequalities.append(Le(simplify(ineq2.lhs), simplify(ineq2.rhs)))
+                elif combination[ind] == -1:
+                    cell_inequalities.append(Le(simplify(s_r), r.v1.x))
+                else:
+                    cell_inequalities.append(Ge(simplify(s_r), r.v2.x))
 
-        cell_inequalities.append(Ge(simplify(lambda_), 0))
-        cell_inequalities.append(Le(simplify(lambda_), 1))
 
-        cell_inequalities.append(Gt(simplify(x_i), e1.v1.x))
-        cell_inequalities.append(Lt(simplify(x_i), e1.v2.x))
-        cell_inequalities.append(Gt(simplify(x_j), e2.v1.x))
-        cell_inequalities.append(Lt(simplify(x_j), e2.v2.x))
 
-        solution = [(pair, cell_inequalities, functional)]
+            cell_inequalities.append(Ge(simplify(lambda_), 0))
+            cell_inequalities.append(Le(simplify(lambda_), 1))
 
-        return solution
+            cell_inequalities.append(Gt(simplify(x_i), e1.v1.x))
+            cell_inequalities.append(Lt(simplify(x_i), e1.v2.x))
+            cell_inequalities.append(Gt(simplify(x_j), e2.v1.x))
+            cell_inequalities.append(Lt(simplify(x_j), e2.v2.x))
+
+            solutions.append((pair, cell_inequalities, functional))
+
+        return solutions
 
 
     def _solve_three_vertices(self, triple, generators_without_triple):
@@ -831,7 +912,7 @@ if __name__ == "__main__":
             Vertex(0, 1)
         )
 
-    if True:
+    if False:
         vertex_sequence = (
             Vertex(0, 0),
             Vertex(3, 0),
@@ -841,6 +922,14 @@ if __name__ == "__main__":
             Vertex(1, 3),
             Vertex(0, 2),
             Vertex(1, 1),
+        )
+
+    if True:
+        vertex_sequence = (
+            Vertex(0, 0),
+            Vertex(2, 0),
+            Vertex(3, 1),
+            Vertex(1, 2),
         )
 
     polygon = Polygon(vertex_sequence)
