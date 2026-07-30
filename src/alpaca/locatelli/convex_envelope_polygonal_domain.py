@@ -15,7 +15,7 @@ from matplotlib.path import Path
 from matplotlib.patches import Polygon as PolygonPatch
 
 FEAS_TOL = 1e-6
-VALIDATION_DISCRETIZATION = 0.2
+VALIDATION_DISCRETIZATION = 0.1
 
 
 def plot_cell(cell_inequalities, polygon):
@@ -190,37 +190,13 @@ def satisfies_all(point, inequalities):
         for expr in expressions:
             denominator = sp.denom(sp.together(expr))
 
-            if denominator.subs(substitutions) == 0:
+            if abs(float(denominator.subs(substitutions))) <= FEAS_TOL:
                 return False
 
         if not ineq.subs(substitutions):
             return False
 
     return True
-
-
-def satisfies_all2(point, inequalities):
-    symbols = set().union(
-        *(ineq.free_symbols for ineq in inequalities)
-    )
-
-    symbols_by_name = {
-        symbol.name: symbol
-        for symbol in symbols
-    }
-
-    substitutions = {
-        symbols_by_name["x"]: point[0],
-        symbols_by_name["y"]: point[1],
-    }
-
-    for ineq in inequalities:
-        print(ineq)
-
-    return all(
-        ineq.subs(substitutions)
-        for ineq in inequalities
-    )
 
 
 @dataclass(frozen=True)
@@ -284,8 +260,8 @@ class EnvelopePolygonalDomain:
         self.polygon = polygon
         self.generators = self._determine_generators()
 
-        solutions_two_elements_J = self._three_elements_J()
-        solutions_three_elements_J = self._two_elements_J()
+        solutions_three_elements_J = self._three_elements_J()
+        solutions_two_elements_J = self._two_elements_J()
 
         self.all_solutions = solutions_two_elements_J + solutions_three_elements_J
 
@@ -430,7 +406,7 @@ class EnvelopePolygonalDomain:
         v = tuple(el for el in pair if isinstance(el, Vertex))[0]
         e = tuple(el for el in pair if isinstance(el, Edge))[0]
 
-        if v == e.v1 or v == e.v2:
+        if e.m * v.x + e.q == v.y:
             return []
 
         x, y = symbols("x y")
@@ -458,6 +434,7 @@ class EnvelopePolygonalDomain:
                 cell_inequalities.append(Lt(simplify(s_r), r.v2.x))
 
 
+
             ineq1 = eta_v <= eta_r
             cell_inequalities.append(Le(simplify(ineq1.lhs), simplify(ineq1.rhs)))
 
@@ -479,6 +456,9 @@ class EnvelopePolygonalDomain:
     def _solve_two_edges(self, pair, generators_without_pair):
         e1= pair[0]
         e2 = pair[1]
+
+        if e1.m == e2.m and e1.q == e2.q:
+            return []
 
         x, y = symbols("x y", real=True)
         if e1.m == e2.m:
@@ -514,10 +494,12 @@ class EnvelopePolygonalDomain:
                 cell_inequalities.append(Lt(simplify(s_r), r.v2.x))
 
             ineq1 = eta_e1 <= eta_r
-            cell_inequalities.append(Le(simplify(ineq1.lhs), simplify(ineq1.rhs)))
+            if not ineq1 == True:
+                cell_inequalities.append(Le(simplify(ineq1.lhs), simplify(ineq1.rhs)))
 
             ineq2 = eta_e2 <= eta_r
-            cell_inequalities.append(Le(simplify(ineq2.lhs), simplify(ineq2.rhs)))
+            if not ineq2 == True:
+                cell_inequalities.append(Le(simplify(ineq2.lhs), simplify(ineq2.rhs)))
 
         cell_inequalities.append(Ge(simplify(lambda_), 0))
         cell_inequalities.append(Le(simplify(lambda_), 1))
@@ -542,7 +524,7 @@ class EnvelopePolygonalDomain:
             [v3.x, v3.y, 1],
             ])
 
-        if np.linalg.det(A) == 0:
+        if abs(np.linalg.det(A)) <= FEAS_TOL:
             return []
 
         a, b, c = symbols("a, b, c")
@@ -573,46 +555,72 @@ class EnvelopePolygonalDomain:
         v1, v2 = (el for el in triple if isinstance(el, Vertex))
         e = tuple(el for el in triple if isinstance(el, Edge))[0]
 
+
         C = 4 * e.m * (e.q + e.m * v2.x - v2.y)
-        if C == 0:
+
+        if np.isclose(float(C), 0.0, atol=1e-12):
             return []
-        else:
-            beta2 = -1/C
-            beta1 = (2 * e.q + 4 * e.m * v2.x) / C
-            beta0 = (4 * e.m * v2.x * v2.y + e.q * e.q) / (-C)
 
-            z = symbols("z")
-            b = beta2 * z**2 + beta1 * z + beta0
+        beta2 = -1 / C
+        beta1 = (2 * e.q + 4 * e.m * v2.x) / C
+        beta0 = -(4 * e.m * v2.x * v2.y + e.q ** 2) / C
+
+        z = sp.symbols("z", real=True)
+
+        b = beta2 * z ** 2 + beta1 * z + beta0
+        a = z - e.m * b
+
+        expr = sp.expand(
+            v1.x * v1.y
+            - a * v1.x
+            - b * v1.y
+            - v2.x * v2.y
+            + a * v2.x
+            + b * v2.y
+        )
+
+        poly = sp.Poly(expr, z)
+
+        roots = np.roots([
+            float(coefficient)
+            for coefficient in poly.all_coeffs()
+        ])
+
+        sol = [
+            root.real
+            for root in roots
+            if abs(root.imag) < 1e-10
+        ]
+
+        solutions = []
+        for z in sol:
+            b = beta2 * z ** 2 + beta1 * z + beta0
             a = z - e.m * b
+            c = v1.x * v1.y - a * v1.x - b * v1.y
 
-            sol = list(solveset(v1.x * v1.y - a * v1.x - b * v1.y - v2.x * v2.y + a * v2.x + b * v2.y, z, domain=S.Reals))
+            if not e.v1.x + FEAS_TOL < (a + e.m * b - e.q) / (2 * e.m) < e.v2.x - FEAS_TOL:
+                continue
 
-            solutions = []
-            for z in sol:
-                b = beta2 * z ** 2 + beta1 * z + beta0
-                a = z - e.m * b
-                c = v1.x * v1.y - a * v1.x - b * v1.y
+            if not feasibility_outside_J_generators(v1, generators_without_triple, a, b):
+                continue
 
-                if not e.v1.x + FEAS_TOL < (a + e.m * b - e.q) / (2 * e.m) < e.v2.x - FEAS_TOL:
-                    continue
+            cell_ineq_coeffs = ConvexHull(
+                [(v1.x, v1.y), (v2.x, v2.y), (get_active_point_from_generator(e, a, b))]).equations
+            x, y = symbols("x, y")
+            cell_inequalities = [row[0] * x + row[1] * y + row[2] <= 0 for row in cell_ineq_coeffs]
 
-                if not feasibility_outside_J_generators(v1, generators_without_triple, a, b):
-                    continue
+            functional = a * x + b * y + c
+            solutions.append((triple, cell_inequalities, functional))
 
-                cell_ineq_coeffs = ConvexHull([(v1.x, v1.y), (v2.x, v2.y), (get_active_point_from_generator(e, a, b))]).equations
-                x, y = symbols("x, y")
-                cell_inequalities = [row[0] * x + row[1] * y + row[2] <= 0 for row in cell_ineq_coeffs]
-
-
-                functional = a * x + b * y + c
-                solutions.append((triple, cell_inequalities, functional))
-
-            return solutions
+        return solutions
 
 
     def _solve_one_vertex_two_edges(self, triple, generators_without_triple):
         v = tuple(el for el in triple if isinstance(el, Vertex))[0]
         e1, e2 = (el for el in triple if isinstance(el, Edge))
+
+        if e1.m == e2.m and e1.q == e2.q:
+            return []
 
         C = 4 * e1.m * (e1.q + e1.m * v.x - v.y)
         if C == 0:
@@ -625,7 +633,6 @@ class EnvelopePolygonalDomain:
             z = symbols("z")
             b = beta2 * z ** 2 + beta1 * z + beta0
             a = z - e1.m * b
-
             sol = list(solveset(v.x * v.y - a * v.x - b * v.y + (a + e2.m * b - e2.q)**2 / (4 * e2.m) + b * e2.q, z, domain=S.Reals))
 
             solutions = []
@@ -647,7 +654,6 @@ class EnvelopePolygonalDomain:
                 x, y = symbols("x, y")
                 cell_inequalities = [row[0] * x + row[1] * y + row[2] <= 0 for row in cell_ineq_coeffs]
 
-
                 functional = a * x + b * y + c
                 solutions.append((triple, cell_inequalities, functional))
 
@@ -656,6 +662,13 @@ class EnvelopePolygonalDomain:
 
     def _solve_three_edges(self, triple, generators_without_triple):
         e1, e2, e3 = triple
+
+        if e1.m == e2.m and e1.q == e2.q:
+            return []
+        if e1.m == e3.m and e1.q == e3.q:
+            return []
+        if e2.m == e3.m and e2.q == e3.q:
+            return []
 
         if e1.m == e2.m:
             b = symbols("b")
@@ -796,17 +809,39 @@ class EnvelopePolygonalDomain:
 
 
 
-
-
-
 if __name__ == "__main__":
-    vertex_sequence = (
-        Vertex(0, 0),
-        Vertex(2, 0),
-        Vertex(2, 2),
-        Vertex(1, 2),
-        Vertex(0, 1)
-    )
+    # convexified staircase polygon
+    if False:
+        vertex_sequence = (
+            Vertex(0, 0),
+            Vertex(2, 0),
+            Vertex(2, 2),
+            Vertex(1, 2),
+            Vertex(0, 1)
+        )
+
+    # staircase polygon
+    if False:
+        vertex_sequence = (
+            Vertex(0, 0),
+            Vertex(2, 0),
+            Vertex(2, 2),
+            Vertex(1, 2),
+            Vertex(1, 1),
+            Vertex(0, 1)
+        )
+
+    if True:
+        vertex_sequence = (
+            Vertex(0, 0),
+            Vertex(3, 0),
+            Vertex(4, 1),
+            Vertex(3, 3),
+            Vertex(2, 2),
+            Vertex(1, 3),
+            Vertex(0, 2),
+            Vertex(1, 1),
+        )
 
     polygon = Polygon(vertex_sequence)
     envelope_generator = EnvelopePolygonalDomain(polygon)
