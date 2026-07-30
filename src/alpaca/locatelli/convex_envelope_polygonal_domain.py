@@ -1,10 +1,11 @@
 from dataclasses import dataclass, field
 import math
 from itertools import combinations
-
+import shapely.geometry as sg
 
 from sympy import S, symbols, Eq, Le, Ge, Lt, Gt, linsolve, solveset, simplify, expand, Poly, PolynomialError, together, fraction
-from sympy.core.relational import Relational
+import gurobipy as gp
+from tqdm import tqdm
 import numpy as np
 from scipy.spatial import ConvexHull
 
@@ -14,6 +15,7 @@ from matplotlib.path import Path
 from matplotlib.patches import Polygon as PolygonPatch
 
 FEAS_TOL = 1e-6
+VALIDATION_DISCRETIZATION = 0.2
 
 
 def plot_cell(cell_inequalities, polygon):
@@ -167,6 +169,58 @@ def feasibility_outside_J_generators(generator_in_J, generators_outside_J, a, b)
 
     return True
 
+def satisfies_all(point, inequalities):
+    symbols = set().union(
+        *(ineq.free_symbols for ineq in inequalities)
+    )
+
+    symbols_by_name = {
+        symbol.name: symbol
+        for symbol in symbols
+    }
+
+    substitutions = {
+        symbols_by_name["x"]: point[0],
+        symbols_by_name["y"]: point[1],
+    }
+
+    for ineq in inequalities:
+        expressions = (ineq.lhs, ineq.rhs)
+
+        for expr in expressions:
+            denominator = sp.denom(sp.together(expr))
+
+            if denominator.subs(substitutions) == 0:
+                return False
+
+        if not ineq.subs(substitutions):
+            return False
+
+    return True
+
+
+def satisfies_all2(point, inequalities):
+    symbols = set().union(
+        *(ineq.free_symbols for ineq in inequalities)
+    )
+
+    symbols_by_name = {
+        symbol.name: symbol
+        for symbol in symbols
+    }
+
+    substitutions = {
+        symbols_by_name["x"]: point[0],
+        symbols_by_name["y"]: point[1],
+    }
+
+    for ineq in inequalities:
+        print(ineq)
+
+    return all(
+        ineq.subs(substitutions)
+        for ineq in inequalities
+    )
 
 
 @dataclass(frozen=True)
@@ -228,13 +282,125 @@ class Polygon:
 class EnvelopePolygonalDomain:
     def __init__(self, polygon: Polygon):
         self.polygon = polygon
-        print(self.polygon.vertices)
-        print(self.polygon.edges)
-        print(self.polygon.is_ortho)
         self.generators = self._determine_generators()
 
-        self._three_elements_J()
-        self._two_elements_J()
+        solutions_two_elements_J = self._three_elements_J()
+        solutions_three_elements_J = self._two_elements_J()
+
+        self.all_solutions = solutions_two_elements_J + solutions_three_elements_J
+
+        self._validation()
+
+    def _validation(self):
+        # read discretization and polygon bounds
+        dx = VALIDATION_DISCRETIZATION
+        dy = VALIDATION_DISCRETIZATION
+        minx = min(v.x for v in self.polygon.vertices)
+        miny = min(v.y for v in self.polygon.vertices)
+        maxx = max(v.x for v in self.polygon.vertices)
+        maxy = max(v.y for v in self.polygon.vertices)
+        shapely_polygon = sg.Polygon((v.x, v.y) for v in self.polygon.vertex_sequence)
+
+        # construct grid and store all 3D points over polygon
+        x_vals = np.arange(minx, maxx + dx, dx)
+        y_vals = np.arange(miny, maxy + dy, dy)
+        points = []
+        for x in x_vals:
+            for y in y_vals:
+                p = sg.Point(x, y)
+                if shapely_polygon.covers(p):
+                    points.append([p.x, p.y, p.x * p.y])
+        points = np.array(points)
+
+        # construct convex hull of 3D points
+        hull = ConvexHull(points)
+
+        # for each 2D point from polygon compute minimal z-coordinate in approximate convex hull and
+        # compare to computed analytical result
+        hull_ineqs = hull.equations  # consider hull facets
+        error = 0
+        for x0, y0, _ in tqdm(points):
+            # use env to completely suppress output
+            env = gp.Env(empty=True)
+            env.setParam("LogToConsole", 0)
+            env.start()
+
+            # build Gurobi model
+            model = gp.Model(env=env)
+            x_var = model.addVar(lb=minx, ub=maxx)
+            y_var = model.addVar(lb=miny, ub=maxy)
+            z_var = model.addVar(lb=-math.inf)
+
+            # fix considered 2D point
+            model.addConstr(x_var == x0)
+            model.addConstr(y_var == y0)
+
+            # add all facet defining inequalities from approximate convex hull
+            for hull_ineq in hull_ineqs:
+                model.addConstr(
+                    hull_ineq[0] * x_var
+                    + hull_ineq[1] * y_var
+                    + hull_ineq[2] * z_var
+                    + hull_ineq[3]
+                    <= 0
+                )
+
+            # minimize in z direction
+            model.setObjective(z_var, gp.GRB.MINIMIZE)
+            model.optimize()
+
+            if not model.status == gp.GRB.Status.OPTIMAL:
+                print("Optimization failed")
+                exit()
+
+            # store obtained minimal z
+            z_manual = z_var.X
+
+            # compute analytical z from computed cells
+            feasible_cell_counter = 0
+            z_list = []
+            for _, cell_inequalities, functional in self.all_solutions:
+                # if fixed point is within considered cell region then we can compute analytical z accordingly
+                if satisfies_all((x0, y0), cell_inequalities):
+                    feasible_cell_counter += 1
+                    symbols = set().union(
+                        *(ineq.free_symbols for ineq in cell_inequalities)
+                    )
+
+                    symbols_by_name = {
+                        symbol.name: symbol
+                        for symbol in symbols
+                    }
+
+                    substitutions = {
+                        symbols_by_name["x"]: x0,
+                        symbols_by_name["y"]: y0,
+                    }
+                    z_analytical = functional.subs(substitutions).evalf()
+                    z_list.append(z_analytical)
+
+                    # if imaginary part of z_analytical is not zero, there was probably division by zero happening
+                    if not sp.im(z_analytical) == 0:
+                        print()
+                        print(
+                            "Imaginary part is not zero, probably division by zero was happening."
+                        )
+                        z_analytical = z_manual  # add no error in this case
+
+            if feasible_cell_counter > 1:
+                print()
+                print('more than one feasible cell was found, analytical z-values are ', z_list)
+
+            # sum up absolute differences to error
+            error += abs(z_manual - z_analytical)
+            if z_manual + 1e-08 <= z_analytical:
+                print(z_manual, z_analytical)
+
+        print("Number of grid points is: ", len(points))
+        print("Total sum of absolute errors is ", error)
+        print("Average absolute error for each grid point is ", error / len(points))
+        # print("Maximum absolute error: is ", max()) # todo maximum printen
+
 
 
 
@@ -257,6 +423,8 @@ class EnvelopePolygonalDomain:
         print('all solutions stemming from Js with two elements:')
         for sol in all_solutions_two_elements_J:
             print(sol)
+
+        return all_solutions_two_elements_J
 
     def _solve_one_vertex_one_edge(self, pair, generators_without_pair):
         v = tuple(el for el in pair if isinstance(el, Vertex))[0]
@@ -362,8 +530,6 @@ class EnvelopePolygonalDomain:
         solution = [(pair, cell_inequalities, functional)]
 
         return solution
-
-
 
 
     def _solve_three_vertices(self, triple, generators_without_triple):
@@ -614,6 +780,8 @@ class EnvelopePolygonalDomain:
         print('all solutions stemming from Js with three elements:')
         for sol in all_solutions_three_elements_J:
             print(sol)
+
+        return all_solutions_three_elements_J
 
 
     def _determine_generators(self):
