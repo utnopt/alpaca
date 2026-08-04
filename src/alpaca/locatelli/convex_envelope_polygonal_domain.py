@@ -434,11 +434,11 @@ class EnvelopePolygonalDomain:
 
             solutions = []
             if number_of_vertices == 1:
-                continue #todo entfernen
                 solutions = self._solve_one_vertex_one_edge(pair, generators_without_pair)
             if number_of_vertices == 0:
                 solutions = self._solve_two_edges_linear(pair, generators_without_pair)
 
+            print(solutions)
             all_solutions_two_elements_J += solutions
 
         print('all solutions stemming from Js with two elements:')
@@ -576,20 +576,17 @@ class EnvelopePolygonalDomain:
                 sol_set = sol.as_set()
 
 
-                if sol is sp.S.EmptySet:
+                if sol_set is sp.S.EmptySet:
                     continue
-                elif sol is sp.S.UniversalSet:
+                elif sol_set is sp.S.UniversalSet:
                     pass
-                elif isinstance(sol, sp.Interval):
+                elif isinstance(sol_set, sp.Interval) or isinstance(sol_set, sp.Union):
                     interval1 = sp.Interval(e1.v1.x - (e2.q - e1.q)/(4 * e1.m), e1.v2.x - (e2.q - e1.q)/(4 * e1.m))
                     interval2 = sp.Interval(e2.v1.x - (e1.q - e2.q) / (4 * e2.m), e2.v2.x - (e1.q - e2.q) / (4 * e2.m))
 
-                    if sol.intersect(interval1).intersect(interval2) is sp.S.EmptySet:
+                    if sol_set.intersect(interval1).intersect(interval2) is sp.S.EmptySet:
                         continue
-                elif isinstance(sol, sp.Union):
-                    print('solution if of unhandled type Union')
-                    exit()
-                elif sol is sp.S.Reals:
+                elif sol_set is sp.S.Reals:
                     print('solution if of unhandled type Reals')
                     exit()
                 else:
@@ -603,9 +600,104 @@ class EnvelopePolygonalDomain:
 
                 solutions.append((pair, cell_inequalities, functional))
             else:
-                #todo
-                pass
+                beta1 = math.sqrt(e1.m * e2.m)
+                beta0 = (e2.q * e1.m - e1.q * e2.m + beta1 * e1.q - beta1 * e2.q) / (
+                        e1.m - e2.m
+                )
 
+                inequalities = []
+                for r in vertices_without_pair:
+                    eta_r = r.x * r.y - a * r.x - b * r.y
+                    ineq = eta_e1 <= eta_r
+
+                    ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                    inequalities.append(ineq_sub)
+
+                for (ind, r) in enumerate(edges_without_pair):
+                    if combination[ind] == 0:
+                        s_r = (a + r.m * b - r.q) / (2 * r.m)
+                        eta_r = -r.m * (s_r) ** 2 - b * r.q
+                    if combination[ind] == -1:
+                        eta_r = r.v1.x * r.v1.y - a * r.v1.x - b * r.v1.y
+                    if combination[ind] == 1:
+                        eta_r = r.v2.x * r.v2.y - a * r.v2.x - b * r.v2.y
+
+                    ineq = eta_e1 <= eta_r
+                    ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                    inequalities.append(ineq_sub)
+
+                sol = sp.reduce_inequalities(inequalities, b)
+                sol_set1 = sol.as_set()
+
+                beta1 = -math.sqrt(e1.m * e2.m)
+                beta0 = (e2.q * e1.m - e1.q * e2.m + beta1 * e1.q - beta1 * e2.q) / (
+                        e1.m - e2.m
+                )
+
+                inequalities = []
+                for r in vertices_without_pair:
+                    eta_r = r.x * r.y - a * r.x - b * r.y
+                    ineq = eta_e1 <= eta_r
+
+                    ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                    inequalities.append(ineq_sub)
+
+                for (ind, r) in enumerate(edges_without_pair):
+                    if combination[ind] == 0:
+                        s_r = (a + r.m * b - r.q) / (2 * r.m)
+                        eta_r = -r.m * (s_r) ** 2 - b * r.q
+                    if combination[ind] == -1:
+                        eta_r = r.v1.x * r.v1.y - a * r.v1.x - b * r.v1.y
+                    if combination[ind] == 1:
+                        eta_r = r.v2.x * r.v2.y - a * r.v2.x - b * r.v2.y
+
+                    ineq = eta_e1 <= eta_r
+                    ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                    inequalities.append(ineq_sub)
+
+                sol = sp.reduce_inequalities(inequalities, b)
+                sol_set2 = sol.as_set()
+
+                sol_set = sp.Union(sol_set1, sol_set2)
+
+                if sol_set is sp.S.EmptySet:
+                    continue
+                elif sol_set is sp.S.UniversalSet:
+                    pass
+                elif isinstance(sol_set, sp.Interval) or isinstance(sol_set, sp.Union):
+                    interval1 = sp.Interval(e1.v1.x - (e2.q - e1.q)/(4 * e1.m), e1.v2.x - (e2.q - e1.q)/(4 * e1.m))
+                    interval2 = sp.Interval(e2.v1.x - (e1.q - e2.q) / (4 * e2.m), e2.v2.x - (e1.q - e2.q) / (4 * e2.m))
+
+                    if sol_set.intersect(interval1).intersect(interval2) is sp.S.EmptySet:
+                        continue
+                elif sol_set is sp.S.Reals:
+                    print('solution if of unhandled type Reals')
+                    exit()
+                else:
+                    print('solution if of unhandled type ', type(sol_set))
+                    exit()
+
+                x, y = sp.symbols("x y", real=True)
+
+
+                x_i = (y + math.sqrt(e1.m * e2.m) * x - e1.q) / (math.sqrt(e1.m) * (math.sqrt(e1.m) + math.sqrt(e2.m)))
+                x_j = (y + math.sqrt(e1.m * e2.m) * x - e2.q) / (math.sqrt(e2.m) * (math.sqrt(e1.m) + math.sqrt(e2.m)))
+
+                cell_inequalities1 = []
+                cell_inequalities1.append(x_j > x_i)
+                cell_inequalities1.append(x - x_i >= 0)
+                cell_inequalities1.append(x - x_i <= x_j - x_i)
+
+                solutions.append((pair, cell_inequalities1, functional))
+
+                cell_inequalities2 = []
+                cell_inequalities2.append(x_j < x_i)
+                cell_inequalities2.append(x - x_i <= 0)
+                cell_inequalities2.append(x - x_i >= x_j - x_i)
+
+                solutions.append((pair, cell_inequalities2, functional))
+
+        return solutions
 
 
 
