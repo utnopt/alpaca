@@ -10,7 +10,7 @@ import numpy as np
 from scipy.spatial import ConvexHull
 
 
-
+from sympy.logic.boolalg import BooleanFunction
 
 import sympy as sp
 import matplotlib.pyplot as plt
@@ -282,13 +282,14 @@ class EnvelopePolygonalDomain:
         self.polygon = polygon
         self.generators = self._determine_generators()
 
-        solutions_three_elements_J = self._three_elements_J()
         solutions_two_elements_J = self._two_elements_J()
+        solutions_three_elements_J = self._three_elements_J()
+
 
         self.all_solutions = solutions_two_elements_J + solutions_three_elements_J
 
-        #for _, cell_inequalities, _ in self.all_solutions:
-        #    plot_cell(cell_inequalities, self.polygon)
+        for _, cell_inequalities, _ in self.all_solutions:
+            plot_cell(cell_inequalities, self.polygon)
 
         self._validation()
 
@@ -433,9 +434,10 @@ class EnvelopePolygonalDomain:
 
             solutions = []
             if number_of_vertices == 1:
+                continue #todo entfernen
                 solutions = self._solve_one_vertex_one_edge(pair, generators_without_pair)
             if number_of_vertices == 0:
-                solutions = self._solve_two_edges(pair, generators_without_pair)
+                solutions = self._solve_two_edges_linear(pair, generators_without_pair)
 
             all_solutions_two_elements_J += solutions
 
@@ -511,6 +513,111 @@ class EnvelopePolygonalDomain:
 
 
         return solutions
+
+    def _solve_two_edges_linear(self, pair, generators_without_pair):
+        e1 = pair[0]
+        e2 = pair[1]
+
+        if e1.m == e2.m and e1.q == e2.q:
+            return []
+
+        x, y = symbols("x y", real=True)
+        if e1.m == e2.m:
+            x_i = (y + e1.m * x - e1.q) / (2 * e1.m)
+            b = x_i + (e1.q - e2.q) / 4
+            a = 2 * e1.m * x_i - e1.m * b + e1.q
+        else:
+            x_i = (y + math.sqrt(e1.m * e2.m) * x - e1.q) / (math.sqrt(e1.m) * (math.sqrt(e1.m) + math.sqrt(e2.m)))
+            x_j = (y + math.sqrt(e1.m * e2.m) * x - e1.q) / (math.sqrt(e2.m) * (math.sqrt(e1.m) + math.sqrt(e2.m)))
+            b = (2 * e2.m * x_j + e2.q - 2 * e1.m * x_i - e1.q) / (e2.m - e1.m)
+            a = 2 * e2.m * x_j + e2.q - e2.m * b
+
+        functional = -e1.m * x_i ** 2 - b * e1.q + a * x + b * y
+        functional = simplify(functional)
+
+        solutions = []
+
+        edges_without_pair = [el for el in generators_without_pair if isinstance(el, Edge)]
+        vertices_without_pair = [el for el in generators_without_pair if isinstance(el, Vertex)]
+        domain_combinations = list(product([-1, 0, 1], repeat=len(edges_without_pair)))
+
+        a, b = sp.symbols("a b", real=True)
+        s_e1 = (a + e1.m * b - e1.q) / (2 * e1.m)
+        eta_e1 = -e1.m * (s_e1) ** 2 - b * e1.q
+
+
+        for combination in domain_combinations:
+            if e1.m == e2.m:
+                beta1 = e1.m
+                beta0 = (e1.q + e2.q) / 2
+
+                inequalities = []
+                for r in vertices_without_pair:
+                    eta_r = r.x * r.y - a * r.x - b * r.y
+                    ineq = eta_e1 <= eta_r
+
+                    ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                    inequalities.append(ineq_sub)
+
+                for (ind, r) in enumerate(edges_without_pair):
+                    if combination[ind] == 0:
+                        s_r = (a + r.m * b - r.q) / (2 * r.m)
+                        eta_r = -r.m * (s_r) ** 2 - b * r.q
+                    if combination[ind] == -1:
+                        eta_r = r.v1.x * r.v1.y - a * r.v1.x - b * r.v1.y
+                    if combination[ind] == 1:
+                        eta_r = r.v2.x * r.v2.y - a * r.v2.x - b * r.v2.y
+
+                    ineq = eta_e1 <= eta_r
+                    ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                    inequalities.append(ineq_sub)
+
+                sol = sp.reduce_inequalities(inequalities, b)
+                sol_set = sol.as_set()
+
+
+                if sol is sp.S.EmptySet:
+                    continue
+                elif sol is sp.S.UniversalSet:
+                    pass
+                elif isinstance(sol, sp.Interval):
+                    interval1 = sp.Interval(e1.v1.x - (e2.q - e1.q)/(4 * e1.m), e1.v2.x - (e2.q - e1.q)/(4 * e1.m))
+                    interval2 = sp.Interval(e2.v1.x - (e1.q - e2.q) / (4 * e2.m), e2.v2.x - (e1.q - e2.q) / (4 * e2.m))
+
+                    if sol.intersect(interval1).intersect(interval2) is sp.S.EmptySet:
+                        continue
+                elif isinstance(sol, sp.Union):
+                    print('solution if of unhandled type Union')
+                    exit()
+                elif sol is sp.S.Reals:
+                    print('solution if of unhandled type Reals')
+                    exit()
+                else:
+                    print('solution if of unhandled type ', type(sol_set))
+                    exit()
+
+                x, y = sp.symbols("x y", real=True)
+                cell_inequalities = []
+                cell_inequalities.append((e1.m * x - y + e1.q)/(e1.q - e2.q) >= 0)
+                cell_inequalities.append((e1.m * x - y + e1.q) / (e1.q - e2.q) <= 1)
+
+                solutions.append((pair, cell_inequalities, functional))
+            else:
+                #todo
+                pass
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     def _solve_two_edges(self, pair, generators_without_pair):
@@ -925,6 +1032,19 @@ if __name__ == "__main__":
         )
 
     if True:
+        vertex_sequence = (
+            Vertex(1, 0),
+            Vertex(4, 0),
+            Vertex(5, 1),  # positive slope
+            Vertex(6, 3),  # positive slope
+            Vertex(5, 5),
+            Vertex(3, 4),  # positive slope
+            Vertex(2, 5),
+            Vertex(1, 3),  # positive slope
+            Vertex(0, 1),  # positive slope
+        )
+
+    if False:
         vertex_sequence = (
             Vertex(0, 0),
             Vertex(2, 0),
