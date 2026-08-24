@@ -447,6 +447,73 @@ class EnvelopePolygonalDomain:
 
         return all_solutions_two_elements_J
 
+    def _solve_one_vertex_one_edge_linear(self, pair, generators_without_pair):
+        v = tuple(el for el in pair if isinstance(el, Vertex))[0]
+        e = tuple(el for el in pair if isinstance(el, Edge))[0]
+
+        if e.m * v.x + e.q == v.y:
+            return []
+
+        x, y = symbols("x y")
+        x_j = (x * (v.y - e.q) - v.x * (y - e.q)) / (e.m * (x - v.x) + v.y - y)
+        lambda_ = (e.m * (x - v.x) + v.y - y) / (v.y - e.q - e.m * v.x)
+        b = (e.m * x_j * x_j - 2 * e.m * v.x * x_j - e.q * v.x + v.x * v.y) / (v.y - e.m * v.x - e.q)
+        a = 2 * e.m * x_j + e.q - e.m * b
+
+        functional = v.x * v.y + a * (x - v.x) + b * (y - v.y)
+        functional = simplify(functional)
+
+        solutions = []
+
+        eta_v = v.x * v.y - a * v.x - b * v.y
+        s_e = (a + e.m * b - e.q) / (2 * e.m)
+        eta_e = -e.m * (s_e) ** 2 - b * e.q
+
+        edges_without_pair = [el for el in generators_without_pair if isinstance(el, Edge)]
+        vertices_without_pair = [el for el in generators_without_pair if isinstance(el, Vertex)]
+
+        domain_combinations = list(product([-1, 0, 1], repeat=len(edges_without_pair)))
+        for combination in domain_combinations:
+            cell_inequalities = []
+            for r in vertices_without_pair:
+                eta_r = r.x * r.y - a * r.x - b * r.y
+
+                ineq1 = eta_v <= eta_r
+                cell_inequalities.append(Le(simplify(ineq1.lhs), simplify(ineq1.rhs)))
+
+                ineq2 = eta_e <= eta_r
+                cell_inequalities.append(Le(simplify(ineq2.lhs), simplify(ineq2.rhs)))
+
+            for (ind, r) in enumerate(edges_without_pair):
+                s_r = (a + r.m * b - r.q) / (2 * r.m)
+                if combination[ind] == 0:
+                    eta_r = -r.m * (s_r) ** 2 - b * r.q
+
+                    cell_inequalities.append(Gt(simplify(s_r), r.v1.x))
+                    cell_inequalities.append(Lt(simplify(s_r), r.v2.x))
+
+                    ineq1 = eta_v <= eta_r
+                    cell_inequalities.append(Le(simplify(ineq1.lhs), simplify(ineq1.rhs)))
+
+                    ineq2 = eta_e <= eta_r
+                    cell_inequalities.append(Le(simplify(ineq2.lhs), simplify(ineq2.rhs)))
+                elif combination[ind] == -1:
+                    cell_inequalities.append(Le(simplify(s_r), r.v1.x))
+                else:
+                    cell_inequalities.append(Ge(simplify(s_r), r.v2.x))
+
+
+            cell_inequalities.append(Ge(simplify(lambda_), 0))
+            cell_inequalities.append(Le(simplify(lambda_), 1))
+
+            cell_inequalities.append(Gt(simplify(x_j), e.v1.x))
+            cell_inequalities.append(Lt(simplify(x_j), e.v2.x))
+
+            solutions.append((pair, cell_inequalities, functional))
+
+
+        return solutions
+
     def _solve_one_vertex_one_edge(self, pair, generators_without_pair):
         v = tuple(el for el in pair if isinstance(el, Vertex))[0]
         e = tuple(el for el in pair if isinstance(el, Edge))[0]
