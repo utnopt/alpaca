@@ -434,11 +434,10 @@ class EnvelopePolygonalDomain:
 
             solutions = []
             if number_of_vertices == 1:
-                solutions = self._solve_one_vertex_one_edge(pair, generators_without_pair)
+                solutions = self._solve_one_vertex_one_edge_linear(pair, generators_without_pair)
             if number_of_vertices == 0:
                 solutions = self._solve_two_edges_linear(pair, generators_without_pair)
 
-            print(solutions)
             all_solutions_two_elements_J += solutions
 
         print('all solutions stemming from Js with two elements:')
@@ -454,9 +453,14 @@ class EnvelopePolygonalDomain:
         if e.m * v.x + e.q == v.y:
             return []
 
-        x, y = symbols("x y")
+        C = 4 * e.m * e.q + 4 * e.m * e.m * v.x - 4 * e.m * v.y
+
+        beta2 = (-1) / C
+        beta1 = (2 * e.q + 4 * e.m * v.x) / C
+        beta0 = (e.q * e.q + 4 * e.m * v.x * v.y) / (-C)
+
+        x, y = symbols("x y", real=True)
         x_j = (x * (v.y - e.q) - v.x * (y - e.q)) / (e.m * (x - v.x) + v.y - y)
-        lambda_ = (e.m * (x - v.x) + v.y - y) / (v.y - e.q - e.m * v.x)
         b = (e.m * x_j * x_j - 2 * e.m * v.x * x_j - e.q * v.x + v.x * v.y) / (v.y - e.m * v.x - e.q)
         a = 2 * e.m * x_j + e.q - e.m * b
 
@@ -465,6 +469,7 @@ class EnvelopePolygonalDomain:
 
         solutions = []
 
+        a, b, z = symbols("a b z", real=True)
         eta_v = v.x * v.y - a * v.x - b * v.y
         s_e = (a + e.m * b - e.q) / (2 * e.m)
         eta_e = -e.m * (s_e) ** 2 - b * e.q
@@ -472,49 +477,171 @@ class EnvelopePolygonalDomain:
         edges_without_pair = [el for el in generators_without_pair if isinstance(el, Edge)]
         vertices_without_pair = [el for el in generators_without_pair if isinstance(el, Vertex)]
 
-        domain_combinations = list(product([-1, 0, 1], repeat=len(edges_without_pair)))
-        for combination in domain_combinations:
-            cell_inequalities = []
-            for r in vertices_without_pair:
-                eta_r = r.x * r.y - a * r.x - b * r.y
 
-                ineq1 = eta_v <= eta_r
-                cell_inequalities.append(Le(simplify(ineq1.lhs), simplify(ineq1.rhs)))
+        if len(edges_without_pair) == 0:
+            inequalities = []
 
-                ineq2 = eta_e <= eta_r
-                cell_inequalities.append(Le(simplify(ineq2.lhs), simplify(ineq2.rhs)))
+            ineq = s_e >= e.v1.x
+            ineq_sub = ineq.subs(a, z - e.m * b)
+            ineq_subsub = ineq_sub.subs(b, beta2 * z ** 2 + beta1 * z + beta0)
+            inequalities.append(ineq_subsub)
 
-            for (ind, r) in enumerate(edges_without_pair):
-                s_r = (a + r.m * b - r.q) / (2 * r.m)
-                if combination[ind] == 0:
-                    eta_r = -r.m * (s_r) ** 2 - b * r.q
+            ineq = s_e <= e.v2.x
+            ineq_sub = ineq.subs(a, z - e.m * b)
+            ineq_subsub = ineq_sub.subs(b, beta2 * z ** 2 + beta1 * z + beta0)
+            inequalities.append(ineq_subsub)
 
-                    cell_inequalities.append(Gt(simplify(s_r), r.v1.x))
-                    cell_inequalities.append(Lt(simplify(s_r), r.v2.x))
+            sol = sp.reduce_inequalities(inequalities, z)
+            sol_set = sol.as_set()
 
-                    ineq1 = eta_v <= eta_r
-                    cell_inequalities.append(Le(simplify(ineq1.lhs), simplify(ineq1.rhs)))
+            if sol_set is sp.S.EmptySet:
+                return []
+            elif isinstance(sol_set, sp.FiniteSet) or isinstance(sol_set, sp.Interval):
+                pass
+            elif sol_set is sp.S.UniversalSet:
+                print('solution is of unexpected type UniversalSet')
+                exit()
+            elif sol_set is sp.S.Reals:
+                print('solution is of unhandled type Reals')
+                exit()
+            else:
+                print('solution is of unhandled type ', type(sol_set))
+                exit()
 
-                    ineq2 = eta_e <= eta_r
-                    cell_inequalities.append(Le(simplify(ineq2.lhs), simplify(ineq2.rhs)))
-                elif combination[ind] == -1:
-                    cell_inequalities.append(Le(simplify(s_r), r.v1.x))
-                else:
-                    cell_inequalities.append(Ge(simplify(s_r), r.v2.x))
 
 
-            cell_inequalities.append(Ge(simplify(lambda_), 0))
-            cell_inequalities.append(Le(simplify(lambda_), 1))
+            x, y = sp.symbols("x y", real=True)
+            cell_inequalities_basis = []
+            cell_inequalities_basis.append((e.m * (x - v.x) + v.y - y) / (v.y - e.q - e.m * v.x) >= 0)
+            cell_inequalities_basis.append((e.m * (x - v.x) + v.y - y) / (v.y - e.q - e.m * v.x) <= 1)
 
-            cell_inequalities.append(Gt(simplify(x_j), e.v1.x))
-            cell_inequalities.append(Lt(simplify(x_j), e.v2.x))
+            if isinstance(sol_set, sp.Interval):
+                lower = sol_set.start
+                upper = sol_set.end
+
+                cell_inequalities1 = cell_inequalities_basis.copy()
+                cell_inequalities1.append(e.m * (x - v.x) + v.y - y >= 0)
+                cell_inequalities1.append(2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (v.y - y) >= lower * (e.m * (x - v.x) + v.y - y))
+                cell_inequalities1.append(
+                    2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
+                                v.y - y) <= upper * (e.m * (x - v.x) + v.y - y))
+
+                cell_inequalities2 = cell_inequalities_basis.copy()
+                cell_inequalities2.append(e.m * (x - v.x) + v.y - y <= 0)
+                cell_inequalities2.append(
+                    2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
+                                v.y - y) <= lower * (e.m * (x - v.x) + v.y - y))
+                cell_inequalities2.append(
+                    2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
+                            v.y - y) >= upper * (e.m * (x - v.x) + v.y - y))
+
+                # todo hier weiter
+
+
+
+
+
 
             solutions.append((pair, cell_inequalities, functional))
+
+        if len(edges_without_pair) >= 1:
+            domain_combinations = list(product([-1, 0, 1], repeat=len(edges_without_pair)))
+            for combination in domain_combinations:
+                inequalities = []
+
+                ineq = s_e >= e.v1.x
+                ineq_sub = ineq.subs(a, z - e.m * b)
+                ineq_subsub = ineq_sub.subs(b, beta2 * z ** 2 + beta1 * z + beta0)
+                inequalities.append(ineq_subsub)
+
+                ineq = s_e <= e.v2.x
+                ineq_sub = ineq.subs(a, z - e.m * b)
+                ineq_subsub = ineq_sub.subs(b, beta2 * z ** 2 + beta1 * z + beta0)
+                inequalities.append(ineq_subsub)
+
+                for r in vertices_without_pair:
+                    eta_r = r.x * r.y - a * r.x - b * r.y
+
+                    ineq = eta_v <= eta_r
+                    ineq_sub = ineq.subs(a, z - e.m * b)
+                    ineq_subsub = ineq_sub.subs(b, beta2*z**2 + beta1*z + beta0)
+                    inequalities.append(ineq_subsub)
+
+
+                for (ind, r) in enumerate(edges_without_pair):
+                    s_r = (a + r.m * b - r.q) / (2 * r.m)
+                    if combination[ind] == 0:
+                        ineq = s_r >= r.v1.x
+                        ineq_sub = ineq.subs(a, z - e.m * b)
+                        ineq_subsub = ineq_sub.subs(b, beta2 * z ** 2 + beta1 * z + beta0)
+                        inequalities.append(ineq_subsub)
+
+                        ineq = s_r <= r.v2.x
+                        ineq_sub = ineq.subs(a, z - e.m * b)
+                        ineq_subsub = ineq_sub.subs(b, beta2 * z ** 2 + beta1 * z + beta0)
+                        inequalities.append(ineq_subsub)
+
+                        ineq = eta_e <= -r.m * (s_r) ** 2 - b * r.q
+                        ineq_sub = ineq.subs(a, z - e.m * b)
+                        ineq_subsub = ineq_sub.subs(b, beta2 * z ** 2 + beta1 * z + beta0)
+                        inequalities.append(ineq_subsub)
+
+                    if combination[ind] == -1:
+                        ineq = s_r <= r.v1.x
+                        ineq_sub = ineq.subs(a, z - e.m * b)
+                        ineq_subsub = ineq_sub.subs(b, beta2 * z ** 2 + beta1 * z + beta0)
+                        inequalities.append(ineq_subsub)
+
+                        ineq = eta_e <= r.v1.x * r.v1.y - a * r.v1.x - b * r.v1.y
+                        ineq_sub = ineq.subs(a, z - e.m * b)
+                        ineq_subsub = ineq_sub.subs(b, beta2 * z ** 2 + beta1 * z + beta0)
+                        inequalities.append(ineq_subsub)
+
+                    if combination[ind] == 1:
+                        ineq = s_r >= r.v2.x
+                        ineq_sub = ineq.subs(a, z - e.m * b)
+                        ineq_subsub = ineq_sub.subs(b, beta2 * z ** 2 + beta1 * z + beta0)
+                        inequalities.append(ineq_subsub)
+
+                        ineq = eta_e <= r.v2.x * r.v2.y - a * r.v2.x - b * r.v2.y
+                        ineq_sub = ineq.subs(a, z - e.m * b)
+                        ineq_subsub = ineq_sub.subs(b, beta2 * z ** 2 + beta1 * z + beta0)
+                        inequalities.append(ineq_subsub)
+
+
+
+                sol = sp.reduce_inequalities(inequalities, z)
+                sol_set = sol.as_set()
+
+                if sol_set is sp.S.EmptySet:
+                    continue
+                elif isinstance(sol_set, sp.FiniteSet):
+                    pass
+                elif sol_set is sp.S.UniversalSet:
+                    print('solution is of unexpected type UniversalSet')
+                    print(combination)
+                    print(inequalities)
+                    exit()
+                elif sol_set is sp.S.Reals:
+                    print('solution is of unhandled type Reals')
+                    exit()
+                else:
+                    print('solution is of unhandled type ', type(sol_set))
+                    exit()
+
+                x, y = sp.symbols("x y", real=True)
+                cell_inequalities = []
+                cell_inequalities.append((e.m * (x - v.x) + v.y - y)/(v.y - e.q - e.m * v.x) >= 0)
+                cell_inequalities.append((e.m * (x - v.x) + v.y - y)/(v.y - e.q - e.m * v.x) <= 1)
+
+                solutions.append((pair, cell_inequalities, functional))
 
 
         return solutions
 
     def _solve_one_vertex_one_edge(self, pair, generators_without_pair):
+        #todo geht hier in die cell_inequalities überhaupt die gleichheit von eta_e und eta_v ein? glaube nicht
+
         v = tuple(el for el in pair if isinstance(el, Vertex))[0]
         e = tuple(el for el in pair if isinstance(el, Edge))[0]
 
@@ -612,7 +739,7 @@ class EnvelopePolygonalDomain:
         s_e1 = (a + e1.m * b - e1.q) / (2 * e1.m)
         eta_e1 = -e1.m * (s_e1) ** 2 - b * e1.q
 
-
+        # todo siehe _solve_one_vertex_one_edge_linear mit Fallunterscheidung und berücksichtige die domain ineqs für beide edges
         for combination in domain_combinations:
             if e1.m == e2.m:
                 beta1 = e1.m
@@ -627,17 +754,37 @@ class EnvelopePolygonalDomain:
                     inequalities.append(ineq_sub)
 
                 for (ind, r) in enumerate(edges_without_pair):
+                    s_r = (a + r.m * b - r.q) / (2 * r.m)
                     if combination[ind] == 0:
-                        s_r = (a + r.m * b - r.q) / (2 * r.m)
-                        eta_r = -r.m * (s_r) ** 2 - b * r.q
-                    if combination[ind] == -1:
-                        eta_r = r.v1.x * r.v1.y - a * r.v1.x - b * r.v1.y
-                    if combination[ind] == 1:
-                        eta_r = r.v2.x * r.v2.y - a * r.v2.x - b * r.v2.y
+                        ineq = s_r >= r.v1.x
+                        ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                        inequalities.append(ineq_sub)
 
-                    ineq = eta_e1 <= eta_r
-                    ineq_sub = ineq.subs(a, beta1 * b + beta0)
-                    inequalities.append(ineq_sub)
+                        ineq = s_r <= r.v2.x
+                        ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                        inequalities.append(ineq_sub)
+
+                        ineq = eta_e1 <= -r.m * (s_r) ** 2 - b * r.q
+                        ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                        inequalities.append(ineq_sub)
+
+                    if combination[ind] == -1:
+                        ineq = s_r <= r.v1.x
+                        ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                        inequalities.append(ineq_sub)
+
+                        ineq = eta_e1 <= r.v1.x * r.v1.y - a * r.v1.x - b * r.v1.y
+                        ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                        inequalities.append(ineq_sub)
+
+                    if combination[ind] == 1:
+                        ineq = s_r >= r.v2.x
+                        ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                        inequalities.append(ineq_sub)
+
+                        ineq = eta_e1 <= r.v2.x * r.v2.y - a * r.v2.x - b * r.v2.y
+                        ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                        inequalities.append(ineq_sub)
 
                 sol = sp.reduce_inequalities(inequalities, b)
                 sol_set = sol.as_set()
@@ -645,14 +792,6 @@ class EnvelopePolygonalDomain:
 
                 if sol_set is sp.S.EmptySet:
                     continue
-                elif sol_set is sp.S.UniversalSet:
-                    pass
-                elif isinstance(sol_set, sp.Interval) or isinstance(sol_set, sp.Union):
-                    interval1 = sp.Interval(e1.v1.x - (e2.q - e1.q)/(4 * e1.m), e1.v2.x - (e2.q - e1.q)/(4 * e1.m))
-                    interval2 = sp.Interval(e2.v1.x - (e1.q - e2.q) / (4 * e2.m), e2.v2.x - (e1.q - e2.q) / (4 * e2.m))
-
-                    if sol_set.intersect(interval1).intersect(interval2) is sp.S.EmptySet:
-                        continue
                 elif sol_set is sp.S.Reals:
                     print('solution if of unhandled type Reals')
                     exit()
@@ -1158,7 +1297,7 @@ class EnvelopePolygonalDomain:
 
 if __name__ == "__main__":
     # convexified staircase polygon
-    if False:
+    if True:
         vertex_sequence = (
             Vertex(0, 0),
             Vertex(2, 0),
@@ -1190,7 +1329,7 @@ if __name__ == "__main__":
             Vertex(1, 1),
         )
 
-    if True:
+    if False:
         vertex_sequence = (
             Vertex(1, 0),
             Vertex(4, 0),
