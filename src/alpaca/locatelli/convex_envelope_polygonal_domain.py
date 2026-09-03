@@ -773,8 +773,73 @@ class EnvelopePolygonalDomain:
 
         solutions = []
 
+        a, b = sp.symbols("a b", real=True)
+        s_e1 = (a + e1.m * b - e1.q) / (2 * e1.m)
+        eta_e1 = -e1.m * (s_e1) ** 2 - b * e1.q
+        s_e2 = (a + e2.m * b - e2.q) / (2 * e2.m)
+        eta_e2 = -e2.m * (s_e2) ** 2 - b * e2.q
+
         edges_without_pair = [el for el in generators_without_pair if isinstance(el, Edge)]
         vertices_without_pair = [el for el in generators_without_pair if isinstance(el, Vertex)]
+
+        if len(edges_without_pair) == 0:
+            if e1.m == e2.m:
+                beta1 = e1.m
+                beta0 = (e1.q + e2.q) / 2
+                inequalities = []
+
+                ineq = s_e1 >= e1.v1.x
+                ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                inequalities.append(ineq_sub)
+
+                ineq = s_e1 <= e1.v2.x
+                ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                inequalities.append(ineq_sub)
+
+                ineq = s_e2 >= e2.v1.x
+                ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                inequalities.append(ineq_sub)
+
+                ineq = s_e2 <= e2.v2.x
+                ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                inequalities.append(ineq_sub)
+
+
+
+                for r in vertices_without_pair:
+                    eta_r = r.x * r.y - a * r.x - b * r.y
+
+                    ineq = eta_e1 <= eta_r
+                    ineq_sub = ineq.subs(a, beta1 * b + beta0)
+                    inequalities.append(ineq_sub)
+
+                sol = sp.reduce_inequalities(inequalities, b)
+                sol_set = sol.as_set()
+
+                if sol_set is sp.S.EmptySet:
+                    return []
+                elif isinstance(sol_set, sp.FiniteSet) or isinstance(sol_set, sp.Interval):
+                    pass
+                elif sol_set is sp.S.UniversalSet:
+                    print('solution is of unexpected type UniversalSet')
+                    exit()
+                elif sol_set is sp.S.Reals:
+                    print('solution is of unhandled type Reals')
+                    exit()
+                else:
+                    print('solution is of unhandled type ', type(sol_set))
+                    exit()
+
+                # todo hier weiter (immer mit code für one edge, one vertex abgleichen), nicht anderen case ungleiche e_m vergessen
+
+        if len(edges_without_pair) >= 1:
+            #todo hier auch noch
+            pass
+
+
+
+
+        # todo ab hier alter code
         domain_combinations = list(product([-1, 0, 1], repeat=len(edges_without_pair)))
 
         a, b = sp.symbols("a b", real=True)
