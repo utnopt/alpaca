@@ -18,7 +18,7 @@ from matplotlib.path import Path
 from matplotlib.patches import Polygon as PolygonPatch
 
 FEAS_TOL = 1e-6
-VALIDATION_DISCRETIZATION = 0.1
+VALIDATION_DISCRETIZATION = 0.05
 
 
 def plot_cell(cell_inequalities, polygon):
@@ -491,6 +491,14 @@ class EnvelopePolygonalDomain:
             ineq_subsub = ineq_sub.subs(b, beta2 * z ** 2 + beta1 * z + beta0)
             inequalities.append(ineq_subsub)
 
+            for r in vertices_without_pair:
+                eta_r = r.x * r.y - a * r.x - b * r.y
+
+                ineq = eta_v <= eta_r
+                ineq_sub = ineq.subs(a, z - e.m * b)
+                ineq_subsub = ineq_sub.subs(b, beta2 * z ** 2 + beta1 * z + beta0)
+                inequalities.append(ineq_subsub)
+
             sol = sp.reduce_inequalities(inequalities, z)
             sol_set = sol.as_set()
 
@@ -509,7 +517,6 @@ class EnvelopePolygonalDomain:
                 exit()
 
 
-
             x, y = sp.symbols("x y", real=True)
             cell_inequalities_basis = []
             cell_inequalities_basis.append((e.m * (x - v.x) + v.y - y) / (v.y - e.q - e.m * v.x) >= 0)
@@ -520,14 +527,18 @@ class EnvelopePolygonalDomain:
                 upper = sol_set.end
 
                 cell_inequalities1 = cell_inequalities_basis.copy()
-                cell_inequalities1.append(e.m * (x - v.x) + v.y - y >= 0)
+                cell_inequalities1.append(e.m * (x - v.x) + v.y - y > 0)
                 cell_inequalities1.append(2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (v.y - y) >= lower * (e.m * (x - v.x) + v.y - y))
                 cell_inequalities1.append(
                     2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
                                 v.y - y) <= upper * (e.m * (x - v.x) + v.y - y))
 
+
+                # todo implement feasibility checker here
+                solutions.append((pair, cell_inequalities1, functional))
+
                 cell_inequalities2 = cell_inequalities_basis.copy()
-                cell_inequalities2.append(e.m * (x - v.x) + v.y - y <= 0)
+                cell_inequalities2.append(e.m * (x - v.x) + v.y - y < 0)
                 cell_inequalities2.append(
                     2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
                                 v.y - y) <= lower * (e.m * (x - v.x) + v.y - y))
@@ -535,14 +546,13 @@ class EnvelopePolygonalDomain:
                     2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
                             v.y - y) >= upper * (e.m * (x - v.x) + v.y - y))
 
-                # todo hier weiter
+                # todo implement feasibility checker here
+                solutions.append((pair, cell_inequalities2, functional))
 
+            else:
+                print('solution is of below unhandled type ', type(sol_set))
+                exit()
 
-
-
-
-
-            solutions.append((pair, cell_inequalities, functional))
 
         if len(edges_without_pair) >= 1:
             domain_combinations = list(product([-1, 0, 1], repeat=len(edges_without_pair)))
@@ -630,14 +640,45 @@ class EnvelopePolygonalDomain:
                     exit()
 
                 x, y = sp.symbols("x y", real=True)
-                cell_inequalities = []
-                cell_inequalities.append((e.m * (x - v.x) + v.y - y)/(v.y - e.q - e.m * v.x) >= 0)
-                cell_inequalities.append((e.m * (x - v.x) + v.y - y)/(v.y - e.q - e.m * v.x) <= 1)
+                cell_inequalities_basis = []
+                cell_inequalities_basis.append((e.m * (x - v.x) + v.y - y) / (v.y - e.q - e.m * v.x) >= 0)
+                cell_inequalities_basis.append((e.m * (x - v.x) + v.y - y) / (v.y - e.q - e.m * v.x) <= 1)
 
-                solutions.append((pair, cell_inequalities, functional))
+                if isinstance(sol_set, sp.Interval):
+                    lower = sol_set.start
+                    upper = sol_set.end
+
+                    cell_inequalities1 = cell_inequalities_basis.copy()
+                    cell_inequalities1.append(e.m * (x - v.x) + v.y - y > 0)
+                    cell_inequalities1.append(
+                        2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
+                                    v.y - y) >= lower * (e.m * (x - v.x) + v.y - y))
+                    cell_inequalities1.append(
+                        2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
+                                v.y - y) <= upper * (e.m * (x - v.x) + v.y - y))
+
+                    # todo implement feasibility checker here
+                    solutions.append((pair, cell_inequalities1, functional))
+
+                    cell_inequalities2 = cell_inequalities_basis.copy()
+                    cell_inequalities2.append(e.m * (x - v.x) + v.y - y < 0)
+                    cell_inequalities2.append(
+                        2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
+                                v.y - y) <= lower * (e.m * (x - v.x) + v.y - y))
+                    cell_inequalities2.append(
+                        2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
+                                v.y - y) >= upper * (e.m * (x - v.x) + v.y - y))
+
+                    # todo implement feasibility checker here
+                    solutions.append((pair, cell_inequalities2, functional))
+
+                else:
+                    print('solution is of below unhandled type ', type(sol_set))
+                    exit()
 
 
         return solutions
+
 
     def _solve_one_vertex_one_edge(self, pair, generators_without_pair):
         #todo geht hier in die cell_inequalities überhaupt die gleichheit von eta_e und eta_v ein? glaube nicht
@@ -707,6 +748,7 @@ class EnvelopePolygonalDomain:
 
 
         return solutions
+
 
     def _solve_two_edges_linear(self, pair, generators_without_pair):
         e1 = pair[0]
@@ -904,18 +946,6 @@ class EnvelopePolygonalDomain:
                 solutions.append((pair, cell_inequalities2, functional))
 
         return solutions
-
-
-
-
-
-
-
-
-
-
-
-
 
 
     def _solve_two_edges(self, pair, generators_without_pair):
