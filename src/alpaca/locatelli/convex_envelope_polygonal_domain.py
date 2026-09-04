@@ -9,9 +9,6 @@ from tqdm import tqdm
 import numpy as np
 from scipy.spatial import ConvexHull
 
-
-from sympy.logic.boolalg import BooleanFunction
-
 import sympy as sp
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
@@ -289,8 +286,45 @@ def compute_cells_one_vertex_one_edge(solutions, v, e, inequalities, functional)
         # todo implement feasibility checker here
         solutions.append(((v, e), cell_inequalities2, functional))
 
+    elif isinstance(sol_set, sp.FiniteSet):
+        if len(sol_set) == 1:
+            sol = next(iter(sol_set))
+            lower = sol
+            upper = sol
+
+            cell_inequalities1 = cell_inequalities_base.copy()
+            cell_inequalities1.append(e.m * (x - v.x) + v.y - y > 0)
+            cell_inequalities1.append(
+                2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
+                            v.y - y) >= lower * (
+                        e.m * (x - v.x) + v.y - y))
+            cell_inequalities1.append(
+                2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
+                        v.y - y) <= upper * (e.m * (x - v.x) + v.y - y))
+
+            # todo implement feasibility checker here
+            solutions.append(((v, e), cell_inequalities1, functional))
+
+            cell_inequalities2 = cell_inequalities_base.copy()
+            cell_inequalities2.append(e.m * (x - v.x) + v.y - y < 0)
+            cell_inequalities2.append(
+                2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
+                        v.y - y) <= lower * (e.m * (x - v.x) + v.y - y))
+            cell_inequalities2.append(
+                2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
+                        v.y - y) >= upper * (e.m * (x - v.x) + v.y - y))
+
+            # todo implement feasibility checker here
+            solutions.append(((v, e), cell_inequalities2, functional))
+
+        else:
+            print('function compute_cells_one_vertex_one_edge')
+            print('solution is of below unhandled type ', type(sol_set), len(sol_set))
+
     else:
+        print('function compute_cells_one_vertex_one_edge')
         print('solution is of below unhandled type ', type(sol_set))
+        print(sol_set)
         exit()
 
 
@@ -331,7 +365,24 @@ def compute_cells_two_edges_equal_m(solutions, e1, e2, beta1, beta0, inequalitie
 
         solutions.append(((e1, e2), cell_inequalities, functional))
 
+    elif isinstance(sol_set, sp.FiniteSet):
+        if len(sol_set) == 1:
+            sol = next(iter(sol_set))
+            lower = sol
+            upper = sol
+
+            cell_inequalities.append((y + e1.m * x - beta0) / (2 * e1.m) >= lower)
+            cell_inequalities.append((y + e1.m * x - beta0) / (2 * e1.m) <= upper)
+
+            solutions.append(((e1, e2), cell_inequalities, functional))
+        else:
+            print('function compute_cells_two_edges_equal_m')
+            print('solution is of below unhandled type ', type(sol_set), len(sol_set))
+            exit()
+
+
     else:
+        print('function compute_cells_two_edges_equal_m')
         print('solution is of below unhandled type ', type(sol_set))
         exit()
 
@@ -1148,7 +1199,7 @@ class EnvelopePolygonalDomain:
 
 if __name__ == "__main__":
     # convexified staircase polygon
-    if True:
+    if False:
         vertex_sequence = (
             Vertex(0, 0),
             Vertex(2, 0),
@@ -1193,7 +1244,7 @@ if __name__ == "__main__":
             Vertex(0, 1),  # positive slope
         )
 
-    if False:
+    if True:
         vertex_sequence = (
             Vertex(0, 0),
             Vertex(2, 0),
