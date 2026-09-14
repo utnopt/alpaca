@@ -4,7 +4,7 @@ from itertools import combinations, product
 import shapely.geometry as sg
 from pygments.lexers import r
 
-from sympy import S, symbols, Eq, Le, Ge, Lt, Gt, linsolve, simplify, expand, Poly, PolynomialError, together, fraction
+from sympy import S, Eq, Le, Ge, Lt, Gt, linsolve, simplify, expand, Poly, PolynomialError, together, fraction
 import gurobipy as gp
 from tqdm import tqdm
 import numpy as np
@@ -14,6 +14,11 @@ import sympy as sp
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
 from matplotlib.patches import Polygon as PolygonPatch
+
+from shapely.geometry import Polygon as ShapelyPolygon
+from shapely.geometry import box
+from shapely.ops import split
+from shapely.geometry import LineString
 
 """
 Paper A: 
@@ -272,7 +277,6 @@ def compute_cells_one_vertex_one_edge(solutions, v, e, inequalities, functional)
             2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
                     v.y - y) <= upper * (e.m * (x - v.x) + v.y - y))
 
-        # todo implement feasibility checker here
         solutions.append(((v, e), cell_inequalities1, functional))
 
         cell_inequalities2 = cell_inequalities_base.copy()
@@ -284,7 +288,6 @@ def compute_cells_one_vertex_one_edge(solutions, v, e, inequalities, functional)
             2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
                     v.y - y) >= upper * (e.m * (x - v.x) + v.y - y))
 
-        # todo implement feasibility checker here
         solutions.append(((v, e), cell_inequalities2, functional))
 
     elif isinstance(sol_set, sp.FiniteSet):
@@ -303,7 +306,7 @@ def compute_cells_one_vertex_one_edge(solutions, v, e, inequalities, functional)
                 2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
                         v.y - y) <= upper * (e.m * (x - v.x) + v.y - y))
 
-            # todo implement feasibility checker here
+
             solutions.append(((v, e), cell_inequalities1, functional))
 
             cell_inequalities2 = cell_inequalities_base.copy()
@@ -315,7 +318,6 @@ def compute_cells_one_vertex_one_edge(solutions, v, e, inequalities, functional)
                 2 * e.m * x * (v.y - e.q) - 2 * e.m * v.x * (y - e.q) + e.q * e.m * (x - v.x) + e.q * (
                         v.y - y) >= upper * (e.m * (x - v.x) + v.y - y))
 
-            # todo implement feasibility checker here
             solutions.append(((v, e), cell_inequalities2, functional))
 
         else:
@@ -497,6 +499,145 @@ def add_eta_inequalities_for_vertices_outside_J(inequalities, edge, vertices_wit
         inequalities.append(ineq)
 
 
+def has_2d_intersection(vertex_sequence, inequalities, tol=1e-10):
+    """
+    Prüft, ob ein ggf. nicht-konvexes Polygon einen zweidimensionalen
+    Schnitt mit einer durch lineare SymPy-Ungleichungen gegebenen Zelle hat.
+
+    Parameters
+    ----------
+    vertices : list[tuple[float, float]]
+        Vertex sequence des Polygons, z.B.
+        [(0, 0), (2, 0), (2, 1), (1, 1), (1, 2), (0, 2)].
+
+    inequalities : list
+        Liste linearer SymPy-Ungleichungen in x und y, z.B.
+        [x >= 0, y >= 0, x + y <= 2].
+
+    x, y : sympy.Symbol
+        Die verwendeten SymPy-Variablen.
+
+    tol : float
+        Flächentoleranz.
+
+    Returns
+    -------
+    bool
+        True genau dann, wenn der Schnitt positive Fläche besitzt.
+    """
+    x, y = sp.symbols('x y', real=True)
+    polygon = ShapelyPolygon([(float(v.x), float(v.y)) for v in vertex_sequence])
+
+    if not polygon.is_valid:
+        polygon = polygon.buffer(0)
+
+    if polygon.is_empty:
+        return False
+
+    intersection = polygon
+
+    # Bounding box etwas vergrößern.
+    minx, miny, maxx, maxy = polygon.bounds
+
+    scale = max(maxx - minx, maxy - miny, 1.0)
+    margin = 10 * scale
+
+    bounding_box = box(
+        minx - margin,
+        miny - margin,
+        maxx + margin,
+        maxy + margin,
+    )
+
+    for inequality in inequalities:
+
+        # Bringe Ungleichung auf Form expr <= 0 bzw. expr >= 0.
+        expr = sp.expand(inequality.lhs - inequality.rhs)
+
+        poly = sp.Poly(expr, x, y)
+
+        if poly.total_degree() > 1:
+            raise ValueError(
+                f"Ungleichung ist nicht linear: {inequality}"
+            )
+
+        a = float(expr.coeff(x))
+        b = float(expr.coeff(y))
+        c = float(expr.subs({x: 0, y: 0}))
+
+        # a*x + b*y + c = 0 ist die Begrenzungsgerade.
+        if abs(a) < tol and abs(b) < tol:
+            # Ungleichung enthält gar kein x oder y.
+            if not bool(inequality):
+                return False
+            continue
+
+        # Zwei weit auseinanderliegende Punkte auf der Geraden.
+        if abs(b) > abs(a):
+            x1 = minx - margin
+            x2 = maxx + margin
+
+            y1 = -(a * x1 + c) / b
+            y2 = -(a * x2 + c) / b
+
+        else:
+            y1 = miny - margin
+            y2 = maxy + margin
+
+            x1 = -(b * y1 + c) / a
+            x2 = -(b * y2 + c) / a
+
+        line = LineString([
+            (x1, y1),
+            (x2, y2),
+        ])
+
+        # Bounding Box durch die Gerade teilen.
+        pieces = split(bounding_box, line)
+
+        valid_pieces = []
+
+        for piece in pieces.geoms:
+            p = piece.representative_point()
+
+            value = a * p.x + b * p.y + c
+
+            if isinstance(
+                inequality,
+                (sp.core.relational.LessThan,
+                 sp.core.relational.StrictLessThan)
+            ):
+                valid = value <= tol
+
+            elif isinstance(
+                inequality,
+                (sp.core.relational.GreaterThan,
+                 sp.core.relational.StrictGreaterThan)
+            ):
+                valid = value >= -tol
+
+            else:
+                raise ValueError(
+                    f"Nicht unterstützte Bedingung: {inequality}"
+                )
+
+            if valid:
+                valid_pieces.append(piece)
+
+        if not valid_pieces:
+            return False
+
+        halfplane = valid_pieces[0]
+
+        intersection = intersection.intersection(halfplane)
+
+        if intersection.is_empty:
+            return False
+
+        if intersection.area <= tol:
+            return False
+
+    return intersection.area > tol
 
 @dataclass(frozen=True)
 class Vertex:
@@ -562,7 +703,6 @@ class EnvelopePolygonalDomain:
 
         solutions_two_elements_J = self._two_elements_J()
         solutions_three_elements_J = self._three_elements_J()
-
 
         self.all_solutions = solutions_two_elements_J + solutions_three_elements_J
 
@@ -641,6 +781,7 @@ class EnvelopePolygonalDomain:
             # compute analytical z from computed cells
             feasible_cell_counter = 0
             z_list = []
+            functionals_list = []
 
             for _, cell_inequalities, functional in self.all_solutions:
                 feasible, msg = satisfies_all((x0, y0), cell_inequalities)
@@ -663,6 +804,7 @@ class EnvelopePolygonalDomain:
                     }
                     z_analytical = functional.subs(substitutions).evalf()
                     z_list.append(z_analytical)
+                    functionals_list.append(functional)
 
                     # if imaginary part of z_analytical is not zero, there was probably division by zero happening
                     if not sp.im(z_analytical) == 0:
@@ -681,8 +823,10 @@ class EnvelopePolygonalDomain:
                 continue
 
             if feasible_cell_counter > 1:
-                print()
-                print('more than one feasible cell was found, analytical z-values are ', z_list)
+                print('more than one feasible cell was found')
+                print('analytical z-values are ', z_list)
+                print('functionals are ', functionals_list)
+                print('###########')
             if feasible_cell_counter == 0:
                 infeasible_points += 1
                 continue
@@ -716,6 +860,9 @@ class EnvelopePolygonalDomain:
 
             all_solutions_two_elements_J += solutions
 
+        # filter all cells that are not 2D
+        all_solutions_two_elements_J = [solution for solution in all_solutions_two_elements_J if has_2d_intersection(self.polygon.vertex_sequence, solution[1], tol=1e-10)]
+
         print('all solutions stemming from Js with two elements:')
         for sol in all_solutions_two_elements_J:
             print(sol)
@@ -733,7 +880,7 @@ class EnvelopePolygonalDomain:
             return []
 
         # introduce variables for symbolic computation
-        x, y = symbols("x y", real=True)
+        x, y = sp.symbols("x y", real=True)
 
         # compute a, b and functional as in Appendix A.2, Paper B
         x_j = (x * (v.y - e.q) - v.x * (y - e.q)) / (e.m * (x - v.x) + v.y - y)
@@ -788,7 +935,7 @@ class EnvelopePolygonalDomain:
             return []
 
         # introduce variables for symbolic computation
-        x, y = symbols("x y", real=True)
+        x, y = sp.symbols("x y", real=True)
 
         # compute a, b and functional as in Appendix A.3, Paper B
         if e1.m == e2.m:
@@ -916,7 +1063,7 @@ class EnvelopePolygonalDomain:
         if abs(np.linalg.det(A)) <= FEAS_TOL:
             return []
 
-        a, b, c = symbols("a, b, c")
+        a, b, c = sp.symbols("a, b, c", real=True)
 
         eqs = [
             Eq(a * v1.x + b * v1.y + c, v1.x * v1.y),
@@ -931,7 +1078,7 @@ class EnvelopePolygonalDomain:
 
 
         cell_ineq_coeffs = ConvexHull([(v1.x, v1.y), (v2.x, v2.y), (v3.x, v3.y)]).equations
-        x, y = symbols("x, y")
+        x, y = sp.symbols("x y", real=True)
         cell_inequalities = [row[0]*x + row[1]*y + row[2] <= 0 for row in cell_ineq_coeffs]
 
         functional = a * x + b * y + c
@@ -991,7 +1138,7 @@ class EnvelopePolygonalDomain:
 
             cell_ineq_coeffs = ConvexHull(
                 [(v1.x, v1.y), (v2.x, v2.y), (get_active_point_from_generator(e, a, b))]).equations
-            x, y = symbols("x, y")
+            x, y = sp.symbols("x y", real=True)
             cell_inequalities = [row[0] * x + row[1] * y + row[2] <= 0 for row in cell_ineq_coeffs]
 
             functional = a * x + b * y + c
@@ -1015,7 +1162,7 @@ class EnvelopePolygonalDomain:
             beta1 = (2 * e1.q + 4 * e1.m * v.x) / C
             beta0 = (4 * e1.m * v.x * v.y + e1.q * e1.q) / (-C)
 
-            z = symbols("z")
+            z = sp.symbols("z", real=True)
 
             b = beta2 * z ** 2 + beta1 * z + beta0
             a = z - e1.m * b
@@ -1052,7 +1199,7 @@ class EnvelopePolygonalDomain:
                     continue
 
                 cell_ineq_coeffs = ConvexHull([(v.x, v.y), (get_active_point_from_generator(e1, a, b)), (get_active_point_from_generator(e2, a, b))]).equations
-                x, y = symbols("x, y")
+                x, y = sp.symbols("x y", real=True)
                 cell_inequalities = [row[0] * x + row[1] * y + row[2] <= 0 for row in cell_ineq_coeffs]
 
                 functional = a * x + b * y + c
@@ -1072,7 +1219,7 @@ class EnvelopePolygonalDomain:
             return []
 
         if e1.m == e2.m:
-            b = symbols("b")
+            b = sp.symbols("b", real=True)
             a = e1.m * b + (e1.q + e2.q) / 2
 
             expr = (a + e3.m * b - e3.q)**2 / (4 * e3.m) + b * e3.q - (a + e2.m * b - e2.q)**2 / (4 * e2.m) - b * e2.q
@@ -1105,14 +1252,14 @@ class EnvelopePolygonalDomain:
                     continue
 
                 cell_ineq_coeffs = ConvexHull([(get_active_point_from_generator(e1, a, b)), (get_active_point_from_generator(e2, a, b)), (get_active_point_from_generator(e3, a, b))]).equations
-                x, y = symbols("x, y")
+                x, y = sp.symbols("x y", real=True)
                 cell_inequalities = [row[0] * x + row[1] * y + row[2] <= 0 for row in cell_ineq_coeffs]
 
                 functional = a * x + b * y + c
                 solutions.append((triple, cell_inequalities, functional))
 
         else:
-            b = symbols("b")
+            b = sp.symbols("b", real=True)
             a = (e2.q * e1.m - e1.q * e2.m + math.sqrt(e1.m * e2.m) * ((e1.m - e2.m) * b + e1.q - e2.q)) / (e1.m - e2.m)
 
             expr = (a + e3.m * b - e3.q) ** 2 / (4 * e3.m) + b * e3.q - (a + e2.m * b - e2.q) ** 2 / (4 * e2.m) - b * e2.q
@@ -1146,13 +1293,13 @@ class EnvelopePolygonalDomain:
                 cell_ineq_coeffs = ConvexHull(
                     [(get_active_point_from_generator(e1, a, b)), (get_active_point_from_generator(e2, a, b)),
                      (get_active_point_from_generator(e3, a, b))]).equations
-                x, y = symbols("x, y")
+                x, y = sp.symbols("x y", real=True)
                 cell_inequalities = [row[0] * x + row[1] * y + row[2] <= 0 for row in cell_ineq_coeffs]
 
                 functional = a * x + b * y + c
                 solutions.append((triple, cell_inequalities, functional))
 
-            b = symbols("b")
+            b = sp.symbols("b", real=True)
             a = (e2.q * e1.m - e1.q * e2.m - math.sqrt(e1.m * e2.m) * ((e1.m - e2.m) * b + e1.q - e2.q)) / (e1.m - e2.m)
 
             expr = (a + e3.m * b - e3.q) ** 2 / (4 * e3.m) + b * e3.q - (a + e2.m * b - e2.q) ** 2 / (4 * e2.m) - b * e2.q
@@ -1187,7 +1334,7 @@ class EnvelopePolygonalDomain:
                     [(get_active_point_from_generator(e1, a, b)), (get_active_point_from_generator(e2, a, b)),
                      (get_active_point_from_generator(e3, a, b))]).equations
 
-                x, y = symbols("x, y")
+                x, y = sp.symbols("x y", real=True)
                 functional = a * x + b * y + c
                 solutions.append((triple, cell, functional))
 
@@ -1212,6 +1359,10 @@ class EnvelopePolygonalDomain:
 
             all_solutions_three_elements_J += solutions
 
+        # filter all cells that are not 2D
+        all_solutions_two_elements_J = [solution for solution in all_solutions_three_elements_J if
+                                        has_2d_intersection(self.polygon.vertex_sequence, solution[1], tol=1e-10)]
+
         print('all solutions stemming from Js with three elements:')
         for sol in all_solutions_three_elements_J:
             print(sol)
@@ -1228,12 +1379,17 @@ class EnvelopePolygonalDomain:
 
         return generators
 
+#todo remove
+def f1(x, y):
+    return 0.34314575050762*x**2 + 0.48528137423857*x*y - 0.68629150101524*x + 0.17157287525381*y**2 + 0.343145750507619*y - 4.44089209850063e-16
 
-
+#todo remove
+def f2(x, y):
+    return 1.0*(2.0*x**2 + 2.0*x*y - 6.0*x - 1.0*y**2 + 4.0)/(x - y + 1)
 
 if __name__ == "__main__":
     # convexified staircase polygon
-    if False:
+    if True:
         vertex_sequence = (
             Vertex(0, 0),
             Vertex(2, 0),
