@@ -796,7 +796,7 @@ class EnvelopePolygonalDomain:
             a = 2 * e1.m * x_i - e1.m * b + e1.q
         else:
             x_i = (y + math.sqrt(e1.m * e2.m) * x - e1.q) / (math.sqrt(e1.m) * (math.sqrt(e1.m) + math.sqrt(e2.m)))
-            x_j = (y + math.sqrt(e1.m * e2.m) * x - e1.q) / (math.sqrt(e2.m) * (math.sqrt(e1.m) + math.sqrt(e2.m)))
+            x_j = (y + math.sqrt(e1.m * e2.m) * x - e2.q) / (math.sqrt(e2.m) * (math.sqrt(e1.m) + math.sqrt(e2.m)))
             b = (2 * e2.m * x_j + e2.q - 2 * e1.m * x_i - e1.q) / (e2.m - e1.m)
             a = 2 * e2.m * x_j + e2.q - e2.m * b
 
