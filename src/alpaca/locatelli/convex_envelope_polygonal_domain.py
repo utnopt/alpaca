@@ -31,6 +31,7 @@ Convex envelopes of bivariate functions through the solution of KKT systems, Mar
 
 
 FEAS_TOL = 1e-6
+VALIDATION_TOL = 0.05
 VALIDATION_DISCRETIZATION = 0.1
 
 
@@ -741,6 +742,7 @@ class EnvelopePolygonalDomain:
         error = 0
         undefined_points = 0
         infeasible_points = 0
+        exceeded_validation_tolerances = []
         for x0, y0, _ in tqdm(points):
             # use env to completely suppress output
             env = gp.Env(empty=True)
@@ -782,6 +784,7 @@ class EnvelopePolygonalDomain:
             feasible_cell_counter = 0
             z_list = []
             functionals_list = []
+
 
             for _, cell_inequalities, functional in self.all_solutions:
                 feasible, msg = satisfies_all((x0, y0), cell_inequalities)
@@ -827,6 +830,10 @@ class EnvelopePolygonalDomain:
                 print('analytical z-values are ', z_list)
                 print('functionals are ', functionals_list)
                 print('###########')
+
+                if abs(max(z_list) - min(z_list)) > VALIDATION_TOL:
+                    print('too much difference in z-values')
+                    exceeded_validation_tolerances.append(abs(max(z_list) - min(z_list)))
             if feasible_cell_counter == 0:
                 infeasible_points += 1
                 continue
@@ -841,6 +848,7 @@ class EnvelopePolygonalDomain:
         print("Number of grid points is: ", len(points)- undefined_points - infeasible_points)
         print("Total sum of absolute errors is ", error)
         print("Average absolute error for each grid point is ", error / (len(points) - undefined_points - infeasible_points))
+        print("Exceeded validation tolerances are ", exceeded_validation_tolerances)
         # print("Maximum absolute error: is ", max()) # todo maximum printen
 
 
@@ -1360,7 +1368,7 @@ class EnvelopePolygonalDomain:
             all_solutions_three_elements_J += solutions
 
         # filter all cells that are not 2D
-        all_solutions_two_elements_J = [solution for solution in all_solutions_three_elements_J if
+        all_solutions_three_elements_J = [solution for solution in all_solutions_three_elements_J if
                                         has_2d_intersection(self.polygon.vertex_sequence, solution[1], tol=1e-10)]
 
         print('all solutions stemming from Js with three elements:')
@@ -1388,8 +1396,11 @@ def f2(x, y):
     return 1.0*(2.0*x**2 + 2.0*x*y - 6.0*x - 1.0*y**2 + 4.0)/(x - y + 1)
 
 if __name__ == "__main__":
+
+    # todo union of cells with same functionals
+
     # convexified staircase polygon
-    if True:
+    if False:
         vertex_sequence = (
             Vertex(0, 0),
             Vertex(2, 0),
@@ -1421,7 +1432,7 @@ if __name__ == "__main__":
             Vertex(1, 1),
         )
 
-    if False:
+    if True:
         vertex_sequence = (
             Vertex(1, 0),
             Vertex(4, 0),
