@@ -2,8 +2,9 @@ from dataclasses import dataclass, field
 import math
 from itertools import combinations, product
 import shapely.geometry as sg
+from pygments.lexers import r
 
-from sympy import S, symbols, Eq, Le, Ge, Lt, Gt, linsolve, solveset, simplify, expand, Poly, PolynomialError, together, fraction
+from sympy import S, symbols, Eq, Le, Ge, Lt, Gt, linsolve, simplify, expand, Poly, PolynomialError, together, fraction
 import gurobipy as gp
 from tqdm import tqdm
 import numpy as np
@@ -967,17 +968,13 @@ class EnvelopePolygonalDomain:
             + b * v2.y
         )
 
-        poly = sp.Poly(expr, z)
-
-        roots = np.roots([
-            float(coefficient)
-            for coefficient in poly.all_coeffs()
-        ])
+        poly = sp.Poly(sp.expand(expr), z)
+        roots = sp.nroots(poly, n=10, maxsteps=200)
 
         sol = [
-            root.real
-            for root in roots
-            if abs(root.imag) < 1e-10
+            float(sp.re(r))
+            for r in roots
+            if abs(float(sp.im(r))) < 1e-10
         ]
 
         solutions = []
@@ -1019,9 +1016,25 @@ class EnvelopePolygonalDomain:
             beta0 = (4 * e1.m * v.x * v.y + e1.q * e1.q) / (-C)
 
             z = symbols("z")
+
             b = beta2 * z ** 2 + beta1 * z + beta0
             a = z - e1.m * b
-            sol = list(solveset(v.x * v.y - a * v.x - b * v.y + (a + e2.m * b - e2.q)**2 / (4 * e2.m) + b * e2.q, z, domain=S.Reals))
+
+            expr = (
+                    v.x * v.y
+                    - a * v.x
+                    - b * v.y
+                    + (a + e2.m * b - e2.q) ** 2 / (4 * e2.m)
+                    + b * e2.q
+            )
+            poly = sp.Poly(sp.expand(expr), z)
+            roots = sp.nroots(poly, n=10, maxsteps=200)
+
+            sol = [
+                float(sp.re(r))
+                for r in roots
+                if abs(float(sp.im(r))) < 1e-10
+            ]
 
             solutions = []
             for z in sol:
@@ -1062,7 +1075,16 @@ class EnvelopePolygonalDomain:
             b = symbols("b")
             a = e1.m * b + (e1.q + e2.q) / 2
 
-            sol = list(solveset((a + e3.m * b - e3.q)**2 / (4 * e3.m) + b * e3.q - (a + e2.m * b - e2.q)**2 / (4 * e2.m) - b * e2.q, b, domain=S.Reals))
+            expr = (a + e3.m * b - e3.q)**2 / (4 * e3.m) + b * e3.q - (a + e2.m * b - e2.q)**2 / (4 * e2.m) - b * e2.q
+            poly = sp.Poly(sp.expand(expr), b)
+            roots = sp.nroots(poly, n=10, maxsteps=200)
+
+            sol = [
+                float(sp.re(r))
+                for r in roots
+                if abs(float(sp.im(r))) < 1e-10
+            ]
+
 
             solutions = []
             for b in sol:
@@ -1093,9 +1115,15 @@ class EnvelopePolygonalDomain:
             b = symbols("b")
             a = (e2.q * e1.m - e1.q * e2.m + math.sqrt(e1.m * e2.m) * ((e1.m - e2.m) * b + e1.q - e2.q)) / (e1.m - e2.m)
 
-            sol = list(solveset(
-                (a + e3.m * b - e3.q) ** 2 / (4 * e3.m) + b * e3.q - (a + e2.m * b - e2.q) ** 2 / (4 * e2.m) - b * e2.q,
-                b, domain=S.Reals))
+            expr = (a + e3.m * b - e3.q) ** 2 / (4 * e3.m) + b * e3.q - (a + e2.m * b - e2.q) ** 2 / (4 * e2.m) - b * e2.q
+            poly = sp.Poly(sp.expand(expr), b)
+            roots = sp.nroots(poly, n=10, maxsteps=200)
+
+            sol = [
+                float(sp.re(r))
+                for r in roots
+                if abs(float(sp.im(r))) < 1e-10
+            ]
 
             solutions = []
             for b in sol:
@@ -1127,9 +1155,15 @@ class EnvelopePolygonalDomain:
             b = symbols("b")
             a = (e2.q * e1.m - e1.q * e2.m - math.sqrt(e1.m * e2.m) * ((e1.m - e2.m) * b + e1.q - e2.q)) / (e1.m - e2.m)
 
-            sol = list(solveset(
-                (a + e3.m * b - e3.q) ** 2 / (4 * e3.m) + b * e3.q - (a + e2.m * b - e2.q) ** 2 / (4 * e2.m) - b * e2.q,
-                b, domain=S.Reals))
+            expr = (a + e3.m * b - e3.q) ** 2 / (4 * e3.m) + b * e3.q - (a + e2.m * b - e2.q) ** 2 / (4 * e2.m) - b * e2.q
+            poly = sp.Poly(sp.expand(expr), b)
+            roots = sp.nroots(poly, n=10, maxsteps=200)
+
+            sol = [
+                float(sp.re(r))
+                for r in roots
+                if abs(float(sp.im(r))) < 1e-10
+            ]
 
             for b in sol:
                 a = (e2.q * e1.m - e1.q * e2.m - math.sqrt(e1.m * e2.m) * ((e1.m - e2.m) * b + e1.q - e2.q)) / (
@@ -1244,7 +1278,7 @@ if __name__ == "__main__":
             Vertex(0, 1),  # positive slope
         )
 
-    if True:
+    if False:
         vertex_sequence = (
             Vertex(0, 0),
             Vertex(2, 0),
