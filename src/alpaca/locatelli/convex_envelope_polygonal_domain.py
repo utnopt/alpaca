@@ -1,3 +1,18 @@
+"""Construct candidate cells for the convex envelope of ``f(x, y) = x*y``.
+
+The implementation follows Locatelli's KKT construction.  Vertices and polygon
+edges with a strictly convex restriction of ``x*y`` are the generators.  For
+each admissible generator set ``J`` of size two or three, the module derives a
+cell and the corresponding analytical expression of the envelope.  The domain
+may be non-convex; every candidate cell is intersected with the input polygon.
+
+Paper A:
+    Polyhedral subdivisions and functional forms for the convex envelopes of
+    bilinear, fractional and other bivariate functions over general polytopes.
+Paper B:
+    Convex envelopes of bivariate functions through the solution of KKT systems.
+"""
+
 from dataclasses import dataclass, field
 import math
 from itertools import combinations, product
@@ -20,27 +35,16 @@ from shapely.geometry import box
 from shapely.ops import split
 from shapely.geometry import LineString
 
-"""
-Paper A: 
-Polyhedral subdivisions and functional forms for the convex envelopes of bilinear, fractional and other
-bivariate functions over general polytopes, Marco Locatelli
-
-Paper B:
-Convex envelopes of bivariate functions through the solution of KKT systems, Marco Locatelli
-"""
-
-
 
 
 
 def plot_cell(cell_inequalities, polygon):
+    """Plot the part of a symbolic candidate cell contained in ``polygon``."""
     x, y = sp.symbols('x y', real=True)
 
     polygon_vertices = np.array([[v.x, v.y] for v in polygon.vertex_sequence] + [[polygon.vertex_sequence[0].x, polygon.vertex_sequence[0].y]])
 
-    # ------------------------------------------------------------
-    # 3. Plotbereich aus Bounding Box des Polygons
-    # ------------------------------------------------------------
+    # Use one common grid for the polygon mask and all symbolic inequalities.
 
     padding = 0.2
 
@@ -56,9 +60,7 @@ def plot_cell(cell_inequalities, polygon):
 
     X, Y = np.meshgrid(x_values, y_values)
 
-    # ------------------------------------------------------------
-    # 4. Maske des Polygons P
-    # ------------------------------------------------------------
+    # Mask of the original, possibly non-convex polygon.
 
     points = np.column_stack((X.ravel(), Y.ravel()))
 
@@ -69,14 +71,12 @@ def plot_cell(cell_inequalities, polygon):
         radius=1e-10
     ).reshape(X.shape)
 
-    # ------------------------------------------------------------
-    # 5. Maske der Zelle C
-    # ------------------------------------------------------------
+    # Mask of the candidate cell.
 
     mask_C = np.ones(X.shape, dtype=bool)
 
     for inequality in cell_inequalities:
-        # SymPy-Ungleichung direkt als boolesche NumPy-Funktion
+        # Evaluate the symbolic inequality over the complete plotting grid.
         inequality_function = sp.lambdify(
             (x, y),
             inequality,
@@ -85,8 +85,7 @@ def plot_cell(cell_inequalities, polygon):
 
         current_mask = inequality_function(X, Y)
 
-        # Falls SymPy bei konstanten Ausdrücken nur einen booleschen
-        # Einzelwert zurückgibt
+        # Constant inequalities produce one Boolean; broadcast it to the grid.
         current_mask = np.broadcast_to(
             np.asarray(current_mask, dtype=bool),
             X.shape
@@ -94,19 +93,12 @@ def plot_cell(cell_inequalities, polygon):
 
         mask_C &= current_mask
 
-    # ------------------------------------------------------------
-    # 6. Schnitt C ∩ P
-    # ------------------------------------------------------------
-
+    # Only the portion inside the original domain is a valid envelope cell.
     mask_intersection = mask_C & mask_P
-
-    # ------------------------------------------------------------
-    # 7. Plot
-    # ------------------------------------------------------------
 
     fig, ax = plt.subplots(figsize=(7, 6))
 
-    # Zulässige Schnittmenge einfärben
+    # Shade the feasible intersection and show both kinds of boundary.
     ax.contourf(
         X,
         Y,
@@ -115,7 +107,6 @@ def plot_cell(cell_inequalities, polygon):
         alpha=0.5
     )
 
-    # Rand des Polygons einzeichnen
     polygon_patch = PolygonPatch(
         polygon_vertices,
         closed=True,
@@ -126,7 +117,6 @@ def plot_cell(cell_inequalities, polygon):
     )
     ax.add_patch(polygon_patch)
 
-    # Grenzen der polynomialen Zelle einzeichnen
     for inequality in cell_inequalities:
         boundary_expression = inequality.lhs - inequality.rhs
         boundary_function = sp.lambdify(
@@ -159,6 +149,12 @@ def plot_cell(cell_inequalities, polygon):
 
 
 def get_active_point_from_generator(generator, a, b):
+    """Return the contact point selected by the supporting slope ``(a, b)``.
+
+    A vertex is constant.  On an edge, the stationary point of
+    ``xy - a*x - b*y`` is clamped to the edge endpoints; this is the piecewise
+    definition of ``x_k(alpha)`` in equations (5)--(8) of Paper B.
+    """
     if isinstance(generator, Vertex):
         x_r = generator.x
         y_r = generator.y
@@ -174,6 +170,11 @@ def get_active_point_from_generator(generator, a, b):
 
 
 def feasibility_outside_J_generators(generator_in_J, generators_outside_J, a, b):
+    """Check the inactive-generator inequalities for a candidate KKT solution.
+
+    All generators in ``J`` have the same eta value.  It therefore suffices to
+    compare one active generator with every generator outside ``J``.
+    """
     x_k, y_k = get_active_point_from_generator(generator_in_J, a, b)
 
     for generator_outside_J in generators_outside_J:
@@ -186,6 +187,7 @@ def feasibility_outside_J_generators(generator_in_J, generators_outside_J, a, b)
 
 
 def chop_floats(expr, tol=1e-10):
+    """Replace tiny floating coefficients by exact zero before symbolic tests."""
     replacements = {}
     for f in expr.atoms(sp.Float):
         if abs(float(f)) < tol:
@@ -195,6 +197,12 @@ def chop_floats(expr, tol=1e-10):
 
 
 def satisfies_all(point, inequalities):
+    """Evaluate all cell inequalities at a point with feasibility tolerance.
+
+    Returns ``(False, 'undefined')`` if a rational expression has a denominator
+    close to zero, and ``(False, 'violation')`` for an ordinary failed bound.
+    This distinction is used by the validation summary.
+    """
     symbols = set().union(
         *(ineq.free_symbols for ineq in inequalities)
     )
@@ -230,6 +238,11 @@ def satisfies_all(point, inequalities):
 
 
 def compute_cells_one_vertex_one_edge(solutions, v, e, inequalities, functional):
+    """Convert the remaining one-dimensional KKT bounds into spatial cells.
+
+    Clearing a sign-unknown denominator creates two cases.  The strict sign
+    constraint in each case preserves the direction of the multiplied bounds.
+    """
     # introduce variables for symbolic computation
     x, y, a, b, z = sp.symbols("x y a b z", real=True)
 
@@ -325,6 +338,7 @@ def compute_cells_one_vertex_one_edge(solutions, v, e, inequalities, functional)
 
 
 def compute_cells_two_edges_equal_m(solutions, e1, e2, beta1, beta0, inequalities, functional):
+    """Build the cell for two active edges having the same slope."""
     # introduce variables for symbolic computation
     x, y, a, b = sp.symbols("x y a b", real=True)
 
@@ -384,6 +398,7 @@ def compute_cells_two_edges_equal_m(solutions, e1, e2, beta1, beta0, inequalitie
 
 
 def compute_cells_two_edges_non_equal_m(solutions, e1, e2, beta1, beta0, inequalities, functional):
+    """Build the two orientation cases for active edges of different slopes."""
     # introduce variables for symbolic computation
     x, y, a, b = sp.symbols("x y a b", real=True)
 
@@ -444,6 +459,12 @@ def compute_cells_two_edges_non_equal_m(solutions, e1, e2, beta1, beta0, inequal
 
 
 def add_domain_inequalities(inequalities, edge, domain, substitutions):
+    """Add the inequalities selecting one branch of an edge generator.
+
+    ``domain`` is ``-1`` at the left endpoint, ``0`` on the stationary middle
+    segment, and ``1`` at the right endpoint.  Substitutions eliminate the KKT
+    variables that were solved in the current generator case.
+    """
     # introduce variables for symbolic computation
     a, b, z = sp.symbols('a b z', real=True)
 
@@ -475,6 +496,7 @@ def add_domain_inequalities(inequalities, edge, domain, substitutions):
 
 
 def add_eta_inequalities_for_vertices_outside_J(inequalities, edge, vertices_without_pair, substitutions):
+    """Require every outside-vertex eta value to be at least the active value."""
     # introduce variables for symbolic computation
     a, b, z = sp.symbols('a b z', real=True)
 
@@ -493,7 +515,12 @@ def add_eta_inequalities_for_vertices_outside_J(inequalities, edge, vertices_wit
 
 
 def add_eta_inequalities_for_edges_outside_J(inequalities, edge, edges_without_pair, domains, substitutions):
-    # todo checken, ist von codex
+    """Add eta comparisons for outside edges in their stationary domain.
+
+    In endpoint domains the outside edge has the same active point and eta
+    value as one of its vertices.  The vertex inequalities already impose that
+    condition, so adding it again is redundant and can amplify roundoff.
+    """
     # introduce variables for symbolic computation
     a, b, z = sp.symbols('a b z', real=True)
 
@@ -517,30 +544,11 @@ def add_eta_inequalities_for_edges_outside_J(inequalities, edge, edges_without_p
 
 
 def has_2d_intersection(vertex_sequence, inequalities, tol=1e-10):
-    """
-    Prüft, ob ein ggf. nicht-konvexes Polygon einen zweidimensionalen
-    Schnitt mit einer durch lineare SymPy-Ungleichungen gegebenen Zelle hat.
+    """Return whether a linear cell intersects the polygon with positive area.
 
-    Parameters
-    ----------
-    vertices : list[tuple[float, float]]
-        Vertex sequence des Polygons, z.B.
-        [(0, 0), (2, 0), (2, 1), (1, 1), (1, 2), (0, 2)].
-
-    inequalities : list
-        Liste linearer SymPy-Ungleichungen in x und y, z.B.
-        [x >= 0, y >= 0, x + y <= 2].
-
-    x, y : sympy.Symbol
-        Die verwendeten SymPy-Variablen.
-
-    tol : float
-        Flächentoleranz.
-
-    Returns
-    -------
-    bool
-        True genau dann, wenn der Schnitt positive Fläche besitzt.
+    Each inequality is converted to a half-plane and clipped against the
+    possibly non-convex polygon.  Lower-dimensional contacts are deliberately
+    discarded because the envelope on their boundary follows by continuity.
     """
     x, y = sp.symbols('x y', real=True)
     polygon = ShapelyPolygon([(float(v.x), float(v.y)) for v in vertex_sequence])
@@ -568,7 +576,7 @@ def has_2d_intersection(vertex_sequence, inequalities, tol=1e-10):
 
     for inequality in inequalities:
 
-        # Bringe Ungleichung auf Form expr <= 0 bzw. expr >= 0.
+        # Normalize the boundary as lhs - rhs = 0.
         expr = sp.expand(inequality.lhs - inequality.rhs)
 
         poly = sp.Poly(expr, x, y)
@@ -582,14 +590,14 @@ def has_2d_intersection(vertex_sequence, inequalities, tol=1e-10):
         b = float(expr.coeff(y))
         c = float(expr.subs({x: 0, y: 0}))
 
-        # a*x + b*y + c = 0 ist die Begrenzungsgerade.
+        # A constant inequality either keeps or removes the whole intersection.
         if abs(a) < tol and abs(b) < tol:
             # Ungleichung enthält gar kein x oder y.
             if not bool(inequality):
                 return False
             continue
 
-        # Zwei weit auseinanderliegende Punkte auf der Geraden.
+        # Construct a line long enough to split the enlarged bounding box.
         if abs(b) > abs(a):
             x1 = minx - margin
             x2 = maxx + margin
@@ -658,24 +666,29 @@ def has_2d_intersection(vertex_sequence, inequalities, tol=1e-10):
 
 @dataclass(frozen=True)
 class Vertex:
+    """A polygon vertex and a constant generator in Locatelli's construction."""
     x: float
     y: float
 
 
 @dataclass(frozen=True)
 class Edge:
+    """A polygon edge represented by ``y = m*x + q`` when non-vertical."""
     v1: Vertex
     v2: Vertex
     m: float = field(init=False)
     q: float = field(init=False)
 
     def __post_init__(self):
+        # Ordering endpoints by x makes the three edge domains unambiguous.
         if self.v1.x > self.v2.x:
             tmp = self.v1
             object.__setattr__(self, "v1", self.v2)
             object.__setattr__(self, "v2", tmp)
 
         if self.v1.x == self.v2.x:
+            # Vertical edges are linear restrictions of x*y and are therefore
+            # not strictly convex edge generators for this particular function.
             m = math.nan
             q = math.nan
         else:
@@ -688,6 +701,7 @@ class Edge:
 
 @dataclass(frozen=True)
 class Polygon:
+    """Polygon boundary data; ``vertex_sequence`` preserves cyclic adjacency."""
     vertex_sequence: tuple[Vertex, ...]
     vertices: frozenset[Vertex] = field(init=False)
     edges: frozenset[Edge] = field(init=False)
@@ -714,6 +728,8 @@ class Polygon:
 
 
 class EnvelopePolygonalDomain:
+    """Derive, plot, and validate all full-dimensional envelope cells."""
+
     def __init__(self, polygon: Polygon):
         self.polygon = polygon
         self.generators = self._determine_generators()
@@ -729,6 +745,13 @@ class EnvelopePolygonalDomain:
         self._validation()
 
     def _validation(self):
+        """Compare analytical cells with a discretized lifted convex hull.
+
+        The lifted grid ``(x, y, x*y)`` only approximates the true reference,
+        so the reported mean error depends on ``VALIDATION_DISCRETIZATION``.
+        Cell coverage, invalid functional values, and disagreements between
+        overlapping cells are checked independently of that reference error.
+        """
         # read discretization and polygon bounds
         dx = VALIDATION_DISCRETIZATION
         dy = VALIDATION_DISCRETIZATION
@@ -749,7 +772,8 @@ class EnvelopePolygonalDomain:
                     points.append([p.x, p.y, p.x * p.y])
         points = np.array(points)
 
-        # construct convex hull of 3D points
+        # The lower surface of this 3D hull is the discretized reference
+        # envelope.  Finer grids improve it but increase the LP workload.
         hull = ConvexHull(points)
 
         # for each 2D point from polygon compute minimal z-coordinate in approximate convex hull and
@@ -802,7 +826,8 @@ class EnvelopePolygonalDomain:
                     # store obtained minimal z
                     z_manual = z_var.X
 
-                    # compute analytical z from computed cells
+                    # Evaluate every covering analytical cell.  Overlap is
+                    # allowed on boundaries, but all resulting values must agree.
                     feasible_cell_counter = 0
                     has_undefined_cell = False
                     has_invalid_functional_value = False
@@ -837,10 +862,14 @@ class EnvelopePolygonalDomain:
                             has_undefined_cell = True
 
                     if has_invalid_functional_value:
+                        # A valid value from another overlapping cell must not
+                        # hide a singular or non-real functional evaluation.
                         undefined_points += 1
                         continue
 
                     if not z_list:
+                        # No analytical value can mean either definite lack of
+                        # cell coverage or an undecidable symbolic evaluation.
                         if len(unassigned_diagnostics) < 10:
                             violation_count = 0
                             undefined_count = 0
@@ -900,6 +929,8 @@ class EnvelopePolygonalDomain:
                         continue
 
                     if len(z_list) > 1:
+                        # This diagnostic checks that alternative active sets
+                        # define the same envelope value on their intersection.
                         cell_difference = max(z_list) - min(z_list)
                         has_multiple_valid_cells = True
                         largest_cell_difference = max(largest_cell_difference, cell_difference)
@@ -927,6 +958,7 @@ class EnvelopePolygonalDomain:
 
 
     def _two_elements_J(self):
+        """Enumerate KKT active sets ``J`` containing two generators."""
         pairs = list(combinations(self.generators, 2))
 
         all_solutions_two_elements_J = []
@@ -942,7 +974,8 @@ class EnvelopePolygonalDomain:
 
             all_solutions_two_elements_J += solutions
 
-        # filter all cells that are not 2D
+        # Observation 3.2 of Paper B permits lower-dimensional cells to be
+        # discarded; their envelope values are recovered by continuity.
         all_solutions_two_elements_J = [solution for solution in all_solutions_two_elements_J if has_2d_intersection(self.polygon.vertex_sequence, solution[1], tol=1e-10)]
 
         print('all solutions stemming from Js with two elements:')
@@ -955,6 +988,7 @@ class EnvelopePolygonalDomain:
 
 
     def _solve_one_vertex_one_edge_linear(self, pair, generators_without_pair):
+        """Solve system (15) for one vertex and one convex edge generator."""
         # extract vertex and edge from input pair
         v = tuple(el for el in pair if isinstance(el, Vertex))[0]
         e = tuple(el for el in pair if isinstance(el, Edge))[0]
@@ -992,7 +1026,8 @@ class EnvelopePolygonalDomain:
         vertices_without_pair = [el for el in generators_without_pair if isinstance(el, Vertex)]
         add_eta_inequalities_for_vertices_outside_J(base_inequalities, e, vertices_without_pair, substitutions)
 
-        # consider edges outside J and introduce case distinction
+        # Each inactive edge is piecewise defined on three alpha-domains, so
+        # every domain combination represents a separate symbolic case.
         edges_without_pair = [el for el in generators_without_pair if isinstance(el, Edge)]
         if len(edges_without_pair) == 0: # if there is no edge outside of J
             compute_cells_one_vertex_one_edge(solutions, v, e, base_inequalities, functional)
@@ -1013,6 +1048,7 @@ class EnvelopePolygonalDomain:
 
 
     def _solve_two_edges_linear(self, pair, generators_without_pair):
+        """Solve system (15) for two convex edge generators."""
         # extract two edges from input pair
         e1 = pair[0]
         e2 = pair[1]
@@ -1041,7 +1077,8 @@ class EnvelopePolygonalDomain:
         # the return object solutions contains the whole polyhedral subdivision, the cells are computed in the following
         solutions = []
 
-        # case distinction on equality of slopes of edges
+        # Parallel edges have one KKT branch.  Non-parallel edges yield the two
+        # signs of sqrt(m1*m2) described in Lemma 5.1 of Paper A.
         a, b = sp.symbols("a b", real=True)
         if e1.m == e2.m:
             # define variable subsitutions to simplify inequality systems, cf. Lemma 5.1 and Section 5.1, Paper A
@@ -1147,8 +1184,11 @@ class EnvelopePolygonalDomain:
 
 
     def _solve_three_vertices(self, triple, generators_without_triple):
+        """Build an affine cell supported by three non-collinear vertices."""
         v1, v2, v3 = triple
-        # todo triple mit konvexen kanten ausschließen (later)
+        # todo
+        # Potential future reduction: discard triples ruled out by convex
+        # connections between their vertices before solving the KKT system.
 
         A = np.array([
             [v1.x, v1.y, 1],
@@ -1157,6 +1197,7 @@ class EnvelopePolygonalDomain:
             ])
 
         if abs(np.linalg.det(A)) <= FEAS_TOL:
+            # Collinear contacts span no two-dimensional cell.
             return []
 
         a, b, c = sp.symbols("a, b, c", real=True)
@@ -1184,6 +1225,7 @@ class EnvelopePolygonalDomain:
 
 
     def _solve_two_vertices_one_edge(self, triple, generators_without_triple):
+        """Find affine KKT supports touching two vertices and one edge."""
         v1, v2 = (el for el in triple if isinstance(el, Vertex))
         e = tuple(el for el in triple if isinstance(el, Edge))[0]
 
@@ -1212,6 +1254,8 @@ class EnvelopePolygonalDomain:
         )
 
         poly = sp.Poly(sp.expand(expr), z)
+        # The contact equations reduce to a univariate polynomial.  Only real
+        # roots whose edge contact lies strictly inside the edge are admissible.
         roots = sp.nroots(poly, n=10, maxsteps=200)
 
         sol = [
@@ -1244,6 +1288,7 @@ class EnvelopePolygonalDomain:
 
 
     def _solve_one_vertex_two_edges(self, triple, generators_without_triple):
+        """Find affine KKT supports touching one vertex and two edges."""
         v = tuple(el for el in triple if isinstance(el, Vertex))[0]
         e1, e2 = (el for el in triple if isinstance(el, Edge))
 
@@ -1305,6 +1350,7 @@ class EnvelopePolygonalDomain:
 
 
     def _solve_three_edges(self, triple, generators_without_triple):
+        """Find affine KKT supports touching three convex edge generators."""
         e1, e2, e3 = triple
 
         if e1.m == e2.m and e1.q == e2.q:
@@ -1426,18 +1472,20 @@ class EnvelopePolygonalDomain:
                 if not feasibility_outside_J_generators(e1, generators_without_triple, a, b):
                     continue
 
-                cell = ConvexHull(
+                cell_ineq_coeffs = ConvexHull(
                     [(get_active_point_from_generator(e1, a, b)), (get_active_point_from_generator(e2, a, b)),
                      (get_active_point_from_generator(e3, a, b))]).equations
 
                 x, y = sp.symbols("x y", real=True)
+                cell_inequalities = [row[0] * x + row[1] * y + row[2] <= 0 for row in cell_ineq_coeffs]
                 functional = a * x + b * y + c
-                solutions.append((triple, cell, functional))
+                solutions.append((triple, cell_inequalities, functional))
 
         return solutions
 
 
     def _three_elements_J(self):
+        """Enumerate all four type combinations for active sets of size three."""
         triples = list(combinations(self.generators, 3))
         all_solutions_three_elements_J = []
         for triple in triples:
@@ -1455,7 +1503,7 @@ class EnvelopePolygonalDomain:
 
             all_solutions_three_elements_J += solutions
 
-        # filter all cells that are not 2D
+        # Keep only full-dimensional intersections with the original domain.
         all_solutions_three_elements_J = [solution for solution in all_solutions_three_elements_J if
                                         has_2d_intersection(self.polygon.vertex_sequence, solution[1], tol=1e-10)]
 
@@ -1469,20 +1517,29 @@ class EnvelopePolygonalDomain:
 
 
     def _determine_generators(self):
+        """Return vertices and edges on which ``x*y`` is strictly convex.
+
+        Along ``y=m*x+q``, the second derivative of ``x*y`` with respect to x
+        equals ``2*m``.  Hence precisely the positive-slope edges are convex
+        edge generators; vertical, horizontal, and negative-slope edges are not.
+        """
         generators = list(self.polygon.vertices) + list(e for e in self.polygon.edges if e.m > 0)
 
         if self.polygon.is_ortho:
             pass
-            # TODO implement reduction
+            # A specialized generator reduction for orthogonal polygons can be
+            # inserted here; the general enumeration remains correct without it.
 
         return generators
 
 
 
+# Numerical tolerance used for cell membership and KKT feasibility checks.
 FEAS_TOL = 1e-6
+# Step size of the independent lifted-grid reference used by _validation().
 VALIDATION_DISCRETIZATION = 0.1
 
-# Additional validation instances. The first four describe the same region.
+# Polygon instances used by the validation regression suite.
 VALIDATION_INSTANCES = {
     # Original examples from the module entry point.
     "original_convexified_staircase": ((0, 0), (2, 0), (2, 2), (1, 2), (0, 1)),
@@ -1503,12 +1560,22 @@ VALIDATION_INSTANCES = {
     "axis_aligned_mixed": ((0, 0), (4, 0), (4, 3), (3, 3), (3, 1), (1, 1), (1, 4), (0, 4)),
 }
 
+# This geometry is intentionally used only by the focused KKT branch test.
+# It produces valid three-edge cells in the negative-sqrt branch, but has an
+# unrelated vertex-edge degeneracy for the complete two-generator enumeration.
+THREE_EDGE_BRANCH_INSTANCE = (
+    (3.27943, 5.70233), (-1.25825, 3.59399), (-2.96916, 3.20979),
+    (-1.95154, 1.29355), (-5.31055, -0.35844), (-0.58458, -6.66487),
+    (1.61146, -2.04535),
+)
+
 
 
 
 if __name__ == "__main__":
 
-    # todo union of cells with same functionals
+    # Candidate cells with identical functionals may be merged for presentation;
+    # keeping them separate does not change the evaluated envelope.
     validation_instance = "quadrilateral_base"
     vertex_sequence = tuple(Vertex(*point) for point in VALIDATION_INSTANCES[validation_instance])
 
