@@ -30,9 +30,7 @@ Convex envelopes of bivariate functions through the solution of KKT systems, Mar
 """
 
 
-FEAS_TOL = 1e-6
-VALIDATION_TOL = 0.05
-VALIDATION_DISCRETIZATION = 0.1
+
 
 
 def plot_cell(cell_inequalities, polygon):
@@ -761,9 +759,8 @@ class EnvelopePolygonalDomain:
         compared_points = 0
         undefined_points = 0
         infeasible_points = 0
-        exceeded_validation_tolerances = []
         largest_cell_difference = 0
-        worst_cell_comparison = None
+        has_multiple_valid_cells = False
         nan_counter = 0
         invalid_value_counter = 0
         unassigned_diagnostics = []
@@ -808,9 +805,8 @@ class EnvelopePolygonalDomain:
                     # compute analytical z from computed cells
                     feasible_cell_counter = 0
                     has_undefined_cell = False
+                    has_invalid_functional_value = False
                     z_list = []
-                    functionals_list = []
-                    valid_cells = []
 
 
                     for generators, cell_inequalities, functional in self.all_solutions:
@@ -831,15 +827,18 @@ class EnvelopePolygonalDomain:
 
                             if z_analytical.is_finite is not True or z_analytical.is_real is not True:
                                 invalid_value_counter += 1
+                                has_invalid_functional_value = True
                                 continue
 
                             z_list.append(z_analytical)
-                            functionals_list.append(functional)
-                            valid_cells.append((generators, cell_inequalities, functional, z_analytical))
 
 
                         elif msg == 'undefined':
                             has_undefined_cell = True
+
+                    if has_invalid_functional_value:
+                        undefined_points += 1
+                        continue
 
                     if not z_list:
                         if len(unassigned_diagnostics) < 10:
@@ -902,18 +901,8 @@ class EnvelopePolygonalDomain:
 
                     if len(z_list) > 1:
                         cell_difference = max(z_list) - min(z_list)
-                        if worst_cell_comparison is None or cell_difference > largest_cell_difference:
-                            largest_cell_difference = cell_difference
-                            worst_cell_comparison = ((x0, y0), z_manual, valid_cells)
-
-                        print('more than one feasible cell was found')
-                        print('analytical z-values are ', z_list)
-                        print('functionals are ', functionals_list)
-                        print('###########')
-
-                        if abs(max(z_list) - min(z_list)) > VALIDATION_TOL:
-                            print('too much difference in z-values')
-                            exceeded_validation_tolerances.append(abs(max(z_list) - min(z_list)))
+                        has_multiple_valid_cells = True
+                        largest_cell_difference = max(largest_cell_difference, cell_difference)
                     # Use the last valid value, not a potentially discarded NaN.
                     z_analytical = z_list[-1]
                     # sum up absolute differences to error
@@ -922,28 +911,17 @@ class EnvelopePolygonalDomain:
                     if z_manual + 1e-08 <= z_analytical:
                         print(z_manual, z_analytical)
 
-        print('undefined vs infeasible: ', undefined_points, infeasible_points)
+
+        print('Numbers of undefined and infeasible (but not undefined) points are: ', undefined_points, infeasible_points)
         print("Number of compared grid points is: ", compared_points)
-        print("Total sum of absolute errors is ", error)
         if compared_points > 0:
-            print("Average absolute error for each compared grid point is ", error / compared_points)
+            print("Average absolute error for each compared grid point is: ", error / compared_points)
         else:
             print("No evaluable grid points; average absolute error is undefined.")
-        print("Exceeded validation tolerances are ", exceeded_validation_tolerances)
-        print("Number of nan values occured in functional evaluation is ", nan_counter)
-        print("Number of non-finite or non-real functional values is ", invalid_value_counter)
-        print("First unassigned grid points (point, violations, undefined): ", unassigned_diagnostics)
-        if worst_cell_comparison is not None:
-            point, reference_value, cells = worst_cell_comparison
-            print("Largest difference between analytical cell values is ", largest_cell_difference)
-            print("Grid point is ", point)
-            print("Discretized reference value is ", reference_value)
-            for index, (generators, inequalities, functional, value) in enumerate(cells, start=1):
-                print(f"Cell {index}:")
-                print("  Generators: ", generators)
-                print("  Inequalities: ", inequalities)
-                print("  Functional: ", functional)
-                print("  Analytical value: ", value)
+        print("Number of nan functional values is: ", nan_counter)
+        print("Number of non-finite or non-real functional values is: ", invalid_value_counter)
+        if has_multiple_valid_cells:
+            print("Largest difference between analytical cell values is: ", largest_cell_difference)
         else:
             print("No grid point with multiple valid cell values found.")
 
@@ -970,6 +948,8 @@ class EnvelopePolygonalDomain:
         print('all solutions stemming from Js with two elements:')
         for sol in all_solutions_two_elements_J:
             print(sol)
+        print('\n')
+        print(100 * '#')
 
         return all_solutions_two_elements_J
 
@@ -1482,6 +1462,8 @@ class EnvelopePolygonalDomain:
         print('all solutions stemming from Js with three elements:')
         for sol in all_solutions_three_elements_J:
             print(sol)
+        print('\n')
+        print(100*'#')
 
         return all_solutions_three_elements_J
 
@@ -1495,71 +1477,40 @@ class EnvelopePolygonalDomain:
 
         return generators
 
-#todo remove
-def f1(x, y):
-    return 0.34314575050762*x**2 + 0.48528137423857*x*y - 0.68629150101524*x + 0.17157287525381*y**2 + 0.343145750507619*y - 4.44089209850063e-16
 
-#todo remove
-def f2(x, y):
-    return 1.0*(2.0*x**2 + 2.0*x*y - 6.0*x - 1.0*y**2 + 4.0)/(x - y + 1)
+
+FEAS_TOL = 1e-6
+VALIDATION_DISCRETIZATION = 0.1
+
+# Additional validation instances. The first four describe the same region.
+VALIDATION_INSTANCES = {
+    # Original examples from the module entry point.
+    "original_convexified_staircase": ((0, 0), (2, 0), (2, 2), (1, 2), (0, 1)),
+    "original_staircase": ((0, 0), (2, 0), (2, 2), (1, 2), (1, 1), (0, 1)),
+    "original_eight_vertex_notch": ((0, 0), (3, 0), (4, 1), (3, 3), (2, 2), (1, 3), (0, 2), (1, 1)),
+    "original_critical": ((1, 0), (4, 0), (5, 1), (6, 3), (5, 5), (3, 4), (2, 5), (1, 3), (0, 1)),
+    "quadrilateral_base": ((0, 0), (2, 0), (3, 1), (1, 2)),
+    "quadrilateral_reversed": ((1, 2), (3, 1), (2, 0), (0, 0)),
+    "quadrilateral_rotated_start": ((3, 1), (1, 2), (0, 0), (2, 0)),
+    "quadrilateral_split_edge": ((0, 0), (2, 0), (2.5, 0.5), (3, 1), (1, 2)),
+    "quadrilateral_negative": ((-2, -1), (0, -1), (1, 0), (-1, 1)),
+    "deep_u_notch": ((0, 0), (3, 0), (3, 3), (2, 3), (2, 1), (1, 1), (1, 3), (0, 3)),
+    "sloped_notch": ((0, 0), (3, 0), (3, 3), (2, 2), (1, 3), (0, 2)),
+    "narrow_l": ((0, 0), (3, 0), (3, 0.2), (0.2, 0.2), (0.2, 2), (0, 2)),
+    "small_scale": ((0, 0), (0.002, 0), (0.003, 0.001), (0.001, 0.002)),
+    "large_scale": ((0, 0), (2000, 0), (3000, 1000), (1000, 2000)),
+    "near_parallel_edges": ((0, 0), (4, 0), (6, 1), (5.9, 2), (2, 1.9), (0, 3)),
+    "axis_aligned_mixed": ((0, 0), (4, 0), (4, 3), (3, 3), (3, 1), (1, 1), (1, 4), (0, 4)),
+}
+
+
+
 
 if __name__ == "__main__":
 
     # todo union of cells with same functionals
-
-    # convexified staircase polygon
-    if False:
-        vertex_sequence = (
-            Vertex(0, 0),
-            Vertex(2, 0),
-            Vertex(2, 2),
-            Vertex(1, 2),
-            Vertex(0, 1)
-        )
-
-    # staircase polygon
-    if False:
-        vertex_sequence = (
-            Vertex(0, 0),
-            Vertex(2, 0),
-            Vertex(2, 2),
-            Vertex(1, 2),
-            Vertex(1, 1),
-            Vertex(0, 1)
-        )
-
-    if False:
-        vertex_sequence = (
-            Vertex(0, 0),
-            Vertex(3, 0),
-            Vertex(4, 1),
-            Vertex(3, 3),
-            Vertex(2, 2),
-            Vertex(1, 3),
-            Vertex(0, 2),
-            Vertex(1, 1),
-        )
-
-    if False:
-        vertex_sequence = (
-            Vertex(1, 0),
-            Vertex(4, 0),
-            Vertex(5, 1),  # positive slope
-            Vertex(6, 3),  # positive slope
-            Vertex(5, 5),
-            Vertex(3, 4),  # positive slope
-            Vertex(2, 5),
-            Vertex(1, 3),  # positive slope
-            Vertex(0, 1),  # positive slope
-        )
-
-    if True:
-        vertex_sequence = (
-            Vertex(0, 0),
-            Vertex(2, 0),
-            Vertex(3, 1),
-            Vertex(1, 2),
-        )
+    validation_instance = "quadrilateral_base"
+    vertex_sequence = tuple(Vertex(*point) for point in VALIDATION_INSTANCES[validation_instance])
 
     polygon = Polygon(vertex_sequence)
     envelope_generator = EnvelopePolygonalDomain(polygon)
