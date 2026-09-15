@@ -494,6 +494,30 @@ def add_eta_inequalities_for_vertices_outside_J(inequalities, edge, vertices_wit
         inequalities.append(ineq)
 
 
+def add_eta_inequalities_for_edges_outside_J(inequalities, edge, edges_without_pair, domains, substitutions):
+    # todo checken, ist von codex
+    # introduce variables for symbolic computation
+    a, b, z = sp.symbols('a b z', real=True)
+
+    # (21), (22) in Paper B; edge belongs to J and is in its middle domain
+    s_e = (a + edge.m * b - edge.q) / (2 * edge.m)
+    eta_e = -edge.m * s_e ** 2 - b * edge.q
+
+    # Endpoint minima are already covered by vertex inequalities or active
+    # equalities in J. Repeating them can turn float roundoff into false bounds.
+    for r, domain in zip(edges_without_pair, domains):
+        if domain != 0:
+            continue
+
+        s_r = (a + r.m * b - r.q) / (2 * r.m)
+        eta_r = -r.m * s_r ** 2 - b * r.q
+
+        ineq = eta_e <= eta_r
+        for key, value in substitutions.items():
+            ineq = ineq.subs(key, value)
+        inequalities.append(ineq)
+
+
 def has_2d_intersection(vertex_sequence, inequalities, tol=1e-10):
     """
     Prüft, ob ein ggf. nicht-konvexes Polygon einen zweidimensionalen
@@ -738,8 +762,11 @@ class EnvelopePolygonalDomain:
         undefined_points = 0
         infeasible_points = 0
         exceeded_validation_tolerances = []
+        largest_cell_difference = 0
+        worst_cell_comparison = None
         nan_counter = 0
         invalid_value_counter = 0
+        unassigned_diagnostics = []
         # Reuse one environment and model for all grid points.
         with gp.Env(empty=True) as env:
             env.setParam("LogToConsole", 0)
@@ -783,9 +810,10 @@ class EnvelopePolygonalDomain:
                     has_undefined_cell = False
                     z_list = []
                     functionals_list = []
+                    valid_cells = []
 
 
-                    for _, cell_inequalities, functional in self.all_solutions:
+                    for generators, cell_inequalities, functional in self.all_solutions:
                         feasible, msg = satisfies_all((x0, y0), cell_inequalities)
 
                         # if fixed point is within considered cell region then we can compute analytical z accordingly
@@ -807,12 +835,65 @@ class EnvelopePolygonalDomain:
 
                             z_list.append(z_analytical)
                             functionals_list.append(functional)
+                            valid_cells.append((generators, cell_inequalities, functional, z_analytical))
 
 
                         elif msg == 'undefined':
                             has_undefined_cell = True
 
                     if not z_list:
+                        if len(unassigned_diagnostics) < 10:
+                            violation_count = 0
+                            undefined_count = 0
+                            for _, candidate_inequalities, _ in self.all_solutions:
+                                _, candidate_msg = satisfies_all(
+                                    (x0, y0), candidate_inequalities
+                                )
+                                if candidate_msg == 'violation':
+                                    violation_count += 1
+                                elif candidate_msg == 'undefined':
+                                    undefined_count += 1
+                            unassigned_diagnostics.append(
+                                ((x0, y0), violation_count, undefined_count)
+                            )
+                            if len(unassigned_diagnostics) == 1:
+                                print("Detailed diagnosis for first unassigned point:", (x0, y0))
+                                for cell_index, (candidate_generators, candidate_inequalities, _) in enumerate(
+                                        self.all_solutions, start=1):
+                                    candidate_ok, candidate_msg = satisfies_all(
+                                        (x0, y0), candidate_inequalities
+                                    )
+                                    if not candidate_ok:
+                                        failed_index = next(
+                                            (index for index, inequality in enumerate(candidate_inequalities)
+                                             if not bool(inequality.subs({sp.Symbol("x", real=True): x0,
+                                                                           sp.Symbol("y", real=True): y0}))),
+                                            None,
+                                        )
+                                        failed_inequality = (
+                                            candidate_inequalities[failed_index]
+                                            if failed_index is not None else None
+                                        )
+                                        failed_slack = None
+                                        if failed_inequality is not None:
+                                            coordinate_values = {"x": x0, "y": y0}
+                                            failed_substitutions = {
+                                                symbol: coordinate_values[symbol.name]
+                                                for symbol in failed_inequality.free_symbols
+                                                if symbol.name in coordinate_values
+                                            }
+                                            failed_slack = float(sp.N(
+                                                (failed_inequality.lhs - failed_inequality.rhs)
+                                                .subs(failed_substitutions)
+                                            ))
+                                        print(
+                                            "  Cell", cell_index,
+                                            "generators=", candidate_generators,
+                                            "reason=", candidate_msg,
+                                            "failed_inequality_index=", failed_index,
+                                            "failed_inequality=", failed_inequality,
+                                            "lhs_minus_rhs=", failed_slack,
+                                        )
                         if feasible_cell_counter == 0 and not has_undefined_cell:
                             infeasible_points += 1
                         else:
@@ -820,6 +901,10 @@ class EnvelopePolygonalDomain:
                         continue
 
                     if len(z_list) > 1:
+                        cell_difference = max(z_list) - min(z_list)
+                        if worst_cell_comparison is None or cell_difference > largest_cell_difference:
+                            largest_cell_difference = cell_difference
+                            worst_cell_comparison = ((x0, y0), z_manual, valid_cells)
 
                         print('more than one feasible cell was found')
                         print('analytical z-values are ', z_list)
@@ -847,6 +932,20 @@ class EnvelopePolygonalDomain:
         print("Exceeded validation tolerances are ", exceeded_validation_tolerances)
         print("Number of nan values occured in functional evaluation is ", nan_counter)
         print("Number of non-finite or non-real functional values is ", invalid_value_counter)
+        print("First unassigned grid points (point, violations, undefined): ", unassigned_diagnostics)
+        if worst_cell_comparison is not None:
+            point, reference_value, cells = worst_cell_comparison
+            print("Largest difference between analytical cell values is ", largest_cell_difference)
+            print("Grid point is ", point)
+            print("Discretized reference value is ", reference_value)
+            for index, (generators, inequalities, functional, value) in enumerate(cells, start=1):
+                print(f"Cell {index}:")
+                print("  Generators: ", generators)
+                print("  Inequalities: ", inequalities)
+                print("  Functional: ", functional)
+                print("  Analytical value: ", value)
+        else:
+            print("No grid point with multiple valid cell values found.")
 
 
     def _two_elements_J(self):
@@ -925,6 +1024,9 @@ class EnvelopePolygonalDomain:
                 for ind, r in enumerate(edges_without_pair):
                     add_domain_inequalities(extended_inequalities, r, combination[ind], substitutions)
 
+                add_eta_inequalities_for_edges_outside_J(
+                    extended_inequalities, e, edges_without_pair, combination, substitutions)
+
                 compute_cells_one_vertex_one_edge(solutions, v, e, extended_inequalities, functional)
 
         return solutions
@@ -988,6 +1090,9 @@ class EnvelopePolygonalDomain:
                     for ind, r in enumerate(edges_without_pair):
                         add_domain_inequalities(extended_inequalities, r, combination[ind], substitutions)
 
+                    add_eta_inequalities_for_edges_outside_J(
+                        extended_inequalities, e1, edges_without_pair, combination, substitutions)
+
                     compute_cells_two_edges_equal_m(solutions, e1, e2, beta1, beta0, extended_inequalities, functional)
 
         else: # here we need to subdifferentiate for the two solutions stated in Lemma 5.1, Paper A
@@ -1019,6 +1124,9 @@ class EnvelopePolygonalDomain:
                     for ind, r in enumerate(edges_without_pair):
                         add_domain_inequalities(extended_inequalities, r, combination[ind], substitutions)
 
+                    add_eta_inequalities_for_edges_outside_J(
+                        extended_inequalities, e1, edges_without_pair, combination, substitutions)
+
                     compute_cells_two_edges_non_equal_m(solutions, e1, e2, beta1, beta0, extended_inequalities, functional)
 
             # define variable subsitutions to simplify inequality systems, cf. Lemma 5.1 and Section 5.1, Paper A
@@ -1048,6 +1156,9 @@ class EnvelopePolygonalDomain:
                     # add domain inequalities for edges outside of J
                     for ind, r in enumerate(edges_without_pair):
                         add_domain_inequalities(extended_inequalities, r, combination[ind], substitutions)
+
+                    add_eta_inequalities_for_edges_outside_J(
+                        extended_inequalities, e1, edges_without_pair, combination, substitutions)
 
                     compute_cells_two_edges_non_equal_m(solutions, e1, e2, beta1, beta0, extended_inequalities,
                                                         functional)
@@ -1417,7 +1528,7 @@ if __name__ == "__main__":
             Vertex(0, 1)
         )
 
-    if True:
+    if False:
         vertex_sequence = (
             Vertex(0, 0),
             Vertex(3, 0),
@@ -1442,7 +1553,7 @@ if __name__ == "__main__":
             Vertex(0, 1),  # positive slope
         )
 
-    if False:
+    if True:
         vertex_sequence = (
             Vertex(0, 0),
             Vertex(2, 0),
