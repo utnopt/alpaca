@@ -201,14 +201,11 @@ def satisfies_all(point, inequalities):
         *(ineq.free_symbols for ineq in inequalities)
     )
 
-    symbols_by_name = {
-        symbol.name: symbol
-        for symbol in symbols
-    }
-
+    coordinates = {"x": point[0], "y": point[1]}
     substitutions = {
-        symbols_by_name["x"]: point[0],
-        symbols_by_name["y"]: point[1],
+        symbol: coordinates[symbol.name]
+        for symbol in symbols
+        if symbol.name in coordinates
     }
 
     for ineq in inequalities:
@@ -224,15 +221,12 @@ def satisfies_all(point, inequalities):
             if abs(float(denominator.subs(substitutions))) <= FEAS_TOL:
                 return False, 'undefined'
 
-        ineq_numeric = ineq.func(ineq.lhs, ineq.rhs + FEAS_TOL)
+        # Relax lower bounds downward and upper bounds upward.
+        tolerance = -FEAS_TOL if isinstance(ineq, (Ge, Gt)) else FEAS_TOL
+        ineq_numeric = ineq.func(ineq.lhs, ineq.rhs + tolerance)
         if not ineq_numeric.subs(substitutions):
-            #print('infeasible ineq ', ineq)
             return False, 'violation'
-        #lhs = float(sp.N(ineq.lhs.subs(substitutions)))
-        #rhs = float(sp.N(ineq.rhs.subs(substitutions)))
 
-        #if not lhs <= rhs + FEAS_TOL:
-        #    return False
 
     return True, None
 
@@ -740,116 +734,119 @@ class EnvelopePolygonalDomain:
         # compare to computed analytical result
         hull_ineqs = hull.equations  # consider hull facets
         error = 0
+        compared_points = 0
         undefined_points = 0
         infeasible_points = 0
         exceeded_validation_tolerances = []
-        for x0, y0, _ in tqdm(points):
-            # use env to completely suppress output
-            env = gp.Env(empty=True)
+        nan_counter = 0
+        invalid_value_counter = 0
+        # Reuse one environment and model for all grid points.
+        with gp.Env(empty=True) as env:
             env.setParam("LogToConsole", 0)
             env.start()
 
-            # build Gurobi model
-            model = gp.Model(env=env)
-            x_var = model.addVar(lb=minx, ub=maxx)
-            y_var = model.addVar(lb=miny, ub=maxy)
-            z_var = model.addVar(lb=-math.inf)
+            with gp.Model(env=env) as model:
+                x_var = model.addVar(lb=minx, ub=maxx)
+                y_var = model.addVar(lb=miny, ub=maxy)
+                z_var = model.addVar(lb=-math.inf)
 
-            # fix considered 2D point
-            model.addConstr(x_var == x0)
-            model.addConstr(y_var == y0)
+                x_fix = model.addConstr(x_var == minx)
+                y_fix = model.addConstr(y_var == miny)
 
-            # add all facet defining inequalities from approximate convex hull
-            for hull_ineq in hull_ineqs:
-                model.addConstr(
-                    hull_ineq[0] * x_var
-                    + hull_ineq[1] * y_var
-                    + hull_ineq[2] * z_var
-                    + hull_ineq[3]
-                    <= 0
-                )
-
-            # minimize in z direction
-            model.setObjective(z_var, gp.GRB.MINIMIZE)
-            model.optimize()
-
-            if not model.status == gp.GRB.Status.OPTIMAL:
-                print("Optimization failed")
-                exit()
-
-            # store obtained minimal z
-            z_manual = z_var.X
-
-            # compute analytical z from computed cells
-            feasible_cell_counter = 0
-            z_list = []
-            functionals_list = []
-
-
-            for _, cell_inequalities, functional in self.all_solutions:
-                feasible, msg = satisfies_all((x0, y0), cell_inequalities)
-
-                # if fixed point is within considered cell region then we can compute analytical z accordingly
-                if feasible:
-                    feasible_cell_counter += 1
-                    symbols = set().union(
-                        *(ineq.free_symbols for ineq in cell_inequalities)
+                for hull_ineq in hull_ineqs:
+                    model.addConstr(
+                        hull_ineq[0] * x_var
+                        + hull_ineq[1] * y_var
+                        + hull_ineq[2] * z_var
+                        + hull_ineq[3]
+                        <= 0
                     )
 
-                    symbols_by_name = {
-                        symbol.name: symbol
-                        for symbol in symbols
-                    }
+                model.setObjective(z_var, gp.GRB.MINIMIZE)
 
-                    substitutions = {
-                        symbols_by_name["x"]: x0,
-                        symbols_by_name["y"]: y0,
-                    }
-                    z_analytical = functional.subs(substitutions).evalf()
-                    z_list.append(z_analytical)
-                    functionals_list.append(functional)
+                for x0, y0, _ in tqdm(points):
+                    x_fix.RHS = x0
+                    y_fix.RHS = y0
+                    model.optimize()
 
-                    # if imaginary part of z_analytical is not zero, there was probably division by zero happening
-                    if not sp.im(z_analytical) == 0:
-                        print()
-                        print(
-                            "Imaginary part is not zero, probably division by zero was happening."
+                    if model.status != gp.GRB.Status.OPTIMAL:
+                        raise RuntimeError(
+                            f"Validation failed at ({x0}, {y0}): "
+                            f"Gurobi status {model.status}"
                         )
-                        z_analytical = z_manual  # add no error in this case
 
-                else:
-                    if msg == 'undefined':
-                        undefined_points += 1
-                        break
+                    # store obtained minimal z
+                    z_manual = z_var.X
 
-            if msg == 'undefined':
-                continue
-
-            if feasible_cell_counter > 1:
-                print('more than one feasible cell was found')
-                print('analytical z-values are ', z_list)
-                print('functionals are ', functionals_list)
-                print('###########')
-
-                if abs(max(z_list) - min(z_list)) > VALIDATION_TOL:
-                    print('too much difference in z-values')
-                    exceeded_validation_tolerances.append(abs(max(z_list) - min(z_list)))
-            if feasible_cell_counter == 0:
-                infeasible_points += 1
-                continue
+                    # compute analytical z from computed cells
+                    feasible_cell_counter = 0
+                    has_undefined_cell = False
+                    z_list = []
+                    functionals_list = []
 
 
-            # sum up absolute differences to error
-            error += abs(z_manual - z_analytical)
-            if z_manual + 1e-08 <= z_analytical:
-                print(z_manual, z_analytical)
+                    for _, cell_inequalities, functional in self.all_solutions:
+                        feasible, msg = satisfies_all((x0, y0), cell_inequalities)
+
+                        # if fixed point is within considered cell region then we can compute analytical z accordingly
+                        if feasible:
+                            feasible_cell_counter += 1
+                            coordinates = {"x": x0, "y": y0}
+                            substitutions = {
+                                symbol: coordinates[symbol.name]
+                                for symbol in functional.free_symbols
+                                if symbol.name in coordinates
+                            }
+                            z_analytical = functional.subs(substitutions).evalf()
+                            if z_analytical is sp.nan:
+                                nan_counter += 1
+
+                            if z_analytical.is_finite is not True or z_analytical.is_real is not True:
+                                invalid_value_counter += 1
+                                continue
+
+                            z_list.append(z_analytical)
+                            functionals_list.append(functional)
+
+
+                        elif msg == 'undefined':
+                            has_undefined_cell = True
+
+                    if not z_list:
+                        if feasible_cell_counter == 0 and not has_undefined_cell:
+                            infeasible_points += 1
+                        else:
+                            undefined_points += 1
+                        continue
+
+                    if len(z_list) > 1:
+
+                        print('more than one feasible cell was found')
+                        print('analytical z-values are ', z_list)
+                        print('functionals are ', functionals_list)
+                        print('###########')
+
+                        if abs(max(z_list) - min(z_list)) > VALIDATION_TOL:
+                            print('too much difference in z-values')
+                            exceeded_validation_tolerances.append(abs(max(z_list) - min(z_list)))
+                    # Use the last valid value, not a potentially discarded NaN.
+                    z_analytical = z_list[-1]
+                    # sum up absolute differences to error
+                    error += abs(z_manual - z_analytical)
+                    compared_points += 1
+                    if z_manual + 1e-08 <= z_analytical:
+                        print(z_manual, z_analytical)
 
         print('undefined vs infeasible: ', undefined_points, infeasible_points)
-        print("Number of grid points is: ", len(points)- undefined_points - infeasible_points)
+        print("Number of compared grid points is: ", compared_points)
         print("Total sum of absolute errors is ", error)
-        print("Average absolute error for each grid point is ", error / (len(points) - undefined_points - infeasible_points))
+        if compared_points > 0:
+            print("Average absolute error for each compared grid point is ", error / compared_points)
+        else:
+            print("No evaluable grid points; average absolute error is undefined.")
         print("Exceeded validation tolerances are ", exceeded_validation_tolerances)
-        # print("Maximum absolute error: is ", max()) # todo maximum printen
+        print("Number of nan values occured in functional evaluation is ", nan_counter)
+        print("Number of non-finite or non-real functional values is ", invalid_value_counter)
 
 
     def _two_elements_J(self):
@@ -1420,7 +1417,7 @@ if __name__ == "__main__":
             Vertex(0, 1)
         )
 
-    if False:
+    if True:
         vertex_sequence = (
             Vertex(0, 0),
             Vertex(3, 0),
@@ -1432,7 +1429,7 @@ if __name__ == "__main__":
             Vertex(1, 1),
         )
 
-    if True:
+    if False:
         vertex_sequence = (
             Vertex(1, 0),
             Vertex(4, 0),
