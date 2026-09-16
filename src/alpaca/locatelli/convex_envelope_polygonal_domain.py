@@ -196,13 +196,16 @@ def chop_floats(expr, tol=1e-10):
     return expr.xreplace(replacements)
 
 
-def satisfies_all(point, inequalities):
+def satisfies_all(point, inequalities, tolerance=None):
     """Evaluate all cell inequalities at a point with feasibility tolerance.
 
     Returns ``(False, 'undefined')`` if a rational expression has a denominator
     close to zero, and ``(False, 'violation')`` for an ordinary failed bound.
     This distinction is used by the validation summary.
     """
+    if tolerance is None:
+        tolerance = FEAS_TOL
+
     symbols = set().union(
         *(ineq.free_symbols for ineq in inequalities)
     )
@@ -224,12 +227,12 @@ def satisfies_all(point, inequalities):
         for expr in expressions:
             denominator = sp.denom(sp.together(expr))
 
-            if abs(float(denominator.subs(substitutions))) <= FEAS_TOL:
+            if abs(float(denominator.subs(substitutions))) <= tolerance:
                 return False, 'undefined'
 
         # Relax lower bounds downward and upper bounds upward.
-        tolerance = -FEAS_TOL if isinstance(ineq, (Ge, Gt)) else FEAS_TOL
-        ineq_numeric = ineq.func(ineq.lhs, ineq.rhs + tolerance)
+        bound_tolerance = -tolerance if isinstance(ineq, (Ge, Gt)) else tolerance
+        ineq_numeric = ineq.func(ineq.lhs, ineq.rhs + bound_tolerance)
         if not ineq_numeric.subs(substitutions):
             return False, 'violation'
 
@@ -699,6 +702,13 @@ class Edge:
         object.__setattr__(self, "q", q)
 
 
+def vertex_lies_on_edge_line(vertex, edge):
+    """Return whether ``vertex`` lies on the supporting line of ``edge``."""
+    lhs = edge.m * vertex.x + edge.q
+    scale = max(abs(lhs), abs(vertex.y), np.finfo(float).eps)
+    return abs(lhs - vertex.y) <= DEGENERACY_TOL * scale
+
+
 @dataclass(frozen=True)
 class Polygon:
     """Polygon boundary data; ``vertex_sequence`` preserves cyclic adjacency."""
@@ -759,6 +769,12 @@ class EnvelopePolygonalDomain:
         miny = min(v.y for v in self.polygon.vertices)
         maxx = max(v.x for v in self.polygon.vertices)
         maxy = max(v.y for v in self.polygon.vertices)
+        coordinate_scale = max(
+            abs(maxx - minx), abs(maxy - miny),
+            abs(minx), abs(miny), abs(maxx), abs(maxy),
+            np.finfo(float).eps,
+        )
+        validation_tolerance = DEGENERACY_TOL * coordinate_scale
         shapely_polygon = sg.Polygon((v.x, v.y) for v in self.polygon.vertex_sequence)
 
         # construct grid and store all 3D points over polygon
@@ -781,6 +797,8 @@ class EnvelopePolygonalDomain:
         hull_ineqs = hull.equations  # consider hull facets
         error = 0
         compared_points = 0
+        minimum_reference_value = math.inf
+        maximum_reference_value = -math.inf
         undefined_points = 0
         infeasible_points = 0
         largest_cell_difference = 0
@@ -835,7 +853,9 @@ class EnvelopePolygonalDomain:
 
 
                     for generators, cell_inequalities, functional in self.all_solutions:
-                        feasible, msg = satisfies_all((x0, y0), cell_inequalities)
+                        feasible, msg = satisfies_all(
+                            (x0, y0), cell_inequalities, tolerance=validation_tolerance
+                        )
 
                         # if fixed point is within considered cell region then we can compute analytical z accordingly
                         if feasible:
@@ -939,6 +959,8 @@ class EnvelopePolygonalDomain:
                     # sum up absolute differences to error
                     error += abs(z_manual - z_analytical)
                     compared_points += 1
+                    minimum_reference_value = min(minimum_reference_value, z_manual)
+                    maximum_reference_value = max(maximum_reference_value, z_manual)
                     if z_manual + 1e-08 <= z_analytical:
                         print(z_manual, z_analytical)
 
@@ -946,7 +968,17 @@ class EnvelopePolygonalDomain:
         print('Numbers of undefined and infeasible (but not undefined) points are: ', undefined_points, infeasible_points)
         print("Number of compared grid points is: ", compared_points)
         if compared_points > 0:
-            print("Average absolute error for each compared grid point is: ", error / compared_points)
+            average_absolute_error = error / compared_points
+            reference_value_range = maximum_reference_value - minimum_reference_value
+            print("Average absolute error for each compared grid point is: ", average_absolute_error)
+            print("Reference value range for compared grid points is: ", reference_value_range)
+            if reference_value_range > 0:
+                print(
+                    "Relative average absolute error for each compared grid point is: ",
+                    average_absolute_error / reference_value_range,
+                )
+            else:
+                print("Relative average absolute error is undefined because the reference range is zero.")
         else:
             print("No evaluable grid points; average absolute error is undefined.")
         print("Number of nan functional values is: ", nan_counter)
@@ -993,8 +1025,10 @@ class EnvelopePolygonalDomain:
         v = tuple(el for el in pair if isinstance(el, Vertex))[0]
         e = tuple(el for el in pair if isinstance(el, Edge))[0]
 
-        # the vertex cannot lie on the line containing the edge
-        if e.m * v.x + e.q == v.y:
+        # The vertex cannot lie on the line containing the edge.  A tolerant
+        # comparison is required because reconstructing the line from decimal
+        # endpoints may not reproduce an endpoint's y-coordinate exactly.
+        if vertex_lies_on_edge_line(v, e):
             return []
 
         # introduce variables for symbolic computation
@@ -1230,11 +1264,10 @@ class EnvelopePolygonalDomain:
         e = tuple(el for el in triple if isinstance(el, Edge))[0]
 
 
-        C = 4 * e.m * (e.q + e.m * v2.x - v2.y)
-
-        if np.isclose(float(C), 0.0, atol=1e-12):
+        if vertex_lies_on_edge_line(v2, e):
             return []
 
+        C = 4 * e.m * (e.q + e.m * v2.x - v2.y)
         beta2 = -1 / C
         beta1 = (2 * e.q + 4 * e.m * v2.x) / C
         beta0 = -(4 * e.m * v2.x * v2.y + e.q ** 2) / C
@@ -1295,58 +1328,58 @@ class EnvelopePolygonalDomain:
         if e1.m == e2.m and e1.q == e2.q:
             return []
 
-        C = 4 * e1.m * (e1.q + e1.m * v.x - v.y)
-        if C == 0:
+        if vertex_lies_on_edge_line(v, e1):
             return []
-        else:
-            beta2 = -1 / C
-            beta1 = (2 * e1.q + 4 * e1.m * v.x) / C
-            beta0 = (4 * e1.m * v.x * v.y + e1.q * e1.q) / (-C)
 
-            z = sp.symbols("z", real=True)
+        C = 4 * e1.m * (e1.q + e1.m * v.x - v.y)
+        beta2 = -1 / C
+        beta1 = (2 * e1.q + 4 * e1.m * v.x) / C
+        beta0 = (4 * e1.m * v.x * v.y + e1.q * e1.q) / (-C)
 
+        z = sp.symbols("z", real=True)
+
+        b = beta2 * z ** 2 + beta1 * z + beta0
+        a = z - e1.m * b
+
+        expr = (
+                v.x * v.y
+                - a * v.x
+                - b * v.y
+                + (a + e2.m * b - e2.q) ** 2 / (4 * e2.m)
+                + b * e2.q
+        )
+        poly = sp.Poly(sp.expand(expr), z)
+        roots = sp.nroots(poly, n=10, maxsteps=200)
+
+        sol = [
+            float(sp.re(r))
+            for r in roots
+            if abs(float(sp.im(r))) < 1e-10
+        ]
+
+        solutions = []
+        for z in sol:
             b = beta2 * z ** 2 + beta1 * z + beta0
             a = z - e1.m * b
+            c = v.x * v.y - a * v.x - b * v.y
 
-            expr = (
-                    v.x * v.y
-                    - a * v.x
-                    - b * v.y
-                    + (a + e2.m * b - e2.q) ** 2 / (4 * e2.m)
-                    + b * e2.q
-            )
-            poly = sp.Poly(sp.expand(expr), z)
-            roots = sp.nroots(poly, n=10, maxsteps=200)
+            if not e1.v1.x + FEAS_TOL < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x - FEAS_TOL:
+                continue
 
-            sol = [
-                float(sp.re(r))
-                for r in roots
-                if abs(float(sp.im(r))) < 1e-10
-            ]
+            if not e2.v1.x + FEAS_TOL < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x - FEAS_TOL:
+                continue
 
-            solutions = []
-            for z in sol:
-                b = beta2 * z ** 2 + beta1 * z + beta0
-                a = z - e1.m * b
-                c = v.x * v.y - a * v.x - b * v.y
+            if not feasibility_outside_J_generators(v, generators_without_triple, a, b):
+                continue
 
-                if not e1.v1.x + FEAS_TOL < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x - FEAS_TOL:
-                    continue
+            cell_ineq_coeffs = ConvexHull([(v.x, v.y), (get_active_point_from_generator(e1, a, b)), (get_active_point_from_generator(e2, a, b))]).equations
+            x, y = sp.symbols("x y", real=True)
+            cell_inequalities = [row[0] * x + row[1] * y + row[2] <= 0 for row in cell_ineq_coeffs]
 
-                if not e2.v1.x + FEAS_TOL < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x - FEAS_TOL:
-                    continue
+            functional = a * x + b * y + c
+            solutions.append((triple, cell_inequalities, functional))
 
-                if not feasibility_outside_J_generators(v, generators_without_triple, a, b):
-                    continue
-
-                cell_ineq_coeffs = ConvexHull([(v.x, v.y), (get_active_point_from_generator(e1, a, b)), (get_active_point_from_generator(e2, a, b))]).equations
-                x, y = sp.symbols("x y", real=True)
-                cell_inequalities = [row[0] * x + row[1] * y + row[2] <= 0 for row in cell_ineq_coeffs]
-
-                functional = a * x + b * y + c
-                solutions.append((triple, cell_inequalities, functional))
-
-            return solutions
+        return solutions
 
 
     def _solve_three_edges(self, triple, generators_without_triple):
@@ -1534,6 +1567,8 @@ class EnvelopePolygonalDomain:
 
 
 
+# Numerical tolerance for algebraic degeneracy checks.
+DEGENERACY_TOL = 1e-12
 # Numerical tolerance used for cell membership and KKT feasibility checks.
 FEAS_TOL = 1e-6
 # Step size of the independent lifted-grid reference used by _validation().
@@ -1558,16 +1593,12 @@ VALIDATION_INSTANCES = {
     "large_scale": ((0, 0), (2000, 0), (3000, 1000), (1000, 2000)),
     "near_parallel_edges": ((0, 0), (4, 0), (6, 1), (5.9, 2), (2, 1.9), (0, 3)),
     "axis_aligned_mixed": ((0, 0), (4, 0), (4, 3), (3, 3), (3, 1), (1, 1), (1, 4), (0, 4)),
+    "three_edge_branch": (
+        (3.27943, 5.70233), (-1.25825, 3.59399), (-2.96916, 3.20979),
+        (-1.95154, 1.29355), (-5.31055, -0.35844), (-0.58458, -6.66487),
+        (1.61146, -2.04535),
+    ),
 }
-
-# This geometry is intentionally used only by the focused KKT branch test.
-# It produces valid three-edge cells in the negative-sqrt branch, but has an
-# unrelated vertex-edge degeneracy for the complete two-generator enumeration.
-THREE_EDGE_BRANCH_INSTANCE = (
-    (3.27943, 5.70233), (-1.25825, 3.59399), (-2.96916, 3.20979),
-    (-1.95154, 1.29355), (-5.31055, -0.35844), (-0.58458, -6.66487),
-    (1.61146, -2.04535),
-)
 
 
 
@@ -1576,7 +1607,7 @@ if __name__ == "__main__":
 
     # Candidate cells with identical functionals may be merged for presentation;
     # keeping them separate does not change the evaluated envelope.
-    validation_instance = "quadrilateral_base"
+    validation_instance = "original_convexified_staircase"
     vertex_sequence = tuple(Vertex(*point) for point in VALIDATION_INSTANCES[validation_instance])
 
     polygon = Polygon(vertex_sequence)
