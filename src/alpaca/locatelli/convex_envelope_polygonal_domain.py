@@ -16,6 +16,7 @@ Paper B:
 from dataclasses import dataclass, field
 import math
 from itertools import combinations, product
+from mpmath.libmp.libhyper import NoConvergence
 import shapely.geometry as sg
 from pygments.lexers import r
 
@@ -68,7 +69,7 @@ def plot_cell(cell_inequalities, polygon):
 
     mask_P = polygon_path.contains_points(
         points,
-        radius=1e-10
+        radius=scaled_tolerance(*polygon_vertices.ravel())
     ).reshape(X.shape)
 
     # Mask of the candidate cell.
@@ -169,6 +170,39 @@ def get_active_point_from_generator(generator, a, b):
     return x_r, y_r
 
 
+def scaled_tolerance(*values, relative=1e-12):
+    """Return a roundoff allowance with the units of ``values``.
+
+    The relative part preserves scale invariance.  The machine-epsilon floor
+    covers cancellation near zero without imposing a problem-scale absolute
+    tolerance (which previously broke the ``small_scale`` instance).
+    """
+    scale = max((abs(float(value)) for value in values), default=0.0)
+    return max(relative * scale, 64 * np.finfo(float).eps * max(1.0, scale))
+
+
+def active_point_is_strictly_inside_edge(edge, x_coordinate):
+    tolerance = scaled_tolerance(edge.v1.x, edge.v2.x, edge.v2.x - edge.v1.x)
+    return edge.v1.x + tolerance < x_coordinate < edge.v2.x - tolerance
+
+
+def is_numerically_real(root):
+    return abs(float(sp.im(root))) <= scaled_tolerance(float(sp.re(root)))
+
+
+def numerical_polynomial_roots(poly):
+    """Compute accurate roots, with a fallback for ill-conditioned multiples.
+
+    ``nroots`` may fail to certify high precision for repeated roots even after
+    many iterations.  Ten digits are sufficient for the fallback because every
+    returned candidate is subsequently checked against the KKT conditions.
+    """
+    try:
+        return sp.nroots(poly, n=20, maxsteps=1000)
+    except NoConvergence:
+        return sp.nroots(poly, n=10, maxsteps=1000)
+
+
 def feasibility_outside_J_generators(generator_in_J, generators_outside_J, a, b):
     """Check the inactive-generator inequalities for a candidate KKT solution.
 
@@ -180,20 +214,12 @@ def feasibility_outside_J_generators(generator_in_J, generators_outside_J, a, b)
     for generator_outside_J in generators_outside_J:
         x_r, y_r = get_active_point_from_generator(generator_outside_J, a, b)
 
-        if x_k * y_k - a * x_k - b * y_k > x_r * y_r - a * x_r - b * y_r + FEAS_TOL:
+        eta_k = float(x_k * y_k - a * x_k - b * y_k)
+        eta_r = float(x_r * y_r - a * x_r - b * y_r)
+        if eta_k > eta_r + scaled_tolerance(eta_k, eta_r):
             return False
 
     return True
-
-
-def chop_floats(expr, tol=1e-10):
-    """Replace tiny floating coefficients by exact zero before symbolic tests."""
-    replacements = {}
-    for f in expr.atoms(sp.Float):
-        if abs(float(f)) < tol:
-            replacements[f] = sp.Integer(0)
-
-    return expr.xreplace(replacements)
 
 
 def satisfies_all(point, inequalities, tolerance=None):
@@ -218,10 +244,6 @@ def satisfies_all(point, inequalities, tolerance=None):
     }
 
     for ineq in inequalities:
-        ineq = ineq.func(
-            chop_floats(ineq.lhs),
-            chop_floats(ineq.rhs)
-        )
         expressions = (ineq.lhs, ineq.rhs)
 
         for expr in expressions:
@@ -546,7 +568,7 @@ def add_eta_inequalities_for_edges_outside_J(inequalities, edge, edges_without_p
         inequalities.append(ineq)
 
 
-def has_2d_intersection(vertex_sequence, inequalities, tol=1e-10):
+def has_2d_intersection(vertex_sequence, inequalities):
     """Return whether a linear cell intersects the polygon with positive area.
 
     Each inequality is converted to a half-plane and clipped against the
@@ -567,8 +589,11 @@ def has_2d_intersection(vertex_sequence, inequalities, tol=1e-10):
     # Bounding box etwas vergrößern.
     minx, miny, maxx, maxy = polygon.bounds
 
-    scale = max(maxx - minx, maxy - miny, 1.0)
+    scale = max(maxx - minx, maxy - miny)
+    if scale == 0:
+        return False
     margin = 10 * scale
+    area_tolerance = scaled_tolerance(scale * scale)
 
     bounding_box = box(
         minx - margin,
@@ -594,7 +619,7 @@ def has_2d_intersection(vertex_sequence, inequalities, tol=1e-10):
         c = float(expr.subs({x: 0, y: 0}))
 
         # A constant inequality either keeps or removes the whole intersection.
-        if abs(a) < tol and abs(b) < tol:
+        if abs(a) <= scaled_tolerance(a, b) and abs(b) <= scaled_tolerance(a, b):
             # Ungleichung enthält gar kein x oder y.
             if not bool(inequality):
                 return False
@@ -635,14 +660,14 @@ def has_2d_intersection(vertex_sequence, inequalities, tol=1e-10):
                 (sp.core.relational.LessThan,
                  sp.core.relational.StrictLessThan)
             ):
-                valid = value <= tol
+                valid = value <= scaled_tolerance(a * p.x, b * p.y, c)
 
             elif isinstance(
                 inequality,
                 (sp.core.relational.GreaterThan,
                  sp.core.relational.StrictGreaterThan)
             ):
-                valid = value >= -tol
+                valid = value >= -scaled_tolerance(a * p.x, b * p.y, c)
 
             else:
                 raise ValueError(
@@ -662,10 +687,10 @@ def has_2d_intersection(vertex_sequence, inequalities, tol=1e-10):
         if intersection.is_empty:
             return False
 
-        if intersection.area <= tol:
+        if intersection.area <= area_tolerance:
             return False
 
-    return intersection.area > tol
+    return intersection.area > area_tolerance
 
 @dataclass(frozen=True)
 class Vertex:
@@ -961,7 +986,7 @@ class EnvelopePolygonalDomain:
                     compared_points += 1
                     minimum_reference_value = min(minimum_reference_value, z_manual)
                     maximum_reference_value = max(maximum_reference_value, z_manual)
-                    if z_manual + 1e-08 <= z_analytical:
+                    if z_manual + scaled_tolerance(z_manual, z_analytical) <= z_analytical:
                         print(z_manual, z_analytical)
 
 
@@ -1008,7 +1033,7 @@ class EnvelopePolygonalDomain:
 
         # Observation 3.2 of Paper B permits lower-dimensional cells to be
         # discarded; their envelope values are recovered by continuity.
-        all_solutions_two_elements_J = [solution for solution in all_solutions_two_elements_J if has_2d_intersection(self.polygon.vertex_sequence, solution[1], tol=1e-10)]
+        all_solutions_two_elements_J = [solution for solution in all_solutions_two_elements_J if has_2d_intersection(self.polygon.vertex_sequence, solution[1])]
 
         print('all solutions stemming from Js with two elements:')
         for sol in all_solutions_two_elements_J:
@@ -1224,13 +1249,20 @@ class EnvelopePolygonalDomain:
         # Potential future reduction: discard triples ruled out by convex
         # connections between their vertices before solving the KKT system.
 
+        x_span = max(v1.x, v2.x, v3.x) - min(v1.x, v2.x, v3.x)
+        y_span = max(v1.y, v2.y, v3.y) - min(v1.y, v2.y, v3.y)
+        if x_span == 0 or y_span == 0:
+            return []
         A = np.array([
-            [v1.x, v1.y, 1],
-            [v2.x, v2.y, 1],
-            [v3.x, v3.y, 1],
+            [(v1.x - min(v1.x, v2.x, v3.x)) / x_span,
+             (v1.y - min(v1.y, v2.y, v3.y)) / y_span, 1],
+            [(v2.x - min(v1.x, v2.x, v3.x)) / x_span,
+             (v2.y - min(v1.y, v2.y, v3.y)) / y_span, 1],
+            [(v3.x - min(v1.x, v2.x, v3.x)) / x_span,
+             (v3.y - min(v1.y, v2.y, v3.y)) / y_span, 1],
             ])
 
-        if abs(np.linalg.det(A)) <= FEAS_TOL:
+        if abs(np.linalg.det(A)) <= DEGENERACY_TOL:
             # Collinear contacts span no two-dimensional cell.
             return []
 
@@ -1289,12 +1321,12 @@ class EnvelopePolygonalDomain:
         poly = sp.Poly(sp.expand(expr), z)
         # The contact equations reduce to a univariate polynomial.  Only real
         # roots whose edge contact lies strictly inside the edge are admissible.
-        roots = sp.nroots(poly, n=10, maxsteps=200)
+        roots = numerical_polynomial_roots(poly)
 
         sol = [
             float(sp.re(r))
             for r in roots
-            if abs(float(sp.im(r))) < 1e-10
+            if is_numerically_real(r)
         ]
 
         solutions = []
@@ -1303,7 +1335,7 @@ class EnvelopePolygonalDomain:
             a = z - e.m * b
             c = v1.x * v1.y - a * v1.x - b * v1.y
 
-            if not e.v1.x + FEAS_TOL < (a + e.m * b - e.q) / (2 * e.m) < e.v2.x - FEAS_TOL:
+            if not active_point_is_strictly_inside_edge(e, (a + e.m * b - e.q) / (2 * e.m)):
                 continue
 
             if not feasibility_outside_J_generators(v1, generators_without_triple, a, b):
@@ -1349,12 +1381,12 @@ class EnvelopePolygonalDomain:
                 + b * e2.q
         )
         poly = sp.Poly(sp.expand(expr), z)
-        roots = sp.nroots(poly, n=10, maxsteps=200)
+        roots = numerical_polynomial_roots(poly)
 
         sol = [
             float(sp.re(r))
             for r in roots
-            if abs(float(sp.im(r))) < 1e-10
+            if is_numerically_real(r)
         ]
 
         solutions = []
@@ -1363,10 +1395,10 @@ class EnvelopePolygonalDomain:
             a = z - e1.m * b
             c = v.x * v.y - a * v.x - b * v.y
 
-            if not e1.v1.x + FEAS_TOL < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x - FEAS_TOL:
+            if not active_point_is_strictly_inside_edge(e1, (a + e1.m * b - e1.q) / (2 * e1.m)):
                 continue
 
-            if not e2.v1.x + FEAS_TOL < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x - FEAS_TOL:
+            if not active_point_is_strictly_inside_edge(e2, (a + e2.m * b - e2.q) / (2 * e2.m)):
                 continue
 
             if not feasibility_outside_J_generators(v, generators_without_triple, a, b):
@@ -1399,12 +1431,12 @@ class EnvelopePolygonalDomain:
 
             expr = (a + e3.m * b - e3.q)**2 / (4 * e3.m) + b * e3.q - (a + e2.m * b - e2.q)**2 / (4 * e2.m) - b * e2.q
             poly = sp.Poly(sp.expand(expr), b)
-            roots = sp.nroots(poly, n=10, maxsteps=200)
+            roots = numerical_polynomial_roots(poly)
 
             sol = [
                 float(sp.re(r))
                 for r in roots
-                if abs(float(sp.im(r))) < 1e-10
+                if is_numerically_real(r)
             ]
 
 
@@ -1414,13 +1446,13 @@ class EnvelopePolygonalDomain:
                 x_r, y_r = get_active_point_from_generator(e1, a, b)
                 c = x_r * y_r - a * x_r - b * y_r
 
-                if not e1.v1.x + FEAS_TOL < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x - FEAS_TOL:
+                if not active_point_is_strictly_inside_edge(e1, (a + e1.m * b - e1.q) / (2 * e1.m)):
                     continue
 
-                if not e2.v1.x + FEAS_TOL < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x - FEAS_TOL:
+                if not active_point_is_strictly_inside_edge(e2, (a + e2.m * b - e2.q) / (2 * e2.m)):
                     continue
 
-                if not e3.v1.x + FEAS_TOL < (a + e3.m * b - e3.q) / (2 * e3.m) < e3.v2.x - FEAS_TOL:
+                if not active_point_is_strictly_inside_edge(e3, (a + e3.m * b - e3.q) / (2 * e3.m)):
                     continue
 
                 if not feasibility_outside_J_generators(e1, generators_without_triple, a, b):
@@ -1439,12 +1471,12 @@ class EnvelopePolygonalDomain:
 
             expr = (a + e3.m * b - e3.q) ** 2 / (4 * e3.m) + b * e3.q - (a + e2.m * b - e2.q) ** 2 / (4 * e2.m) - b * e2.q
             poly = sp.Poly(sp.expand(expr), b)
-            roots = sp.nroots(poly, n=10, maxsteps=200)
+            roots = numerical_polynomial_roots(poly)
 
             sol = [
                 float(sp.re(r))
                 for r in roots
-                if abs(float(sp.im(r))) < 1e-10
+                if is_numerically_real(r)
             ]
 
             solutions = []
@@ -1453,13 +1485,13 @@ class EnvelopePolygonalDomain:
                 x_r, y_r = get_active_point_from_generator(e1, a, b)
                 c = x_r * y_r - a * x_r - b * y_r
 
-                if not e1.v1.x + FEAS_TOL < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x - FEAS_TOL:
+                if not active_point_is_strictly_inside_edge(e1, (a + e1.m * b - e1.q) / (2 * e1.m)):
                     continue
 
-                if not e2.v1.x + FEAS_TOL < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x - FEAS_TOL:
+                if not active_point_is_strictly_inside_edge(e2, (a + e2.m * b - e2.q) / (2 * e2.m)):
                     continue
 
-                if not e3.v1.x + FEAS_TOL < (a + e3.m * b - e3.q) / (2 * e3.m) < e3.v2.x - FEAS_TOL:
+                if not active_point_is_strictly_inside_edge(e3, (a + e3.m * b - e3.q) / (2 * e3.m)):
                     continue
 
                 if not feasibility_outside_J_generators(e1, generators_without_triple, a, b):
@@ -1479,12 +1511,12 @@ class EnvelopePolygonalDomain:
 
             expr = (a + e3.m * b - e3.q) ** 2 / (4 * e3.m) + b * e3.q - (a + e2.m * b - e2.q) ** 2 / (4 * e2.m) - b * e2.q
             poly = sp.Poly(sp.expand(expr), b)
-            roots = sp.nroots(poly, n=10, maxsteps=200)
+            roots = numerical_polynomial_roots(poly)
 
             sol = [
                 float(sp.re(r))
                 for r in roots
-                if abs(float(sp.im(r))) < 1e-10
+                if is_numerically_real(r)
             ]
 
             for b in sol:
@@ -1493,13 +1525,13 @@ class EnvelopePolygonalDomain:
                 x_r, y_r = get_active_point_from_generator(e1, a, b)
                 c = x_r * y_r - a * x_r - b * y_r
 
-                if not e1.v1.x + FEAS_TOL < (a + e1.m * b - e1.q) / (2 * e1.m) < e1.v2.x - FEAS_TOL:
+                if not active_point_is_strictly_inside_edge(e1, (a + e1.m * b - e1.q) / (2 * e1.m)):
                     continue
 
-                if not e2.v1.x + FEAS_TOL < (a + e2.m * b - e2.q) / (2 * e2.m) < e2.v2.x - FEAS_TOL:
+                if not active_point_is_strictly_inside_edge(e2, (a + e2.m * b - e2.q) / (2 * e2.m)):
                     continue
 
-                if not e3.v1.x + FEAS_TOL < (a + e3.m * b - e3.q) / (2 * e3.m) < e3.v2.x - FEAS_TOL:
+                if not active_point_is_strictly_inside_edge(e3, (a + e3.m * b - e3.q) / (2 * e3.m)):
                     continue
 
                 if not feasibility_outside_J_generators(e1, generators_without_triple, a, b):
@@ -1538,7 +1570,7 @@ class EnvelopePolygonalDomain:
 
         # Keep only full-dimensional intersections with the original domain.
         all_solutions_three_elements_J = [solution for solution in all_solutions_three_elements_J if
-                                        has_2d_intersection(self.polygon.vertex_sequence, solution[1], tol=1e-10)]
+                                        has_2d_intersection(self.polygon.vertex_sequence, solution[1])]
 
         print('all solutions stemming from Js with three elements:')
         for sol in all_solutions_three_elements_J:
@@ -1569,8 +1601,9 @@ class EnvelopePolygonalDomain:
 
 # Numerical tolerance for algebraic degeneracy checks.
 DEGENERACY_TOL = 1e-12
-# Numerical tolerance used for cell membership and KKT feasibility checks.
-FEAS_TOL = 1e-6
+# Default absolute tolerance for evaluating already-normalized cell inequalities.
+# Scale-sensitive KKT and geometry checks use ``scaled_tolerance`` instead.
+FEAS_TOL = 1e-12
 # Step size of the independent lifted-grid reference used by _validation().
 VALIDATION_DISCRETIZATION = 0.1
 
