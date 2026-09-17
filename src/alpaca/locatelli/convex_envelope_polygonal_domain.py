@@ -18,9 +18,8 @@ import math
 from itertools import combinations, product
 from mpmath.libmp.libhyper import NoConvergence
 import shapely.geometry as sg
-from pygments.lexers import r
 
-from sympy import S, Eq, Le, Ge, Lt, Gt, linsolve, simplify, expand, Poly, PolynomialError, together, fraction
+from sympy import Eq, Ge, Gt, linsolve, simplify
 import gurobipy as gp
 from tqdm import tqdm
 import numpy as np
@@ -181,15 +180,20 @@ def scaled_tolerance(*values, relative=1e-12):
     return max(relative * scale, 64 * np.finfo(float).eps * max(1.0, scale))
 
 
+def roundoff_tolerance(*values):
+    """Return an allowance for floating-point evaluation roundoff only."""
+    scale = max((abs(float(value)) for value in values), default=0.0)
+    return 64 * np.finfo(float).eps * max(1.0, scale)
+
+
 def active_point_is_strictly_inside_edge(edge, x_coordinate):
     # A repeated root evaluated by the ten-digit fallback can place an exact
     # endpoint contact roughly 1e-8 edge lengths inside the segment.  Exclude
     # that numerical sliver as the lower-dimensional endpoint case it is.
-    tolerance = scaled_tolerance(
-        edge.v1.x,
-        edge.v2.x,
-        edge.v2.x - edge.v1.x,
-        relative=ACTIVE_POINT_REL_TOL,
+    edge_length_x = edge.v2.x - edge.v1.x
+    tolerance = max(
+        ACTIVE_POINT_REL_TOL * edge_length_x,
+        roundoff_tolerance(edge.v1.x, edge.v2.x, x_coordinate),
     )
     return edge.v1.x + tolerance < x_coordinate < edge.v2.x - tolerance
 
@@ -737,9 +741,9 @@ class Edge:
 
 def vertex_lies_on_edge_line(vertex, edge):
     """Return whether ``vertex`` lies on the supporting line of ``edge``."""
-    lhs = edge.m * vertex.x + edge.q
-    scale = max(abs(lhs), abs(vertex.y), np.finfo(float).eps)
-    return abs(lhs - vertex.y) <= DEGENERACY_TOL * scale
+    slope_term = edge.m * vertex.x
+    lhs = slope_term + edge.q
+    return abs(lhs - vertex.y) <= roundoff_tolerance(slope_term, edge.q, vertex.y)
 
 
 @dataclass(frozen=True)
@@ -790,8 +794,9 @@ class EnvelopePolygonalDomain:
     def _validation(self):
         """Compare analytical cells with a discretized lifted convex hull.
 
-        The lifted grid ``(x, y, x*y)`` only approximates the true reference,
-        so the reported mean error depends on ``VALIDATION_DISCRETIZATION``.
+        A normalized lifted sampling of the polygon only approximates the true
+        reference, so the reported errors depend on
+        ``VALIDATION_DISCRETIZATION``.
         Cell coverage, invalid functional values, and disagreements between
         overlapping cells are checked independently of that reference error.
         """
@@ -802,33 +807,59 @@ class EnvelopePolygonalDomain:
         miny = min(v.y for v in self.polygon.vertices)
         maxx = max(v.x for v in self.polygon.vertices)
         maxy = max(v.y for v in self.polygon.vertices)
-        coordinate_scale = max(
-            abs(maxx - minx), abs(maxy - miny),
-            abs(minx), abs(miny), abs(maxx), abs(maxy),
-            np.finfo(float).eps,
+        x_span = maxx - minx
+        y_span = maxy - miny
+        coordinate_span = max(abs(x_span), abs(y_span))
+        validation_tolerance = max(
+            DEGENERACY_TOL * coordinate_span,
+            roundoff_tolerance(minx, miny, maxx, maxy),
         )
-        validation_tolerance = DEGENERACY_TOL * coordinate_scale
         shapely_polygon = sg.Polygon((v.x, v.y) for v in self.polygon.vertex_sequence)
 
         # construct grid and store all 3D points over polygon
         x_vals = np.arange(minx, maxx + dx, dx)
         y_vals = np.arange(miny, maxy + dy, dy)
-        points = []
+        evaluation_points = []
         for x in x_vals:
             for y in y_vals:
                 p = sg.Point(x, y)
                 if shapely_polygon.covers(p):
-                    points.append([p.x, p.y, p.x * p.y])
-        points = np.array(points)
+                    evaluation_points.append([p.x, p.y, p.x * p.y])
+        evaluation_points = np.array(evaluation_points)
+
+        # A Cartesian grid generally misses sloped boundaries and may even miss
+        # vertices when a side length is not an integer multiple of the step.
+        # Include a step-size-controlled sampling of every polygon edge in the
+        # lifted reference hull.
+        def normalized_lift(x_coordinate, y_coordinate):
+            normalized_x = (x_coordinate - minx) / x_span
+            normalized_y = (y_coordinate - miny) / y_span
+            return [normalized_x, normalized_y, normalized_x * normalized_y]
+
+        reference_points = [
+            normalized_lift(x_coordinate, y_coordinate)
+            for x_coordinate, y_coordinate, _ in evaluation_points
+        ]
+        for edge in self.polygon.edges:
+            x_distance = abs(edge.v2.x - edge.v1.x)
+            y_distance = abs(edge.v2.y - edge.v1.y)
+            number_of_steps = max(1, math.ceil(max(x_distance / dx, y_distance / dy)))
+            for step in range(number_of_steps + 1):
+                weight = step / number_of_steps
+                x_coordinate = edge.v1.x + weight * (edge.v2.x - edge.v1.x)
+                y_coordinate = edge.v1.y + weight * (edge.v2.y - edge.v1.y)
+                reference_points.append(normalized_lift(x_coordinate, y_coordinate))
+        reference_points = np.unique(np.asarray(reference_points), axis=0)
 
         # The lower surface of this 3D hull is the discretized reference
         # envelope.  Finer grids improve it but increase the LP workload.
-        hull = ConvexHull(points)
+        hull = ConvexHull(reference_points)
 
         # for each 2D point from polygon compute minimal z-coordinate in approximate convex hull and
         # compare to computed analytical result
         hull_ineqs = hull.equations  # consider hull facets
         error = 0
+        maximum_absolute_error = 0
         compared_points = 0
         minimum_reference_value = math.inf
         maximum_reference_value = -math.inf
@@ -838,19 +869,18 @@ class EnvelopePolygonalDomain:
         has_multiple_valid_cells = False
         nan_counter = 0
         invalid_value_counter = 0
-        unassigned_diagnostics = []
         # Reuse one environment and model for all grid points.
         with gp.Env(empty=True) as env:
             env.setParam("LogToConsole", 0)
             env.start()
 
             with gp.Model(env=env) as model:
-                x_var = model.addVar(lb=minx, ub=maxx)
-                y_var = model.addVar(lb=miny, ub=maxy)
+                x_var = model.addVar(lb=0, ub=1)
+                y_var = model.addVar(lb=0, ub=1)
                 z_var = model.addVar(lb=-math.inf)
 
-                x_fix = model.addConstr(x_var == minx)
-                y_fix = model.addConstr(y_var == miny)
+                x_fix = model.addConstr(x_var == 0)
+                y_fix = model.addConstr(y_var == 0)
 
                 for hull_ineq in hull_ineqs:
                     model.addConstr(
@@ -863,9 +893,9 @@ class EnvelopePolygonalDomain:
 
                 model.setObjective(z_var, gp.GRB.MINIMIZE)
 
-                for x0, y0, _ in tqdm(points):
-                    x_fix.RHS = x0
-                    y_fix.RHS = y0
+                for x0, y0, _ in tqdm(evaluation_points):
+                    x_fix.RHS = (x0 - minx) / x_span
+                    y_fix.RHS = (y0 - miny) / y_span
                     model.optimize()
 
                     if model.status != gp.GRB.Status.OPTIMAL:
@@ -875,7 +905,15 @@ class EnvelopePolygonalDomain:
                         )
 
                     # store obtained minimal z
-                    z_manual = z_var.X
+                    # Undo the normalized affine coordinate transformation:
+                    # xy = (x-minx)(y-miny) + miny(x-minx)
+                    #      + minx(y-miny) + minx*miny.
+                    z_manual = (
+                        z_var.X * x_span * y_span
+                        + miny * (x0 - minx)
+                        + minx * (y0 - miny)
+                        + minx * miny
+                    )
 
                     # Evaluate every covering analytical cell.  Overlap is
                     # allowed on boundaries, but all resulting values must agree.
@@ -923,58 +961,6 @@ class EnvelopePolygonalDomain:
                     if not z_list:
                         # No analytical value can mean either definite lack of
                         # cell coverage or an undecidable symbolic evaluation.
-                        if len(unassigned_diagnostics) < 10:
-                            violation_count = 0
-                            undefined_count = 0
-                            for _, candidate_inequalities, _ in self.all_solutions:
-                                _, candidate_msg = satisfies_all(
-                                    (x0, y0), candidate_inequalities
-                                )
-                                if candidate_msg == 'violation':
-                                    violation_count += 1
-                                elif candidate_msg == 'undefined':
-                                    undefined_count += 1
-                            unassigned_diagnostics.append(
-                                ((x0, y0), violation_count, undefined_count)
-                            )
-                            if len(unassigned_diagnostics) == 1:
-                                print("Detailed diagnosis for first unassigned point:", (x0, y0))
-                                for cell_index, (candidate_generators, candidate_inequalities, _) in enumerate(
-                                        self.all_solutions, start=1):
-                                    candidate_ok, candidate_msg = satisfies_all(
-                                        (x0, y0), candidate_inequalities
-                                    )
-                                    if not candidate_ok:
-                                        failed_index = next(
-                                            (index for index, inequality in enumerate(candidate_inequalities)
-                                             if not bool(inequality.subs({sp.Symbol("x", real=True): x0,
-                                                                           sp.Symbol("y", real=True): y0}))),
-                                            None,
-                                        )
-                                        failed_inequality = (
-                                            candidate_inequalities[failed_index]
-                                            if failed_index is not None else None
-                                        )
-                                        failed_slack = None
-                                        if failed_inequality is not None:
-                                            coordinate_values = {"x": x0, "y": y0}
-                                            failed_substitutions = {
-                                                symbol: coordinate_values[symbol.name]
-                                                for symbol in failed_inequality.free_symbols
-                                                if symbol.name in coordinate_values
-                                            }
-                                            failed_slack = float(sp.N(
-                                                (failed_inequality.lhs - failed_inequality.rhs)
-                                                .subs(failed_substitutions)
-                                            ))
-                                        print(
-                                            "  Cell", cell_index,
-                                            "generators=", candidate_generators,
-                                            "reason=", candidate_msg,
-                                            "failed_inequality_index=", failed_index,
-                                            "failed_inequality=", failed_inequality,
-                                            "lhs_minus_rhs=", failed_slack,
-                                        )
                         if feasible_cell_counter == 0 and not has_undefined_cell:
                             infeasible_points += 1
                         else:
@@ -990,12 +976,12 @@ class EnvelopePolygonalDomain:
                     # Use the last valid value, not a potentially discarded NaN.
                     z_analytical = z_list[-1]
                     # sum up absolute differences to error
-                    error += abs(z_manual - z_analytical)
+                    absolute_error = abs(z_manual - z_analytical)
+                    error += absolute_error
+                    maximum_absolute_error = max(maximum_absolute_error, absolute_error)
                     compared_points += 1
                     minimum_reference_value = min(minimum_reference_value, z_manual)
                     maximum_reference_value = max(maximum_reference_value, z_manual)
-                    if z_manual + scaled_tolerance(z_manual, z_analytical) <= z_analytical:
-                        print(z_manual, z_analytical)
 
 
         print('Numbers of undefined and infeasible (but not undefined) points are: ', undefined_points, infeasible_points)
@@ -1004,11 +990,16 @@ class EnvelopePolygonalDomain:
             average_absolute_error = error / compared_points
             reference_value_range = maximum_reference_value - minimum_reference_value
             print("Average absolute error for each compared grid point is: ", average_absolute_error)
+            print("Maximum absolute error over compared grid points is: ", maximum_absolute_error)
             print("Reference value range for compared grid points is: ", reference_value_range)
             if reference_value_range > 0:
                 print(
                     "Relative average absolute error for each compared grid point is: ",
                     average_absolute_error / reference_value_range,
+                )
+                print(
+                    "Relative maximum absolute error over compared grid points is: ",
+                    maximum_absolute_error / reference_value_range,
                 )
             else:
                 print("Relative average absolute error is undefined because the reference range is zero.")
@@ -1639,6 +1630,11 @@ VALIDATION_INSTANCES = {
         (3.27943, 5.70233), (-1.25825, 3.59399), (-2.96916, 3.20979),
         (-1.95154, 1.29355), (-5.31055, -0.35844), (-0.58458, -6.66487),
         (1.61146, -2.04535),
+    ),
+    "one_vertex_two_edges": (
+        (3.8571, 3.0023), (-0.4998, 3.4407), (-4.7796, 1.1793),
+        (-1.2897, -3.0072), (0.6373, -6.69), (2.3745, -4.5562),
+        (6.3981, -0.9325),
     ),
 }
 
