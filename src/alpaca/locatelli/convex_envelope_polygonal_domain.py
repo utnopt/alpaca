@@ -182,7 +182,15 @@ def scaled_tolerance(*values, relative=1e-12):
 
 
 def active_point_is_strictly_inside_edge(edge, x_coordinate):
-    tolerance = scaled_tolerance(edge.v1.x, edge.v2.x, edge.v2.x - edge.v1.x)
+    # A repeated root evaluated by the ten-digit fallback can place an exact
+    # endpoint contact roughly 1e-8 edge lengths inside the segment.  Exclude
+    # that numerical sliver as the lower-dimensional endpoint case it is.
+    tolerance = scaled_tolerance(
+        edge.v1.x,
+        edge.v2.x,
+        edge.v2.x - edge.v1.x,
+        relative=ACTIVE_POINT_REL_TOL,
+    )
     return edge.v1.x + tolerance < x_coordinate < edge.v2.x - tolerance
 
 
@@ -763,7 +771,7 @@ class Polygon:
 
 
 class EnvelopePolygonalDomain:
-    """Derive, plot, and validate all full-dimensional envelope cells."""
+    """Derive, plot, and validate all envelope cells."""
 
     def __init__(self, polygon: Polygon):
         self.polygon = polygon
@@ -1015,7 +1023,7 @@ class EnvelopePolygonalDomain:
 
 
     def _two_elements_J(self):
-        """Enumerate KKT active sets ``J`` containing two generators."""
+        """Enumerate active sets ``J`` containing two generators."""
         pairs = list(combinations(self.generators, 2))
 
         all_solutions_two_elements_J = []
@@ -1025,14 +1033,12 @@ class EnvelopePolygonalDomain:
 
             solutions = []
             if number_of_vertices == 1:
-                solutions = self._solve_one_vertex_one_edge_linear(pair, generators_without_pair)
+                solutions = self._solve_one_vertex_one_edge(pair, generators_without_pair)
             if number_of_vertices == 0:
-                solutions = self._solve_two_edges_linear(pair, generators_without_pair)
+                solutions = self._solve_two_edges(pair, generators_without_pair)
 
             all_solutions_two_elements_J += solutions
 
-        # Observation 3.2 of Paper B permits lower-dimensional cells to be
-        # discarded; their envelope values are recovered by continuity.
         all_solutions_two_elements_J = [solution for solution in all_solutions_two_elements_J if has_2d_intersection(self.polygon.vertex_sequence, solution[1])]
 
         print('all solutions stemming from Js with two elements:')
@@ -1044,8 +1050,8 @@ class EnvelopePolygonalDomain:
         return all_solutions_two_elements_J
 
 
-    def _solve_one_vertex_one_edge_linear(self, pair, generators_without_pair):
-        """Solve system (15) for one vertex and one convex edge generator."""
+    def _solve_one_vertex_one_edge(self, pair, generators_without_pair):
+        """Create solutions for J being one vertex and one convex edge generator."""
         # extract vertex and edge from input pair
         v = tuple(el for el in pair if isinstance(el, Vertex))[0]
         e = tuple(el for el in pair if isinstance(el, Edge))[0]
@@ -1106,7 +1112,7 @@ class EnvelopePolygonalDomain:
         return solutions
 
 
-    def _solve_two_edges_linear(self, pair, generators_without_pair):
+    def _solve_two_edges(self, pair, generators_without_pair):
         """Solve system (15) for two convex edge generators."""
         # extract two edges from input pair
         e1 = pair[0]
@@ -1592,6 +1598,7 @@ class EnvelopePolygonalDomain:
 
         if self.polygon.is_ortho:
             pass
+            # todo
             # A specialized generator reduction for orthogonal polygons can be
             # inserted here; the general enumeration remains correct without it.
 
@@ -1601,13 +1608,15 @@ class EnvelopePolygonalDomain:
 
 # Numerical tolerance for algebraic degeneracy checks.
 DEGENERACY_TOL = 1e-12
+# Relative endpoint exclusion for contacts obtained from multiple roots.
+ACTIVE_POINT_REL_TOL = 1e-7
 # Default absolute tolerance for evaluating already-normalized cell inequalities.
 # Scale-sensitive KKT and geometry checks use ``scaled_tolerance`` instead.
 FEAS_TOL = 1e-12
 # Step size of the independent lifted-grid reference used by _validation().
 VALIDATION_DISCRETIZATION = 0.1
 
-# Polygon instances used by the validation regression suite.
+# Polygon instances used by the validation suite.
 VALIDATION_INSTANCES = {
     # Original examples from the module entry point.
     "original_convexified_staircase": ((0, 0), (2, 0), (2, 2), (1, 2), (0, 1)),
@@ -1635,12 +1644,9 @@ VALIDATION_INSTANCES = {
 
 
 
-
 if __name__ == "__main__":
 
-    # Candidate cells with identical functionals may be merged for presentation;
-    # keeping them separate does not change the evaluated envelope.
-    validation_instance = "original_convexified_staircase"
+    validation_instance = "quadrilateral_base"
     vertex_sequence = tuple(Vertex(*point) for point in VALIDATION_INSTANCES[validation_instance])
 
     polygon = Polygon(vertex_sequence)
