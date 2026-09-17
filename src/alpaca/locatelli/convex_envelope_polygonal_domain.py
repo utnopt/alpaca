@@ -15,6 +15,7 @@ Paper B:
 
 from dataclasses import dataclass, field
 import math
+import textwrap
 from itertools import combinations, product
 from mpmath.libmp.libhyper import NoConvergence
 import shapely.geometry as sg
@@ -136,8 +137,21 @@ def plot_cell(cell_inequality_sets, polygon, functional=None):
     ax.set_ylabel(r"$y$")
     title = "C ∩ P"
     if functional is not None:
-        title += f"\nfunctional: {sp.sstr(functional)}"
-    ax.set_title(title)
+        # Round only the copy used for display; envelope calculations retain
+        # the full-precision symbolic functional.
+        display_functional = functional.xreplace({
+            value: sp.Float(round(float(value), 2), 2)
+            for value in sp.preorder_traversal(functional)
+            if isinstance(value, sp.Float)
+        })
+        functional_text = textwrap.fill(
+            sp.sstr(display_functional),
+            width=75,
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+        title += f"\nfunctional: {functional_text}"
+    ax.set_title(title, fontsize=8 if functional is not None else None)
     ax.grid(alpha=0.2)
 
     plt.show()
@@ -1654,7 +1668,7 @@ VALIDATION_INSTANCES = {
 
 if __name__ == "__main__":
 
-    validation_instance = "deep_u_notch"
+    validation_instance = "quadrilateral_base"
     vertex_sequence = tuple(Vertex(*point) for point in VALIDATION_INSTANCES[validation_instance])
 
     polygon = Polygon(vertex_sequence)
