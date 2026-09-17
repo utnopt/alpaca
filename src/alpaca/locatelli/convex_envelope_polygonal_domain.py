@@ -38,9 +38,17 @@ from shapely.geometry import LineString
 
 
 
-def plot_cell(cell_inequalities, polygon):
-    """Plot the part of a symbolic candidate cell contained in ``polygon``."""
+def plot_cell(cell_inequality_sets, polygon, functional=None):
+    """Plot the union of one functional's candidate cells inside ``polygon``.
+
+    ``cell_inequality_sets`` may be one cell's inequalities or several cells
+    sharing the same analytical functional.  The latter are merged for
+    presentation only; candidate cells remain separate in ``all_solutions``.
+    """
     x, y = sp.symbols('x y', real=True)
+
+    if cell_inequality_sets and hasattr(cell_inequality_sets[0], "lhs"):
+        cell_inequality_sets = [cell_inequality_sets]
 
     polygon_vertices = np.array([[v.x, v.y] for v in polygon.vertex_sequence] + [[polygon.vertex_sequence[0].x, polygon.vertex_sequence[0].y]])
 
@@ -71,34 +79,29 @@ def plot_cell(cell_inequalities, polygon):
         radius=scaled_tolerance(*polygon_vertices.ravel())
     ).reshape(X.shape)
 
-    # Mask of the candidate cell.
-
-    mask_C = np.ones(X.shape, dtype=bool)
-
-    for inequality in cell_inequalities:
-        # Evaluate the symbolic inequality over the complete plotting grid.
-        inequality_function = sp.lambdify(
-            (x, y),
-            inequality,
-            modules="numpy"
-        )
-
-        current_mask = inequality_function(X, Y)
-
-        # Constant inequalities produce one Boolean; broadcast it to the grid.
-        current_mask = np.broadcast_to(
-            np.asarray(current_mask, dtype=bool),
-            X.shape
-        )
-
-        mask_C &= current_mask
-
-    # Only the portion inside the original domain is a valid envelope cell.
-    mask_intersection = mask_C & mask_P
+    # Union the cells carrying the same functional.  This representation also
+    # handles non-convex or disconnected unions without changing the solver's
+    # individual convex candidate cells.
+    mask_intersection = np.zeros(X.shape, dtype=bool)
+    for cell_inequalities in cell_inequality_sets:
+        mask_C = np.ones(X.shape, dtype=bool)
+        for inequality in cell_inequalities:
+            inequality_function = sp.lambdify(
+                (x, y),
+                inequality,
+                modules="numpy"
+            )
+            current_mask = inequality_function(X, Y)
+            current_mask = np.broadcast_to(
+                np.asarray(current_mask, dtype=bool),
+                X.shape
+            )
+            mask_C &= current_mask
+        mask_intersection |= mask_C & mask_P
 
     fig, ax = plt.subplots(figsize=(7, 6))
 
-    # Shade the feasible intersection and show both kinds of boundary.
+    # Shade the feasible union and show its exterior boundary only.
     ax.contourf(
         X,
         Y,
@@ -117,35 +120,40 @@ def plot_cell(cell_inequalities, polygon):
     )
     ax.add_patch(polygon_patch)
 
-    for inequality in cell_inequalities:
-        boundary_expression = inequality.lhs - inequality.rhs
-        boundary_function = sp.lambdify(
-            (x, y),
-            boundary_expression,
-            modules="numpy"
-        )
-
-        Z = np.asarray(boundary_function(X, Y), dtype=float)
-        Z = np.broadcast_to(Z, X.shape)
-
-        ax.contour(
-            X,
-            Y,
-            Z,
-            levels=[0],
-            linewidths=1.5,
-            linestyles="--"
-        )
+    ax.contour(
+        X,
+        Y,
+        mask_intersection.astype(float),
+        levels=[0.5],
+        linewidths=1.5,
+        linestyles="--",
+    )
 
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(y_min, y_max)
     ax.set_aspect("equal")
     ax.set_xlabel(r"$x$")
     ax.set_ylabel(r"$y$")
-    ax.set_title(r"$C \cap P$")
+    title = "C ∩ P"
+    if functional is not None:
+        title += f"\nfunctional: {sp.sstr(functional)}"
+    ax.set_title(title)
     ax.grid(alpha=0.2)
 
     plt.show()
+
+
+def group_cells_by_functional(solutions):
+    """Group candidate-cell inequalities by exactly identical functionals."""
+    groups = []
+    for _, cell_inequalities, functional in solutions:
+        for representative, cell_sets in groups:
+            if sp.simplify(functional - representative) == 0:
+                cell_sets.append(cell_inequalities)
+                break
+        else:
+            groups.append((functional, [cell_inequalities]))
+    return groups
 
 
 def get_active_point_from_generator(generator, a, b):
@@ -786,8 +794,8 @@ class EnvelopePolygonalDomain:
 
         self.all_solutions = solutions_two_elements_J + solutions_three_elements_J
 
-        for _, cell_inequalities, _ in self.all_solutions:
-            plot_cell(cell_inequalities, self.polygon)
+        for functional, cell_inequality_sets in group_cells_by_functional(self.all_solutions):
+            plot_cell(cell_inequality_sets, self.polygon, functional)
 
         self._validation()
 
@@ -1642,7 +1650,7 @@ VALIDATION_INSTANCES = {
 
 if __name__ == "__main__":
 
-    validation_instance = "quadrilateral_base"
+    validation_instance = "deep_u_notch"
     vertex_sequence = tuple(Vertex(*point) for point in VALIDATION_INSTANCES[validation_instance])
 
     polygon = Polygon(vertex_sequence)

@@ -128,6 +128,24 @@ class TestPolygonalEnvelope(unittest.TestCase):
                 for value in values:
                     self.assertAlmostEqual(value, expected, delta=4.0)
 
+    def test_plotting_groups_cells_with_identical_functional(self):
+        coordinates = domain.VALIDATION_INSTANCES["deep_u_notch"]
+        polygon = domain.Polygon(tuple(domain.Vertex(*point) for point in coordinates))
+        with patch.object(domain, "plot_cell") as plot_cell, \
+                patch.object(domain.EnvelopePolygonalDomain, "_validation"), \
+                patch("sys.stdout", new_callable=io.StringIO):
+            envelope = domain.EnvelopePolygonalDomain(polygon)
+
+        groups = domain.group_cells_by_functional(envelope.all_solutions)
+        self.assertLess(len(groups), len(envelope.all_solutions))
+        self.assertEqual(sum(len(cell_sets) for _, cell_sets in groups), len(envelope.all_solutions))
+        self.assertTrue(any(len(cell_sets) > 1 for _, cell_sets in groups))
+        self.assertEqual(plot_cell.call_count, len(groups))
+        self.assertEqual(
+            [call.args[2] for call in plot_cell.call_args_list],
+            [functional for functional, _ in groups],
+        )
+
     def test_line_incidence_distinguishes_geometry_after_translation(self):
         edge = domain.Edge(
             domain.Vertex(1e8, 1e8),
