@@ -1315,7 +1315,7 @@ class EnvelopePolygonalDomain:
         e = tuple(el for el in triple if isinstance(el, Edge))[0]
 
 
-        if vertex_lies_on_edge_line(v2, e):
+        if vertex_lies_on_edge_line(v1, e) or vertex_lies_on_edge_line(v2, e):
             return []
 
         C = 4 * e.m * (e.q + e.m * v2.x - v2.y)
@@ -1354,14 +1354,15 @@ class EnvelopePolygonalDomain:
             a = z - e.m * b
             c = v1.x * v1.y - a * v1.x - b * v1.y
 
-            if not active_point_is_strictly_inside_edge(e, (a + e.m * b - e.q) / (2 * e.m)):
+            active_point = get_active_point_from_generator(e, a, b)
+            if not active_point_is_strictly_inside_edge(e, active_point[0]):
                 continue
 
             if not feasibility_outside_J_generators(v1, generators_without_triple, a, b):
                 continue
 
             cell_ineq_coeffs = ConvexHull(
-                [(v1.x, v1.y), (v2.x, v2.y), (get_active_point_from_generator(e, a, b))]).equations
+                [(v1.x, v1.y), (v2.x, v2.y), active_point]).equations
             x, y = sp.symbols("x y", real=True)
             cell_inequalities = [row[0] * x + row[1] * y + row[2] <= 0 for row in cell_ineq_coeffs]
 
@@ -1668,7 +1669,7 @@ VALIDATION_INSTANCES = {
 
 if __name__ == "__main__":
 
-    validation_instance = "quadrilateral_base"
+    validation_instance = "original_critical"
     vertex_sequence = tuple(Vertex(*point) for point in VALIDATION_INSTANCES[validation_instance])
 
     polygon = Polygon(vertex_sequence)
